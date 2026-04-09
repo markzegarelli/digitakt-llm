@@ -5,6 +5,7 @@ import threading
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core import midi_utils
+from core.midi_utils import TRACK_CHANNELS
 
 
 class Player:
@@ -48,7 +49,7 @@ class Player:
             velocity = pattern[track][step]
             if velocity > 0:
                 try:
-                    midi_utils.send_note(self.port, note, velocity)
+                    midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
                 except Exception:
                     self.bus.emit(
                         "midi_disconnected",

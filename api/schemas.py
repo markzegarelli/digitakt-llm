@@ -1,7 +1,7 @@
 # api/schemas.py
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class GenerateRequest(BaseModel):
@@ -26,6 +26,18 @@ class BpmRequest(BaseModel):
         return v
 
 
+class CCRequest(BaseModel):
+    track: str
+    param: str
+    value: int = Field(..., ge=0, le=127)
+
+
+class CCResponse(BaseModel):
+    track: str
+    param: str
+    value: int
+
+
 class StateResponse(BaseModel):
     current_pattern: dict
     pending_pattern: dict | None
@@ -34,6 +46,7 @@ class StateResponse(BaseModel):
     midi_port_name: str | None
     last_prompt: str | None
     pattern_history: list
+    track_cc: dict
 
 
 class PatternListResponse(BaseModel):

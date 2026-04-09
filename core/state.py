@@ -22,6 +22,13 @@ DEFAULT_PATTERN: dict = {
 _HISTORY_MAX = 20
 
 
+_DEFAULT_CC_PARAMS: dict[str, int] = {
+    "tune": 64, "filter": 64, "resonance": 64,
+    "attack": 64, "decay": 64, "volume": 100,
+    "reverb": 0, "delay": 0,
+}
+
+
 @dataclass
 class AppState:
     current_pattern: dict = field(default_factory=dict)
@@ -32,9 +39,16 @@ class AppState:
     last_prompt: str | None = None
     pattern_history: list = field(default_factory=list)
     event_loop: asyncio.AbstractEventLoop | None = None
+    track_cc: dict = field(default_factory=lambda: {
+        track: dict(_DEFAULT_CC_PARAMS) for track in TRACK_NAMES
+    })
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+
+    def update_cc(self, track: str, param: str, value: int) -> None:
+        with self._lock:
+            self.track_cc[track][param] = value
 
     def update_pattern(self, pattern: dict, prompt: str | None = None) -> None:
         with self._lock:
