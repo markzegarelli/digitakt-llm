@@ -108,3 +108,21 @@ def test_unmuted_track_still_sends_midi():
     player._play_step(0)
     kick_sends = [c for c in port.send.call_args_list if c[0][0].note == 36]
     assert len(kick_sends) > 0, "Unmuted kick must send MIDI"
+
+
+def test_start_sends_midi_start():
+    player, state, bus, port = _make_player()
+    player.start()
+    player.stop()
+    sent_types = [c[0][0].type for c in port.send.call_args_list]
+    assert "start" in sent_types
+    # start message must be the very first send call
+    assert port.send.call_args_list[0][0][0].type == "start"
+
+
+def test_stop_sends_midi_stop():
+    player, state, bus, port = _make_player()
+    player.start()
+    player.stop()
+    sent_types = [c[0][0].type for c in port.send.call_args_list]
+    assert "stop" in sent_types

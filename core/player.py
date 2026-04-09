@@ -19,6 +19,7 @@ class Player:
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        midi_utils.send_start(self.port)
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -28,6 +29,7 @@ class Player:
     def stop(self) -> None:
         self._stop_event.set()
         self.state.is_playing = False
+        midi_utils.send_stop(self.port)
         self.bus.emit("playback_stopped", {})
 
     def set_bpm(self, bpm: float) -> None:
