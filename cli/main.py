@@ -7,6 +7,9 @@ import json
 import threading
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from core.state import AppState, DEFAULT_PATTERN, TRACK_NAMES
 from core.events import EventBus
 from core.player import Player

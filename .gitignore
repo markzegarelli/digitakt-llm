@@ -1,1 +1,6 @@
 .worktrees/
+.env
+.env.local
+.venv/
+__pycache__/
+*.egg-info/
