@@ -47,7 +47,18 @@ class StateResponse(BaseModel):
     last_prompt: str | None
     pattern_history: list
     track_cc: dict
+    track_muted: dict
 
 
 class PatternListResponse(BaseModel):
     names: list[str]
+
+
+class MuteRequest(BaseModel):
+    track: str
+    muted: bool
+
+
+class MuteResponse(BaseModel):
+    track: str
+    muted: bool
