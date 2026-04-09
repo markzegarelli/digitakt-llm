@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 digitakt-llm = "cli.main:main"
+digitakt-tui = "cli.tui_launcher:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
