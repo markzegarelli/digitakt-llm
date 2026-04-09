@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 import threading
 from core.state import AppState, TRACK_NAMES

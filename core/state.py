@@ -1,4 +1,6 @@
 # core/state.py
+from __future__ import annotations
+
 import asyncio
 import threading
 import time

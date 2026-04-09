@@ -1,4 +1,6 @@
 # core/midi_utils.py
+from __future__ import annotations
+
 import mido
 
 NOTE_MAP: dict[str, int] = {
