@@ -126,3 +126,18 @@ def test_stop_sends_midi_stop():
     player.stop()
     sent_types = [c[0][0].type for c in port.send.call_args_list]
     assert "stop" in sent_types
+
+
+def test_clock_ticks_sent_during_playback():
+    """96 clock ticks per full 16-step loop (6 ticks × 16 steps)."""
+    player, state, bus, port = _make_player()
+    player.set_bpm(9000)
+    player.start()
+    time.sleep(0.05)  # enough for ~1.8 loops at 9000 BPM
+    player.stop()
+
+    clock_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "clock"
+    ]
+    assert len(clock_calls) >= 96  # at least one full loop

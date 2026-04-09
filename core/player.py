@@ -42,6 +42,9 @@ class Player:
     def _step_duration(self) -> float:
         return 60.0 / self.state.bpm / 4.0
 
+    def _tick_duration(self) -> float:
+        return 60.0 / self.state.bpm / 24.0
+
     def _play_step(self, step: int) -> None:
         pattern = self.state.current_pattern
         for track in TRACK_NAMES:
@@ -67,12 +70,27 @@ class Player:
             for step in range(16):
                 if self._stop_event.is_set():
                     break
-                t0 = time.perf_counter()
-                self._play_step(step)
-                elapsed = time.perf_counter() - t0
-                sleep_time = self._step_duration() - elapsed
-                if sleep_time > 0:
-                    self._stop_event.wait(sleep_time)
+                for tick in range(6):
+                    if self._stop_event.is_set():
+                        break
+                    t0 = time.perf_counter()
+                    if tick == 0:
+                        self._play_step(step)
+                    if self._stop_event.is_set():
+                        break
+                    try:
+                        midi_utils.send_clock(self.port)
+                    except Exception:
+                        self.bus.emit(
+                            "midi_disconnected",
+                            {"port": self.state.midi_port_name},
+                        )
+                        self._stop_event.set()
+                        return
+                    elapsed = time.perf_counter() - t0
+                    sleep_time = self._tick_duration() - elapsed
+                    if sleep_time > 0:
+                        self._stop_event.wait(sleep_time)
 
             # End of loop: atomic pattern swap
             if self.state.pending_pattern is not None:
