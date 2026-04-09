@@ -30,7 +30,7 @@ export function CCPanel({ trackCC, selectedTrack, selectedParam, isFocused }: CC
             {i === selectedTrack ? `[${t.toUpperCase()}]` : ` ${t} `}
           </Text>
         ))}
-        <Text color="gray">{"  Meta+←→: track  ↑↓: param  ←→: ±1  Ctrl+←→: ±10"}</Text>
+        <Text color="gray">{"  [/]: track  ↑↓: param  ←→: ±1"}</Text>
       </Box>
       {CC_PARAMS.map((param, i) => {
         const value = cc?.[param as CCParam] ?? 64;

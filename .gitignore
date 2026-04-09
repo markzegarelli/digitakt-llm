@@ -4,3 +4,5 @@
 .venv/
 __pycache__/
 *.egg-info/
+package-lock.json
+tui/node_modules/

@@ -72,20 +72,16 @@ export function App({ baseUrl }: AppProps) {
       if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, 7));
       if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, 7));
 
+      if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
+      if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
+
       if (key.leftArrow || key.rightArrow) {
         const sign = key.rightArrow ? 1 : -1;
-        if (key.meta) {
-          // Meta+arrow → navigate tracks
-          setCCTrack((t) => clamp(t + sign, 0, 7));
-        } else {
-          // plain or Ctrl+arrow → adjust CC value
-          const delta = key.ctrl ? 10 : 1;
-          const track = TRACK_NAMES[ccTrack];
-          const param = CC_PARAMS[ccParam];
-          if (track && param) {
-            const current = state.track_cc[track][param as CCParam];
-            actions.setCC(track, param as CCParam, clamp(current + sign * delta, 0, 127));
-          }
+        const track = TRACK_NAMES[ccTrack];
+        const param = CC_PARAMS[ccParam];
+        if (track && param) {
+          const current = state.track_cc[track][param as CCParam];
+          actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
         }
       }
       return;
@@ -121,7 +117,7 @@ export function App({ baseUrl }: AppProps) {
       />
       <Box paddingX={1}>
         <Text color="gray">
-          {"Tab: switch panel · ↑↓: navigate · m: mute (pattern) · ←→: adjust CC · Meta+←→: track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+          {"Tab: switch panel · ↑↓: navigate · m: mute (pattern) · ←→: adjust CC · [/]: track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
         </Text>
       </Box>
     </Box>

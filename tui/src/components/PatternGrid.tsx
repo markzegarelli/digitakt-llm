@@ -11,8 +11,8 @@ interface PatternGridProps {
 }
 
 const LABELS: Record<TrackName, string> = {
-  kick:  "KICK ", snare: "SNARE", hihat: "HIHAT", clap:  "CLAP ",
-  perc1: "PRC 1", perc2: "PRC 2", perc3: "PRC 3", perc4: "PRC 4",
+  kick:    "KICK ", snare:   "SNARE", tom:     "TOM  ", clap:   "CLAP ",
+  bell:    "BELL ", hihat:   "HIHAT", openhat: "OPHAT", cymbal: "CYMBL",
 };
 
 function StepDot({ velocity, isMuted }: { velocity: number; isMuted: boolean }) {

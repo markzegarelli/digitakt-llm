@@ -27,14 +27,14 @@ TRACK_CHANNELS: dict[str, int] = {
 }
 
 CC_MAP: dict[str, int] = {
-    "tune":      16,
-    "filter":    74,
-    "resonance": 71,
-    "attack":    80,
-    "decay":     82,
-    "volume":    95,
-    "reverb":    91,
-    "delay":     30,
+    "tune":      16,   # Source tune
+    "filter":    74,   # Filter frequency
+    "resonance": 75,   # Filter resonance
+    "attack":    78,   # Amp attack time
+    "decay":     80,   # Amp decay time
+    "volume":     7,   # Amp volume
+    "reverb":    83,   # Amp reverb send
+    "delay":     82,   # Amp delay send
 }
 
 
