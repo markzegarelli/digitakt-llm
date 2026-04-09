@@ -49,3 +49,27 @@ def test_list_ports_returns_list():
     with patch("mido.get_output_names", return_value=["Port A", "Port B"]):
         ports = midi_utils.list_ports()
     assert ports == ["Port A", "Port B"]
+
+
+def test_send_start():
+    port = MagicMock()
+    midi_utils.send_start(port)
+    port.send.assert_called_once()
+    msg = port.send.call_args[0][0]
+    assert msg.type == "start"
+
+
+def test_send_stop():
+    port = MagicMock()
+    midi_utils.send_stop(port)
+    port.send.assert_called_once()
+    msg = port.send.call_args[0][0]
+    assert msg.type == "stop"
+
+
+def test_send_clock():
+    port = MagicMock()
+    midi_utils.send_clock(port)
+    port.send.assert_called_once()
+    msg = port.send.call_args[0][0]
+    assert msg.type == "clock"

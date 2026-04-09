@@ -62,3 +62,15 @@ def send_note(port, note: int, velocity: int, channel: int = 0) -> None:
         return
     port.send(mido.Message("note_on", note=note, velocity=velocity, channel=channel))
     port.send(mido.Message("note_off", note=note, velocity=0, channel=channel))
+
+
+def send_clock(port) -> None:
+    port.send(mido.Message("clock"))
+
+
+def send_start(port) -> None:
+    port.send(mido.Message("start"))
+
+
+def send_stop(port) -> None:
+    port.send(mido.Message("stop"))
