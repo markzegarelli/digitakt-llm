@@ -44,7 +44,7 @@ clap [. . . . . . . . . . . . . . . .]
 
 Each track maps to its own MIDI channel (kick → ch 1, snare → ch 2, … perc4 → ch 8), matching the Digitakt's physical track layout.
 
-**Tracks:** `kick` `snare` `hihat` `clap` `perc1` `perc2` `perc3` `perc4`
+**Tracks:** `kick` `snare` `tom` `clap` `bell` `hihat` `openhat` `cymbal`
 
 **Params:**
 
@@ -69,6 +69,61 @@ kick      64      90   64   64   64  100    0    0
 snare     64      64   64   64   64  100    0    0
 ...
 ```
+
+## TUI
+
+An interactive terminal UI built with [Ink](https://github.com/vadimdemedes/ink) runs on top of the same FastAPI backend.
+
+### Requirements
+
+- [Bun](https://bun.sh) runtime
+
+### Setup
+
+```bash
+cd tui && bun install
+```
+
+### Running
+
+Start the backend first (`digitakt-llm` in one terminal), then in another:
+
+```bash
+digitakt-tui
+```
+
+Or point it at a non-default backend:
+
+```bash
+DIGITAKT_URL=http://localhost:8000 digitakt-tui
+```
+
+### Panels
+
+| Panel | Description |
+|-------|-------------|
+| Pattern Grid | 16-step view for all 8 tracks with mute indicators |
+| CC Panel | Per-track parameter values (filter, decay, reverb, etc.) |
+| Prompt | Free-text input for generation prompts and commands |
+
+Use **Tab** to cycle between panels.
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Cycle panels (Pattern → CC → Prompt) |
+| `↑` / `↓` | Navigate tracks (Pattern) or CC params (CC) |
+| `Space` | Play / stop |
+| `+` / `-` | BPM +1 / -1 |
+| `m` | Mute selected track (Pattern panel) |
+| `←` / `→` | Adjust CC value ±1 (CC panel) |
+| `Ctrl+←` / `Ctrl+→` | Adjust CC value ±10 (CC panel) |
+| `Meta+←` / `Meta+→` | Switch CC track (CC panel) |
+| `Enter` | Submit prompt or command (Prompt panel) |
+| `Ctrl+C` | Quit |
+
+Prompt commands are identical to the CLI (`play`, `stop`, `bpm <n>`, `save <name>`, `load <name>`, or free text to generate a pattern).
 
 ## Environment Variables
 

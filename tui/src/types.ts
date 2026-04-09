@@ -1,5 +1,5 @@
 export const TRACK_NAMES = [
-  "kick", "snare", "hihat", "clap", "perc1", "perc2", "perc3", "perc4",
+  "kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal",
 ] as const;
 
 export type TrackName = typeof TRACK_NAMES[number];

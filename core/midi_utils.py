@@ -4,26 +4,26 @@ from __future__ import annotations
 import mido
 
 NOTE_MAP: dict[str, int] = {
-    "kick":  36,
-    "snare": 37,
-    "hihat": 38,
-    "clap":  39,
-    "perc1": 40,
-    "perc2": 41,
-    "perc3": 42,
-    "perc4": 43,
+    "kick":    36,
+    "snare":   37,
+    "tom":     38,
+    "clap":    39,
+    "bell":    40,
+    "hihat":   41,
+    "openhat": 42,
+    "cymbal":  43,
 }
 
 # Maps app track name → 0-indexed MIDI channel (Digitakt: ch 1–8)
 TRACK_CHANNELS: dict[str, int] = {
-    "kick":  0,  # KICK
-    "snare": 1,  # SNARE
-    "hihat": 2,  # TOM
-    "clap":  3,  # CLAP
-    "perc1": 4,  # COWBELL
-    "perc2": 5,  # CLOSED HAT
-    "perc3": 6,  # OPEN HAT
-    "perc4": 7,  # CYMBAL
+    "kick":    0,  # ch 1 — Kick
+    "snare":   1,  # ch 2 — Snare
+    "tom":     2,  # ch 3 — Tom
+    "clap":    3,  # ch 4 — Clap
+    "bell":    4,  # ch 5 — Bell
+    "hihat":   5,  # ch 6 — Closed hat
+    "openhat": 6,  # ch 7 — Open hat
+    "cymbal":  7,  # ch 8 — Cymbal
 }
 
 CC_MAP: dict[str, int] = {

@@ -24,8 +24,8 @@ _PATTERNS_DIR = Path("patterns")
 
 def _ascii_grid(pattern: dict) -> str:
     beats = "     1 . . . 2 . . . 3 . . . 4 . . ."
-    labels = {"kick": "kick", "snare": "snr ", "hihat": "hhat", "clap": "clap",
-              "perc1": "prc1", "perc2": "prc2", "perc3": "prc3", "perc4": "prc4"}
+    labels = {"kick": "kick", "snare": "snr ", "tom": "tom ", "clap": "clap",
+              "bell": "bell", "hihat": "hhat", "openhat": "opht", "cymbal": "cymb"}
     lines = [beats]
     for track in TRACK_NAMES:
         steps = pattern.get(track, [0] * 16)

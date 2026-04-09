@@ -14,14 +14,14 @@ _SYSTEM_PROMPT = (
     "(velocity), 0 = silent.\n\n"
     "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
     '{\n'
-    '  "kick":  [16 integers 0-127],\n'
-    '  "snare": [16 integers 0-127],\n'
-    '  "hihat": [16 integers 0-127],\n'
-    '  "clap":  [16 integers 0-127],\n'
-    '  "perc1": [16 integers 0-127],\n'
-    '  "perc2": [16 integers 0-127],\n'
-    '  "perc3": [16 integers 0-127],\n'
-    '  "perc4": [16 integers 0-127]\n'
+    '  "kick":    [16 integers 0-127],\n'
+    '  "snare":   [16 integers 0-127],\n'
+    '  "tom":     [16 integers 0-127],\n'
+    '  "clap":    [16 integers 0-127],\n'
+    '  "bell":    [16 integers 0-127],\n'
+    '  "hihat":   [16 integers 0-127],\n'
+    '  "openhat": [16 integers 0-127],\n'
+    '  "cymbal":  [16 integers 0-127]\n'
     "}"
 )
 

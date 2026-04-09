@@ -6,17 +6,17 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-TRACK_NAMES = ["kick", "snare", "hihat", "clap", "perc1", "perc2", "perc3", "perc4"]
+TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
 DEFAULT_PATTERN: dict = {
-    "kick":  [100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0],
-    "snare": [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0],
-    "hihat": [60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0],
-    "clap":  [0] * 16,
-    "perc1": [0] * 16,
-    "perc2": [0] * 16,
-    "perc3": [0] * 16,
-    "perc4": [0] * 16,
+    "kick":    [100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0],
+    "snare":   [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0],
+    "tom":     [0] * 16,
+    "clap":    [0] * 16,
+    "bell":    [0] * 16,
+    "hihat":   [60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0],
+    "openhat": [0] * 16,
+    "cymbal":  [0] * 16,
 }
 
 _HISTORY_MAX = 20
