@@ -11,9 +11,10 @@ from typing import Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
-from api.schemas import BpmRequest, GenerateRequest, PatternListResponse, StateResponse
+from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, PatternListResponse, StateResponse
 from core.events import EventBus
-from core.state import AppState
+from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
+from core.state import AppState, TRACK_NAMES
 
 app = FastAPI(title="Digitakt LLM")
 
@@ -28,6 +29,7 @@ _ws_clients: Set[WebSocket] = set()
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
+    "cc_changed",
 ]
 
 
@@ -84,6 +86,7 @@ def get_state():
         midi_port_name=_state.midi_port_name,
         last_prompt=_state.last_prompt,
         pattern_history=_state.pattern_history,
+        track_cc=_state.track_cc,
     )
 
 
@@ -110,6 +113,24 @@ def post_play():
 def post_stop():
     _player.stop()
     return {"status": "stopped"}
+
+
+@app.post("/cc", response_model=CCResponse)
+def set_cc(req: CCRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    if req.param not in CC_MAP:
+        raise HTTPException(422, f"Unknown param: {req.param}")
+    _state.update_cc(req.track, req.param, req.value)
+    if _player and _player.port:
+        send_cc(_player.port, TRACK_CHANNELS[req.track], CC_MAP[req.param], req.value)
+    _bus.emit("cc_changed", {"track": req.track, "param": req.param, "value": req.value})
+    return CCResponse(track=req.track, param=req.param, value=req.value)
+
+
+@app.get("/cc")
+def get_cc():
+    return _state.track_cc
 
 
 @app.get("/patterns", response_model=PatternListResponse)

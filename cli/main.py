@@ -15,6 +15,7 @@ from core.events import EventBus
 from core.player import Player
 from core.generator import Generator
 from core import midi_utils
+from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 import api.server as server_module
 
 
@@ -30,6 +31,17 @@ def _ascii_grid(pattern: dict) -> str:
         steps = pattern.get(track, [0] * 16)
         cells = " ".join("X" if v > 0 else "." for v in steps)
         lines.append(f"{labels[track]} [{cells}]")
+    return "\n".join(lines)
+
+
+def _cc_table(track_cc: dict) -> str:
+    params = ["tune", "filter", "resonance", "attack", "decay", "volume", "reverb", "delay"]
+    header = f"{'':6}{'tune':>6}{'filter':>8}{'res':>5}{'atk':>5}{'dec':>5}{'vol':>5}{'rev':>5}{'dly':>5}"
+    lines = [header]
+    for track in TRACK_NAMES:
+        row = track_cc.get(track, {})
+        vals = [row.get(p, 0) for p in params]
+        lines.append(f"{track:<6}" + "".join(f"{v:>6}" for v in vals))
     return "\n".join(lines)
 
 
@@ -90,8 +102,9 @@ def _prompt_bpm() -> float:
     return 120.0
 
 
-def _run_repl(player: Player, generator: Generator, state: AppState) -> None:
+def _run_repl(player: Player, generator: Generator, state: AppState, port) -> None:
     print("\nReady. Commands: bpm <n>, stop, play, show, save <name>, load <name>")
+    print("                 cc <track> <param> <value>  |  cc show")
     print("Anything else is sent to Claude as a pattern prompt.\n")
 
     while True:
@@ -142,6 +155,30 @@ def _run_repl(player: Player, generator: Generator, state: AppState) -> None:
                 player.queue_pattern(pattern)
                 print(f"Queued '{arg}' for next loop.")
 
+        elif cmd == "cc":
+            cc_parts = line.split()
+            if len(cc_parts) == 2 and cc_parts[1] == "show":
+                print(_cc_table(state.track_cc))
+            elif len(cc_parts) == 4:
+                _, cc_track, cc_param, cc_raw = cc_parts
+                if cc_track not in TRACK_NAMES:
+                    print(f"Unknown track '{cc_track}'. Tracks: {', '.join(TRACK_NAMES)}")
+                elif cc_param not in CC_MAP:
+                    print(f"Unknown param '{cc_param}'. Params: {', '.join(CC_MAP)}")
+                else:
+                    try:
+                        cc_value = int(cc_raw)
+                        if not (0 <= cc_value <= 127):
+                            raise ValueError
+                        state.update_cc(cc_track, cc_param, cc_value)
+                        if port:
+                            send_cc(port, TRACK_CHANNELS[cc_track], CC_MAP[cc_param], cc_value)
+                        print(f"CC set: {cc_track} {cc_param} = {cc_value}")
+                    except ValueError:
+                        print("Value must be an integer 0–127.")
+            else:
+                print("Usage: cc <track> <param> <value>  |  cc show")
+
         else:
             # Everything else → send to generator
             variation = state.last_prompt is not None
@@ -184,7 +221,7 @@ def main() -> None:
     else:
         print("No MIDI port — playback disabled. Generate patterns to preview in 'show'.")
 
-    _run_repl(player, generator, state)
+    _run_repl(player, generator, state, port)
 
 
 if __name__ == "__main__":
