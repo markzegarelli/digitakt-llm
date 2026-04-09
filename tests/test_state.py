@@ -71,3 +71,39 @@ def test_default_pattern_has_all_tracks():
     for track in TRACK_NAMES:
         assert len(DEFAULT_PATTERN[track]) == 16
         assert all(isinstance(v, int) and 0 <= v <= 127 for v in DEFAULT_PATTERN[track])
+
+
+def test_initial_mute_state_all_unmuted():
+    state = AppState()
+    assert set(state.track_muted.keys()) == set(TRACK_NAMES)
+    assert all(v is False for v in state.track_muted.values())
+
+
+def test_update_mute_toggles_track():
+    state = AppState()
+    state.update_mute("kick", True)
+    assert state.track_muted["kick"] is True
+    state.update_mute("kick", False)
+    assert state.track_muted["kick"] is False
+
+
+def test_update_mute_thread_safety():
+    state = AppState()
+    errors = []
+
+    def toggle(track, value):
+        for _ in range(500):
+            try:
+                state.update_mute(track, value)
+            except Exception as e:
+                errors.append(e)
+
+    threads = [
+        threading.Thread(target=toggle, args=(track, i % 2 == 0))
+        for i, track in enumerate(TRACK_NAMES * 5)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
