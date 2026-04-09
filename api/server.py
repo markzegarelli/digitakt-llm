@@ -11,7 +11,7 @@ from typing import Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
-from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, PatternListResponse, StateResponse
+from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, MuteRequest, MuteResponse, PatternListResponse, StateResponse
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -29,7 +29,7 @@ _ws_clients: Set[WebSocket] = set()
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
-    "cc_changed",
+    "cc_changed", "mute_changed",
 ]
 
 
@@ -87,6 +87,7 @@ def get_state():
         last_prompt=_state.last_prompt,
         pattern_history=_state.pattern_history,
         track_cc=_state.track_cc,
+        track_muted=_state.track_muted,
     )
 
 
@@ -131,6 +132,15 @@ def set_cc(req: CCRequest):
 @app.get("/cc")
 def get_cc():
     return _state.track_cc
+
+
+@app.post("/mute", response_model=MuteResponse)
+def set_mute(req: MuteRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _state.update_mute(req.track, req.muted)
+    _bus.emit("mute_changed", {"track": req.track, "muted": req.muted})
+    return MuteResponse(track=req.track, muted=req.muted)
 
 
 @app.get("/patterns", response_model=PatternListResponse)

@@ -93,3 +93,36 @@ def test_websocket_connects(tmp_path):
     with client.websocket_connect("/ws") as ws:
         # Connection established — no assertion needed beyond not raising
         pass
+
+
+def test_get_state_includes_track_muted(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.get("/state")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "track_muted" in data
+    assert set(data["track_muted"].keys()) == set(TRACK_NAMES)
+    assert all(v is False for v in data["track_muted"].values())
+
+
+def test_post_mute_mutes_track(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/mute", json={"track": "kick", "muted": True})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "kick", "muted": True}
+    state_resp = client.get("/state")
+    assert state_resp.json()["track_muted"]["kick"] is True
+
+
+def test_post_mute_unmutes_track(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/mute", json={"track": "snare", "muted": True})
+    resp = client.post("/mute", json={"track": "snare", "muted": False})
+    assert resp.status_code == 200
+    assert resp.json()["muted"] is False
+
+
+def test_post_mute_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/mute", json={"track": "cowbell", "muted": True})
+    assert resp.status_code == 422
