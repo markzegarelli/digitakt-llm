@@ -6,6 +6,7 @@ import threading
 import anthropic
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
+from core.midi_utils import CC_MAP
 
 _SYSTEM_PROMPT = (
     "You are an expert drum pattern generator specializing in techno and electronic music production. "
@@ -28,6 +29,10 @@ _SYSTEM_PROMPT = (
     "  - Techno thrives on space and repetition; not every track needs hits every bar\n"
     "  - Use the full velocity range 0–127, not just 0 and 100\n\n"
     "Generate 16-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
+    "OPTIONAL CC ADJUSTMENTS:\n"
+    "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
+    "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
+    "reverb, delay, velocity. All values 0–127. velocity scales the track's overall strike intensity.\n\n"
     "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
     '{\n'
     '  "bpm":     <integer from subgenre range>,\n'
@@ -38,7 +43,8 @@ _SYSTEM_PROMPT = (
     '  "bell":    [16 integers 0-127],\n'
     '  "hihat":   [16 integers 0-127],\n'
     '  "openhat": [16 integers 0-127],\n'
-    '  "cymbal":  [16 integers 0-127]\n'
+    '  "cymbal":  [16 integers 0-127],\n'
+    '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
     "}"
 )
 
@@ -69,7 +75,7 @@ class Generator:
             )
         return prompt
 
-    def _parse_pattern(self, text: str) -> tuple[dict, int | None] | None:
+    def _parse_pattern(self, text: str) -> tuple[dict, int | None, dict] | None:
         try:
             data = json.loads(text.strip())
         except (json.JSONDecodeError, ValueError):
@@ -89,7 +95,22 @@ class Generator:
         raw_bpm = data.get("bpm")
         bpm = int(raw_bpm) if isinstance(raw_bpm, (int, float)) and 20 <= raw_bpm <= 400 else None
         pattern = {k: data[k] for k in TRACK_NAMES}
-        return pattern, bpm
+
+        cc_changes: dict = {}
+        raw_cc = data.get("cc", {})
+        if isinstance(raw_cc, dict):
+            valid_params = set(CC_MAP.keys()) | {"velocity"}
+            for track, params in raw_cc.items():
+                if track not in TRACK_NAMES or not isinstance(params, dict):
+                    continue
+                for param, value in params.items():
+                    if param not in valid_params:
+                        continue
+                    if not isinstance(value, int) or not (0 <= value <= 127):
+                        continue
+                    cc_changes.setdefault(track, {})[param] = value
+
+        return pattern, bpm, cc_changes
 
     def _call_api(self, user_prompt: str, strict: bool = False) -> str:
         content = user_prompt + (_STRICT_SUFFIX if strict else "")
@@ -120,10 +141,20 @@ class Generator:
                 )
                 return
 
-            pattern, bpm = result
+            pattern, bpm, cc_changes = result
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
-            self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm})
+
+            for track, params in cc_changes.items():
+                for param, value in params.items():
+                    if param == "velocity":
+                        self.state.update_velocity(track, value)
+                        self.bus.emit("velocity_changed", {"track": track, "value": value})
+                    else:
+                        self.state.update_cc(track, param, value)
+                        self.bus.emit("cc_changed", {"track": track, "param": param, "value": value})
+
+            self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm, "cc_changes": cc_changes})
 
         except Exception as exc:
             self.bus.emit(

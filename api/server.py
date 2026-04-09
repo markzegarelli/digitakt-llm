@@ -11,7 +11,7 @@ from typing import Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
-from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, MuteRequest, MuteResponse, PatternListResponse, StateResponse
+from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, MuteRequest, MuteResponse, PatternListResponse, StateResponse, VelocityRequest, VelocityResponse
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -29,7 +29,7 @@ _ws_clients: Set[WebSocket] = set()
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
-    "cc_changed", "mute_changed",
+    "cc_changed", "mute_changed", "velocity_changed",
 ]
 
 
@@ -88,6 +88,7 @@ def get_state():
         pattern_history=_state.pattern_history,
         track_cc=_state.track_cc,
         track_muted=_state.track_muted,
+        track_velocity=_state.track_velocity,
     )
 
 
@@ -141,6 +142,15 @@ def set_mute(req: MuteRequest):
     _state.update_mute(req.track, req.muted)
     _bus.emit("mute_changed", {"track": req.track, "muted": req.muted})
     return MuteResponse(track=req.track, muted=req.muted)
+
+
+@app.post("/velocity", response_model=VelocityResponse)
+def set_velocity(req: VelocityRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _state.update_velocity(req.track, req.value)
+    _bus.emit("velocity_changed", {"track": req.track, "value": req.value})
+    return VelocityResponse(track=req.track, value=req.value)
 
 
 @app.get("/patterns", response_model=PatternListResponse)

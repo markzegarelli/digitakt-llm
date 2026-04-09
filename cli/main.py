@@ -163,16 +163,19 @@ def _run_repl(player: Player, generator: Generator, state: AppState, port) -> No
                 _, cc_track, cc_param, cc_raw = cc_parts
                 if cc_track not in TRACK_NAMES:
                     print(f"Unknown track '{cc_track}'. Tracks: {', '.join(TRACK_NAMES)}")
-                elif cc_param not in CC_MAP:
-                    print(f"Unknown param '{cc_param}'. Params: {', '.join(CC_MAP)}")
+                elif cc_param not in CC_MAP and cc_param != "velocity":
+                    print(f"Unknown param '{cc_param}'. Params: {', '.join(CC_MAP)}, velocity")
                 else:
                     try:
                         cc_value = int(cc_raw)
                         if not (0 <= cc_value <= 127):
                             raise ValueError
-                        state.update_cc(cc_track, cc_param, cc_value)
-                        if port:
-                            send_cc(port, TRACK_CHANNELS[cc_track], CC_MAP[cc_param], cc_value)
+                        if cc_param == "velocity":
+                            state.update_velocity(cc_track, cc_value)
+                        else:
+                            state.update_cc(cc_track, cc_param, cc_value)
+                            if port:
+                                send_cc(port, TRACK_CHANNELS[cc_track], CC_MAP[cc_param], cc_value)
                         print(f"CC set: {cc_track} {cc_param} = {cc_value}")
                     except ValueError:
                         print("Value must be an integer 0–127.")
@@ -194,6 +197,10 @@ def main() -> None:
         player.queue_pattern(payload["pattern"])
         if payload.get("bpm"):
             player.set_bpm(payload["bpm"])
+        for cc_track, params in payload.get("cc_changes", {}).items():
+            for cc_param, cc_value in params.items():
+                if cc_param != "velocity" and port:
+                    send_cc(port, TRACK_CHANNELS[cc_track], CC_MAP[cc_param], cc_value)
 
     # Select MIDI port
     port_name = _select_midi_port()

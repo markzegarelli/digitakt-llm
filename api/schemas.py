@@ -48,6 +48,7 @@ class StateResponse(BaseModel):
     pattern_history: list
     track_cc: dict
     track_muted: dict
+    track_velocity: dict
 
 
 class PatternListResponse(BaseModel):
@@ -62,3 +63,13 @@ class MuteRequest(BaseModel):
 class MuteResponse(BaseModel):
     track: str
     muted: bool
+
+
+class VelocityRequest(BaseModel):
+    track: str
+    value: int = Field(..., ge=0, le=127)
+
+
+class VelocityResponse(BaseModel):
+    track: str
+    value: int

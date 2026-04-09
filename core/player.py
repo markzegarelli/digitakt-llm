@@ -19,6 +19,8 @@ class Player:
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        if self.port is None:
+            return
         midi_utils.send_start(self.port)
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -29,7 +31,8 @@ class Player:
     def stop(self) -> None:
         self._stop_event.set()
         self.state.is_playing = False
-        midi_utils.send_stop(self.port)
+        if self.port is not None:
+            midi_utils.send_stop(self.port)
         self.bus.emit("playback_stopped", {})
 
     def set_bpm(self, bpm: float) -> None:
@@ -55,6 +58,8 @@ class Player:
                 continue
             velocity = pattern[track][step]
             if velocity > 0:
+                scale = self.state.track_velocity.get(track, 127)
+                velocity = max(1, (velocity * scale) // 127)
                 try:
                     midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
                 except Exception:
@@ -67,13 +72,13 @@ class Player:
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
+            next_tick = time.perf_counter()
             for step in range(16):
                 if self._stop_event.is_set():
                     break
                 for tick in range(6):
                     if self._stop_event.is_set():
                         break
-                    t0 = time.perf_counter()
                     if tick == 0:
                         self._play_step(step)
                     if self._stop_event.is_set():
@@ -87,8 +92,8 @@ class Player:
                         )
                         self._stop_event.set()
                         return
-                    elapsed = time.perf_counter() - t0
-                    sleep_time = self._tick_duration() - elapsed
+                    next_tick += self._tick_duration()
+                    sleep_time = next_tick - time.perf_counter()
                     if sleep_time > 0:
                         self._stop_event.wait(sleep_time)
 

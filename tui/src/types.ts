@@ -17,6 +17,7 @@ export interface DigitaktState {
   midi_port_name: string | null;
   track_cc: Record<TrackName, Record<CCParam, number>>;
   track_muted: Record<TrackName, boolean>;
+  track_velocity: Record<TrackName, number>;
   generation_status: "idle" | "generating" | "failed";
   generation_error: string | null;
   connected: boolean;

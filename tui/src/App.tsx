@@ -8,6 +8,9 @@ import { Prompt } from "./components/Prompt.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { TRACK_NAMES, CC_PARAMS } from "./types.js";
 
+// CC panel row indices: 0 = velocity, 1–8 = CC_PARAMS
+const CC_PANEL_MAX = CC_PARAMS.length; // 8, so valid range is 0–8
+
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -49,6 +52,7 @@ export function App({ baseUrl }: AppProps) {
       setFocus((f) => f === "pattern" ? "cc" : f === "cc" ? "prompt" : "pattern");
       return;
     }
+    if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
     if (focus === "prompt") return;  // Prompt handles its own keys
 
     if (input === " ") {
@@ -69,8 +73,8 @@ export function App({ baseUrl }: AppProps) {
     }
 
     if (focus === "cc") {
-      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, 7));
-      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, 7));
+      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, CC_PANEL_MAX));
+      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, CC_PANEL_MAX));
 
       if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
       if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
@@ -78,10 +82,18 @@ export function App({ baseUrl }: AppProps) {
       if (key.leftArrow || key.rightArrow) {
         const sign = key.rightArrow ? 1 : -1;
         const track = TRACK_NAMES[ccTrack];
-        const param = CC_PARAMS[ccParam];
-        if (track && param) {
-          const current = state.track_cc[track][param as CCParam];
-          actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
+        if (ccParam === 0) {
+          // velocity row
+          if (track) {
+            const current = state.track_velocity[track] ?? 127;
+            actions.setVelocity(track, clamp(current + sign, 0, 127));
+          }
+        } else {
+          const param = CC_PARAMS[ccParam - 1];
+          if (track && param) {
+            const current = state.track_cc[track][param as CCParam];
+            actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
+          }
         }
       }
       return;
@@ -105,6 +117,7 @@ export function App({ baseUrl }: AppProps) {
       />
       <CCPanel
         trackCC={state.track_cc}
+        trackVelocity={state.track_velocity}
         selectedTrack={ccTrack}
         selectedParam={ccParam}
         isFocused={focus === "cc"}
@@ -117,7 +130,7 @@ export function App({ baseUrl }: AppProps) {
       />
       <Box paddingX={1}>
         <Text color="gray">
-          {"Tab: switch panel · ↑↓: navigate · m: mute (pattern) · ←→: adjust CC · [/]: track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+          {"Tab/'/': switch panel · ↑↓: navigate · m: mute (pattern) · ←→: adjust · [/]: track (CC) · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
         </Text>
       </Box>
     </Box>

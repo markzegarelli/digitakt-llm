@@ -5,8 +5,9 @@ import { TRACK_NAMES, CC_PARAMS } from "../types.js";
 
 interface CCPanelProps {
   trackCC: DigitaktState["track_cc"];
+  trackVelocity: DigitaktState["track_velocity"];
   selectedTrack: number;  // 0–7
-  selectedParam: number;  // 0–7
+  selectedParam: number;  // 0=velocity, 1–8=CC params
   isFocused: boolean;
 }
 
@@ -17,9 +18,19 @@ function barGraph(value: number): string {
   return "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
 }
 
-export function CCPanel({ trackCC, selectedTrack, selectedParam, isFocused }: CCPanelProps) {
+export function CCPanel({ trackCC, trackVelocity, selectedTrack, selectedParam, isFocused }: CCPanelProps) {
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
   const cc = trackCC[trackName];
+
+  // Row 0 = velocity; rows 1–8 = CC_PARAMS
+  const rows: Array<{ key: string; label: string; value: number }> = [
+    { key: "velocity", label: "velocity", value: trackVelocity[trackName] ?? 127 },
+    ...CC_PARAMS.map((param) => ({
+      key: param,
+      label: param,
+      value: cc?.[param as CCParam] ?? 64,
+    })),
+  ];
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
@@ -32,14 +43,13 @@ export function CCPanel({ trackCC, selectedTrack, selectedParam, isFocused }: CC
         ))}
         <Text color="gray">{"  [/]: track  ↑↓: param  ←→: ±1"}</Text>
       </Box>
-      {CC_PARAMS.map((param, i) => {
-        const value = cc?.[param as CCParam] ?? 64;
+      {rows.map(({ key, label, value }, i) => {
         const isSelected = i === selectedParam;
         const col = isSelected && isFocused ? "cyan" : "white";
         return (
-          <Box key={param}>
+          <Box key={key}>
             <Text bold={isSelected} color={col}>
-              {isSelected && isFocused ? "▶ " : "  "}{param.padEnd(10)}
+              {isSelected && isFocused ? "▶ " : "  "}{label.padEnd(10)}
             </Text>
             <Text color={isSelected && isFocused ? "cyan" : "blue"}>{barGraph(value)}</Text>
             <Text>{"  "}</Text>

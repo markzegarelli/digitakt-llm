@@ -18,6 +18,9 @@ const DEFAULT_STATE: DigitaktState = {
   track_muted: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, false])
   ) as DigitaktState["track_muted"],
+  track_velocity: Object.fromEntries(
+    TRACK_NAMES.map((t) => [t, 127])
+  ) as DigitaktState["track_velocity"],
   generation_status: "idle",
   generation_error: null,
   connected: false,
@@ -26,6 +29,7 @@ const DEFAULT_STATE: DigitaktState = {
 export interface DigitaktActions {
   setMute(track: TrackName, muted: boolean): Promise<void>;
   setCC(track: TrackName, param: CCParam, value: number): Promise<void>;
+  setVelocity(track: TrackName, value: number): Promise<void>;
   setBpm(bpm: number): Promise<void>;
   play(): Promise<void>;
   stop(): Promise<void>;
@@ -61,6 +65,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         midi_port_name: data["midi_port_name"] as string | null,
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
         track_muted: data["track_muted"] as DigitaktState["track_muted"],
+        track_velocity: data["track_velocity"] as DigitaktState["track_velocity"],
         connected: true,
       }));
     } catch {
@@ -124,6 +129,14 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                   },
                 },
               };
+            case "velocity_changed":
+              return {
+                ...prev,
+                track_velocity: {
+                  ...prev.track_velocity,
+                  [msg.data["track"] as string]: msg.data["value"] as number,
+                },
+              };
             default:
               return prev;
           }
@@ -165,6 +178,14 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         },
       }));
       await api("POST", "/cc", { track, param, value });
+    }, [api]),
+
+    setVelocity: useCallback(async (track: TrackName, value: number) => {
+      setState((prev) => ({
+        ...prev,
+        track_velocity: { ...prev.track_velocity, [track]: value },
+      }));
+      await api("POST", "/velocity", { track, value });
     }, [api]),
 
     setBpm: useCallback(async (bpm: number) => {

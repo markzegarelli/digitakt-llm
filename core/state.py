@@ -45,6 +45,9 @@ class AppState:
     track_muted: dict = field(default_factory=lambda: {
         track: False for track in TRACK_NAMES
     })
+    track_velocity: dict = field(default_factory=lambda: {
+        track: 127 for track in TRACK_NAMES
+    })
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
@@ -52,6 +55,10 @@ class AppState:
     def update_cc(self, track: str, param: str, value: int) -> None:
         with self._lock:
             self.track_cc[track][param] = value
+
+    def update_velocity(self, track: str, value: int) -> None:
+        with self._lock:
+            self.track_velocity[track] = value
 
     def update_mute(self, track: str, muted: bool) -> None:
         with self._lock:
