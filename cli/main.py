@@ -192,6 +192,8 @@ def main() -> None:
     # Wire generator → player: apply new patterns on generation_complete
     def on_generation_complete(payload: dict) -> None:
         player.queue_pattern(payload["pattern"])
+        if payload.get("bpm"):
+            player.set_bpm(payload["bpm"])
 
     # Select MIDI port
     port_name = _select_midi_port()

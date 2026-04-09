@@ -8,12 +8,29 @@ from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 
 _SYSTEM_PROMPT = (
-    "You are an expert drum pattern generator for electronic music production. "
-    "You deeply understand groove, genre conventions, rhythm feel, and dynamics. "
-    "Generate 16-step drum patterns as strict JSON. Each step is an integer 0–127 "
-    "(velocity), 0 = silent.\n\n"
+    "You are an expert drum pattern generator specializing in techno and electronic music production. "
+    "You understand groove, hypnotic repetition, tension, and the specific conventions of techno subgenres.\n\n"
+    "SUBGENRE BPM RANGES — choose a BPM from the matching range based on the user's request:\n"
+    "  detroit techno:          130–138\n"
+    "  minimal techno:          130–136\n"
+    "  acid techno:             138–145\n"
+    "  hypnotic / trance techno: 140–148\n"
+    "  industrial techno:       140–150\n"
+    "  dark techno / hard techno: 142–155\n"
+    "  schranz:                 150–162\n"
+    "  generic / unspecified:   133–140\n\n"
+    "GROOVE RULES:\n"
+    "  - Kick: four-on-the-floor (steps 1,5,9,13) is the techno foundation; vary velocity 90–127 for feel\n"
+    "  - Snare/clap: anchor on beats 2 and 4 (steps 5 and 13); ghost notes on steps 3,7,11,15 add groove\n"
+    "  - Hihat: vary velocity across steps (range 40–100) — never use uniform flat values\n"
+    "  - Open hat: off-beat placements (step 9 is classic) or syncopated 3-against-4 patterns\n"
+    "  - Tom/cymbal/bell: use sparingly for fills, accents, or hypnotic motifs — silence is valid\n"
+    "  - Techno thrives on space and repetition; not every track needs hits every bar\n"
+    "  - Use the full velocity range 0–127, not just 0 and 100\n\n"
+    "Generate 16-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
     "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
     '{\n'
+    '  "bpm":     <integer from subgenre range>,\n'
     '  "kick":    [16 integers 0-127],\n'
     '  "snare":   [16 integers 0-127],\n'
     '  "tom":     [16 integers 0-127],\n'
@@ -52,7 +69,7 @@ class Generator:
             )
         return prompt
 
-    def _parse_pattern(self, text: str) -> dict | None:
+    def _parse_pattern(self, text: str) -> tuple[dict, int | None] | None:
         try:
             data = json.loads(text.strip())
         except (json.JSONDecodeError, ValueError):
@@ -69,7 +86,10 @@ class Generator:
             for v in data[k]
         ):
             return None
-        return data
+        raw_bpm = data.get("bpm")
+        bpm = int(raw_bpm) if isinstance(raw_bpm, (int, float)) and 20 <= raw_bpm <= 400 else None
+        pattern = {k: data[k] for k in TRACK_NAMES}
+        return pattern, bpm
 
     def _call_api(self, user_prompt: str, strict: bool = False) -> str:
         content = user_prompt + (_STRICT_SUFFIX if strict else "")
@@ -87,22 +107,23 @@ class Generator:
 
         try:
             text = self._call_api(user_prompt)
-            pattern = self._parse_pattern(text)
+            result = self._parse_pattern(text)
 
-            if pattern is None:
+            if result is None:
                 text = self._call_api(user_prompt, strict=True)
-                pattern = self._parse_pattern(text)
+                result = self._parse_pattern(text)
 
-            if pattern is None:
+            if result is None:
                 self.bus.emit(
                     "generation_failed",
                     {"prompt": prompt, "error": "Invalid JSON after retry"},
                 )
                 return
 
+            pattern, bpm = result
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
-            self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt})
+            self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm})
 
         except Exception as exc:
             self.bus.emit(
