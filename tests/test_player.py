@@ -91,3 +91,20 @@ def test_step_duration_formula():
     assert abs(player._step_duration() - 0.125) < 1e-9
     state.bpm = 60.0
     assert abs(player._step_duration() - 0.25) < 1e-9
+
+
+def test_muted_track_does_not_send_midi():
+    player, state, bus, port = _make_player()
+    state.track_muted["kick"] = True
+    player._play_step(0)   # step 0 — kick has velocity 100
+    for call_args in port.send.call_args_list:
+        msg = call_args[0][0]
+        assert msg.note != 36, "Muted kick must not send MIDI"
+
+
+def test_unmuted_track_still_sends_midi():
+    player, state, bus, port = _make_player()
+    state.track_muted["kick"] = False
+    player._play_step(0)
+    kick_sends = [c for c in port.send.call_args_list if c[0][0].note == 36]
+    assert len(kick_sends) > 0, "Unmuted kick must send MIDI"

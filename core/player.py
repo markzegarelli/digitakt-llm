@@ -46,6 +46,8 @@ class Player:
             note = midi_utils.NOTE_MAP.get(track)
             if note is None or track not in pattern:
                 continue
+            if self.state.track_muted.get(track, False):
+                continue
             velocity = pattern[track][step]
             if velocity > 0:
                 try:
