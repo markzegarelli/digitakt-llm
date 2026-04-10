@@ -47,7 +47,7 @@ def test_track_channels_completeness():
 # ---------------------------------------------------------------------------
 
 def test_cc_map_completeness():
-    expected = {"tune", "filter", "resonance", "attack", "decay", "volume", "reverb", "delay"}
+    expected = {"tune", "filter", "resonance", "attack", "hold", "decay", "volume", "reverb", "delay"}
     assert set(CC_MAP.keys()) == expected
     for name, num in CC_MAP.items():
         assert 0 <= num <= 127, f"{name} CC number {num} out of range"
@@ -70,6 +70,7 @@ def test_app_state_track_cc_defaults():
         assert cc["filter"] == 127
         assert cc["resonance"] == 0
         assert cc["attack"] == 0
+        assert cc["hold"] == 0
         assert cc["decay"] == 64
 
 

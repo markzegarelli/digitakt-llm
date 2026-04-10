@@ -31,6 +31,7 @@ CC_MAP: dict[str, int] = {
     "filter":    74,   # Filter frequency
     "resonance": 75,   # Filter resonance
     "attack":    78,   # Amp attack time
+    "hold":      79,   # Amp hold time
     "decay":     80,   # Amp decay time
     "volume":     7,   # Amp volume
     "reverb":    83,   # Amp reverb send
