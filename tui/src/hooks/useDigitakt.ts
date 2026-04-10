@@ -45,6 +45,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "vel_changed":          return `vel: ${data["track"]} step ${data["step"]} = ${data["value"]}`;
     case "swing_changed":        return `swing: ${data["amount"]}`;
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
+    case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
     default:                     return `${event}`;
   }
 }
@@ -61,6 +62,7 @@ export interface DigitaktActions {
   setSwing(amount: number): Promise<void>;
   setVel(track: TrackName, step: number, value: number): Promise<void>;
   randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
+  randbeat(): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -116,7 +118,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         };
 
         // Re-fetch full state for bulk pattern changes
-        if (msg.event === "random_applied") {
+        if (msg.event === "random_applied" || msg.event === "randbeat_applied") {
           fetchState();
         }
 
@@ -135,13 +137,16 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return { ...prev, is_playing: false, log: newLog };
             case "generation_started":
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
-            case "generation_complete":
+            case "generation_complete": {
+              const genBpm = msg.data["bpm"] as number | undefined;
               return {
                 ...prev,
                 generation_status: "idle",
                 current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"],
+                ...(genBpm ? { bpm: genBpm } : {}),
                 log: newLog,
               };
+            }
             case "generation_failed":
               return {
                 ...prev,
@@ -192,6 +197,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             }
             case "prob_changed":
             case "random_applied":
+            case "randbeat_applied":
               return { ...prev, log: newLog };
             default:
               return { ...prev, log: newLog };
@@ -269,6 +275,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     randomize: useCallback(async (track: string, param: string, lo: number, hi: number) => {
       await api("POST", "/random", { track, param, lo, hi });
+    }, [api]),
+
+    randbeat: useCallback(async () => {
+      await api("POST", "/randbeat");
     }, [api]),
   };
 

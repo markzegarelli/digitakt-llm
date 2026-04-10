@@ -42,6 +42,7 @@ export function App({ baseUrl }: AppProps) {
   const [ccTrack, setCCTrack]           = useState(0);
   const [ccParam, setCCParam]           = useState(0);
   const [showHelp, setShowHelp]         = useState(false);
+  const [showLog, setShowLog]           = useState(false);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -96,6 +97,12 @@ export function App({ baseUrl }: AppProps) {
         actions.randomize(track, param, lo, hi);
         break;
       }
+      case "randbeat":
+        actions.randbeat();
+        break;
+      case "log":
+        setShowLog((v) => !v);
+        break;
       case "cc": {
         const track = parts[1] as TrackName;
         const param = parts[2] as CCParam;
@@ -117,7 +124,7 @@ export function App({ baseUrl }: AppProps) {
     if (key.tab) {
       setFocus((f) => {
         if (f === "pattern") return "cc";
-        if (f === "cc") return "log";
+        if (f === "cc") return showLog ? "log" : "prompt";
         if (f === "log") return "prompt";
         return "pattern";
       });
@@ -194,10 +201,12 @@ export function App({ baseUrl }: AppProps) {
         selectedParam={ccParam}
         isFocused={focus === "cc"}
       />
-      <ActivityLog
-        log={state.log}
-        isFocused={focus === "log"}
-      />
+      {showLog && (
+        <ActivityLog
+          log={state.log}
+          isFocused={focus === "log"}
+        />
+      )}
       <Prompt
         isFocused={focus === "prompt"}
         generationStatus={state.generation_status}

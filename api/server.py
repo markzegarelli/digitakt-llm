@@ -17,7 +17,7 @@ from api.schemas import (
     VelocityRequest, VelocityResponse,
     ProbRequest, SwingRequest, VelRequest, RandomRequest,
 )
-from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob
+from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -36,7 +36,7 @@ _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
     "cc_changed", "mute_changed", "velocity_changed",
-    "swing_changed", "prob_changed", "vel_changed", "random_applied",
+    "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
 ]
 
 
@@ -207,6 +207,21 @@ def set_random(req: RandomRequest):
     _player.queue_pattern(new_pattern)
     _bus.emit("random_applied", {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi})
     return {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi}
+
+
+@app.post("/randbeat")
+def post_randbeat():
+    pattern, bpm, swing, cc_changes = generate_random_beat()
+    pattern = apply_swing(pattern, swing)
+    _player.queue_pattern(pattern)
+    _player.set_bpm(bpm)
+    for track, params in cc_changes.items():
+        for param, value in params.items():
+            _state.update_cc(track, param, value)
+            if _player and _player.port:
+                send_cc(_player.port, TRACK_CHANNELS[track], CC_MAP[param], value)
+    _bus.emit("randbeat_applied", {"bpm": bpm, "swing": swing})
+    return {"bpm": bpm, "swing": swing}
 
 
 @app.get("/patterns", response_model=PatternListResponse)
