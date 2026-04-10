@@ -84,8 +84,9 @@ export function CCPanel({
 
           return (
             <Box key={key}>
-              {/* Fixed-width selector: always "▶ " or "  " */}
-              <Text bold color={col}>{"▶ "}</Text>
+              {/* Single ASCII char selector — same pattern as PatternGrid */}
+              <Text bold color={col}>{">"}</Text>
+              <Text>{" "}</Text>
               <Text bold color={col}>{label.padEnd(10)}</Text>
               <Text color="gray">{"["}</Text>
               {Array.from({ length: 16 }, (_, s) => {
@@ -122,15 +123,19 @@ export function CCPanel({
 
         return (
           <Box key={key}>
-            {/* Fixed-width selector: always 2 chars — prevents layout shift */}
-            <Text bold color={col}>{isSelected && isFocused ? "▶ " : "  "}</Text>
+            {/* Single ASCII char selector — same pattern as PatternGrid */}
+            <Text bold color={isSelected && isFocused ? "cyan" : undefined}>
+              {isSelected && isFocused ? ">" : " "}
+            </Text>
+            <Text>{" "}</Text>
             <Text bold={isSelected} color={col}>{label.padEnd(10)}</Text>
             <Text color={isSelected && isFocused ? "cyan" : "blue"}>{barGraph(value)}</Text>
             <Text>{"  "}</Text>
             <Text bold={isSelected} color={col}>{String(value).padStart(3)}</Text>
-            {/* Fixed-width tail: always 2 chars — prevents layout shift on selection change */}
+            {/* Fixed-width tail: space + ASCII char — matches the > prefix width */}
+            <Text>{" "}</Text>
             <Text color={isSelected && isFocused ? "yellow" : undefined}>
-              {isSelected && isFocused ? " ◄" : "  "}
+              {isSelected && isFocused ? "<" : " "}
             </Text>
           </Box>
         );
