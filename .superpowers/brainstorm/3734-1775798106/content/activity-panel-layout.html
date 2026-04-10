@@ -1,0 +1,115 @@
+<h2>Activity Panel Layout</h2>
+<p class="subtitle">When the log panel is open, how should the layout look? Choose the option that feels right.</p>
+
+<div class="split" style="gap:24px;align-items:flex-start">
+
+  <!-- Option A -->
+  <div class="mockup" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">A — Log replaces CC panel (right column)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:11px;padding:8px;background:#0d0d0d;color:#ccc;line-height:1.5">
+      <div style="color:#4af;margin-bottom:4px">digitakt-llm  ● 138 BPM  ▶ PLAYING  [Digitakt]  swing:20</div>
+      <div style="display:flex;height:260px;gap:4px">
+        <!-- Pattern + CC Panel stacked left -->
+        <div style="flex:2;display:flex;flex-direction:column;gap:4px">
+          <div style="flex:2;border:1px solid #4af;padding:6px;overflow:hidden">
+            <div style="color:#4af;font-size:10px;margin-bottom:4px">PATTERN ─────────────────────────────</div>
+            <div style="color:#888;font-size:10px">kick   │ ██ .  .  .  ██ .  .  .  ██ .  .  .  ██ .  .  . │</div>
+            <div style="color:#888;font-size:10px">snare  │ .  .  .  .  ██ .  .  .  .  .  .  .  ██ .  .  . │</div>
+            <div style="color:#888;font-size:10px">hihat  │ ██ .  ██ .  ██ .  ██ .  ██ .  ██ .  ██ .  ██ . │</div>
+            <div style="color:#888;font-size:10px">clap   │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+            <div style="color:#888;font-size:10px">tom    │ .  .  .  .  .  .  .  .  ██ .  .  .  .  .  .  . │</div>
+            <div style="color:#888;font-size:10px">openht │ .  .  .  .  .  .  ██ .  .  .  .  .  .  .  ██ . │</div>
+            <div style="color:#888;font-size:10px">bell   │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+            <div style="color:#888;font-size:10px">cymbal │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+          </div>
+          <div style="flex:1;border:1px solid #4af;padding:6px;overflow:hidden">
+            <div style="color:#4af;font-size:10px;margin-bottom:4px">CC PARAMS ───────────────────────────</div>
+            <div style="color:#888;font-size:10px">kick   filter:64  res:64  decay:80  tune:64</div>
+            <div style="color:#888;font-size:10px">snare  filter:72  res:48  decay:64  tune:60</div>
+            <div style="color:#888;font-size:10px">hihat  filter:90  res:32  decay:40  tune:68</div>
+          </div>
+        </div>
+        <!-- Activity log right column -->
+        <div style="flex:1;border:1px solid #f84;padding:6px;overflow:hidden">
+          <div style="color:#f84;font-size:10px;margin-bottom:4px">ACTIVITY LOG ─────────────────────────</div>
+          <div style="color:#888;font-size:10px">14:02:01 pattern generated</div>
+          <div style="color:#888;font-size:10px">14:02:01 bpm → 138</div>
+          <div style="color:#888;font-size:10px">14:02:01 swing → 20</div>
+          <div style="color:#888;font-size:10px">14:02:05 playback started</div>
+          <div style="color:#888;font-size:10px">14:02:31 /bpm 142</div>
+          <div style="color:#888;font-size:10px">14:02:31 bpm → 142</div>
+          <div style="color:#888;font-size:10px">14:02:45 pattern generated</div>
+          <div style="color:#888;font-size:10px">14:02:45 bpm → 150</div>
+          <div style="color:#888;font-size:10px">14:03:01 /random all velocity</div>
+          <div style="color:#888;font-size:10px">14:03:12 /randbeat</div>
+          <div style="color:#888;font-size:10px">14:03:12 bpm → 144</div>
+          <div style="color:#888;font-size:10px">14:03:12 cc randomized</div>
+          <div style="color:#aaa;font-size:10px">...</div>
+        </div>
+      </div>
+      <div style="margin-top:4px;border:1px solid #555;padding:4px;color:#888;font-size:10px">
+        &gt; <span style="color:#fff">_</span>
+      </div>
+    </div>
+    <div style="padding:8px 4px;font-size:12px;color:#999">
+      Activity replaces the CC panel in the right column. CC panel hides when log is open. Toggle with <code>Tab</code> or <code>/log</code>.
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="mockup" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer;flex:1">
+    <div class="mockup-header">B — Log as third column (CC stays visible)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:11px;padding:8px;background:#0d0d0d;color:#ccc;line-height:1.5">
+      <div style="color:#4af;margin-bottom:4px">digitakt-llm  ● 138 BPM  ▶ PLAYING  [Digitakt]  swing:20</div>
+      <div style="display:flex;height:260px;gap:4px">
+        <!-- Pattern Panel -->
+        <div style="flex:3;border:1px solid #4af;padding:6px;overflow:hidden">
+          <div style="color:#4af;font-size:10px;margin-bottom:4px">PATTERN ──────────────────────────</div>
+          <div style="color:#888;font-size:10px">kick   │ ██ .  .  .  ██ .  .  .  ██ .  .  .  ██ .  .  . │</div>
+          <div style="color:#888;font-size:10px">snare  │ .  .  .  .  ██ .  .  .  .  .  .  .  ██ .  .  . │</div>
+          <div style="color:#888;font-size:10px">hihat  │ ██ .  ██ .  ██ .  ██ .  ██ .  ██ .  ██ .  ██ . │</div>
+          <div style="color:#888;font-size:10px">clap   │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+          <div style="color:#888;font-size:10px">tom    │ .  .  .  .  .  .  .  .  ██ .  .  .  .  .  .  . │</div>
+          <div style="color:#888;font-size:10px">openht │ .  .  .  .  .  .  ██ .  .  .  .  .  .  .  ██ . │</div>
+          <div style="color:#888;font-size:10px">bell   │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+          <div style="color:#888;font-size:10px">cymbal │ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . │</div>
+        </div>
+        <!-- CC Panel -->
+        <div style="flex:1.5;border:1px solid #4af;padding:6px;overflow:hidden">
+          <div style="color:#4af;font-size:10px;margin-bottom:4px">CC PARAMS ───────────</div>
+          <div style="color:#888;font-size:10px">kick</div>
+          <div style="color:#888;font-size:10px"> filter: 64</div>
+          <div style="color:#888;font-size:10px"> res:    64</div>
+          <div style="color:#888;font-size:10px"> decay:  80</div>
+          <div style="color:#888;font-size:10px">snare</div>
+          <div style="color:#888;font-size:10px"> filter: 72</div>
+          <div style="color:#888;font-size:10px"> decay:  64</div>
+          <div style="color:#888;font-size:10px">hihat</div>
+          <div style="color:#888;font-size:10px"> filter: 90</div>
+          <div style="color:#888;font-size:10px"> decay:  40</div>
+        </div>
+        <!-- Activity log right column -->
+        <div style="flex:1.5;border:1px solid #f84;padding:6px;overflow:hidden">
+          <div style="color:#f84;font-size:10px;margin-bottom:4px">ACTIVITY ────────────</div>
+          <div style="color:#888;font-size:10px">pattern generated</div>
+          <div style="color:#888;font-size:10px">bpm → 138</div>
+          <div style="color:#888;font-size:10px">swing → 20</div>
+          <div style="color:#888;font-size:10px">playback started</div>
+          <div style="color:#888;font-size:10px">bpm → 142</div>
+          <div style="color:#888;font-size:10px">pattern generated</div>
+          <div style="color:#888;font-size:10px">bpm → 150</div>
+          <div style="color:#888;font-size:10px">/randbeat</div>
+          <div style="color:#888;font-size:10px">bpm → 144</div>
+          <div style="color:#888;font-size:10px">cc randomized</div>
+        </div>
+      </div>
+      <div style="margin-top:4px;border:1px solid #555;padding:4px;color:#888;font-size:10px">
+        &gt; <span style="color:#fff">_</span>
+      </div>
+    </div>
+    <div style="padding:8px 4px;font-size:12px;color:#999">
+      Activity is a third column alongside Pattern and CC. All panels visible at once. Toggle with <code>Tab</code> or <code>/log</code>.
+    </div>
+  </div>
+
+</div>
