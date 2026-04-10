@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import time
 import threading
 from core.state import AppState, TRACK_NAMES
@@ -46,6 +47,12 @@ class Player:
             note = midi_utils.NOTE_MAP.get(track)
             if note is None or track not in pattern:
                 continue
+            # Check per-step probability
+            prob_track = pattern.get("prob", {}).get(track)
+            if prob_track is not None:
+                step_prob = prob_track[step]
+                if random.random() * 100 >= step_prob:
+                    continue
             velocity = pattern[track][step]
             if velocity > 0:
                 try:
