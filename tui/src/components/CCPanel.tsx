@@ -11,7 +11,8 @@ interface CCPanelProps {
   selectedParam: number;  // 0=velocity, 1–8=CC params
   isFocused: boolean;
   stepMode: boolean;
-  selectedStep: number;   // 0–15 (only relevant when stepMode=true)
+  selectedStep: number;        // 0–15 (only relevant when stepMode=true)
+  stepInputBuffer: string;     // digits being typed in step-edit mode
 }
 
 const BAR_WIDTH = 20;
@@ -21,8 +22,9 @@ function barGraph(value: number): string {
   return "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
 }
 
-function stepLabel(value: number | null | undefined): string {
-  if (value === null || value === undefined) return " · ";
+// Fixed-width 3-char display for a step cell: override value or "  ·"
+function stepCell(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "  ·";
   return String(value).padStart(3);
 }
 
@@ -35,6 +37,7 @@ export function CCPanel({
   isFocused,
   stepMode,
   selectedStep,
+  stepInputBuffer,
 }: CCPanelProps) {
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
   const cc = trackCC[trackName];
@@ -50,7 +53,7 @@ export function CCPanel({
   ];
 
   const hintText = stepMode
-    ? "↑↓: value  ←→: step  d: clear  Esc: exit step mode"
+    ? "←→: step  ↑↓: ±1  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
     : "[/]: track  ↑↓: param  ←→: ±1  Enter: step mode";
 
   return (
@@ -67,38 +70,51 @@ export function CCPanel({
       {rows.map(({ key, label, value }, i) => {
         const isSelected = i === selectedParam;
         const col = isSelected && isFocused ? "cyan" : "white";
-        const isStepEditing = isSelected && isFocused && stepMode && i > 0; // velocity row has no step CC
+        const isStepEditing = isSelected && isFocused && stepMode && i > 0; // velocity has no step CC
 
         if (isStepEditing) {
-          // Get per-step CC overrides for this param on the current track
           const param = CC_PARAMS[i - 1] as CCParam;
           const stepOverrides = stepCC?.[trackName]?.[param] ?? null;
+          // What value is the current step actually set to (stored, not preview)
+          const storedValue = stepOverrides?.[selectedStep] ?? null;
+          // Preview: show buffer if user is typing, otherwise stored value
+          const previewValue = stepInputBuffer.length > 0
+            ? parseInt(stepInputBuffer, 10)
+            : storedValue;
 
           return (
             <Box key={key}>
-              <Text bold color={col}>{"▶ "}{label.padEnd(10)}</Text>
+              {/* Fixed-width selector: always "▶ " or "  " */}
+              <Text bold color={col}>{"▶ "}</Text>
+              <Text bold color={col}>{label.padEnd(10)}</Text>
               <Text color="gray">{"["}</Text>
               {Array.from({ length: 16 }, (_, s) => {
-                const override = stepOverrides?.[s] ?? null;
                 const isCurrentStep = s === selectedStep;
+                const cellValue = isCurrentStep ? previewValue : (stepOverrides?.[s] ?? null);
+                const isBuffering = isCurrentStep && stepInputBuffer.length > 0;
                 return (
                   <Text
                     key={s}
                     bold={isCurrentStep}
-                    color={isCurrentStep ? "yellow" : override !== null ? "cyan" : "gray"}
+                    color={
+                      isCurrentStep
+                        ? (isBuffering ? "magenta" : "yellow")
+                        : cellValue !== null ? "cyan" : "gray"
+                    }
                   >
-                    {stepLabel(override)}
+                    {stepCell(cellValue)}
                     {s < 15 ? " " : ""}
                   </Text>
                 );
               })}
               <Text color="gray">{"]"}</Text>
+              {/* Fixed-width step label — always same width */}
               <Text bold color="yellow">
-                {"  step "}{selectedStep + 1}{": "}
-                {stepOverrides?.[selectedStep] !== null && stepOverrides?.[selectedStep] !== undefined
-                  ? String(stepOverrides[selectedStep])
-                  : "global"}
-                {" ◄"}
+                {" s"}{String(selectedStep + 1).padStart(2)}{": "}
+                {stepInputBuffer.length > 0
+                  ? `${stepInputBuffer}_`
+                  : storedValue !== null ? String(storedValue) : "global"}
+                {"  "}
               </Text>
             </Box>
           );
@@ -106,13 +122,16 @@ export function CCPanel({
 
         return (
           <Box key={key}>
-            <Text bold={isSelected} color={col}>
-              {isSelected && isFocused ? "▶ " : "  "}{label.padEnd(10)}
-            </Text>
+            {/* Fixed-width selector: always 2 chars — prevents layout shift */}
+            <Text bold color={col}>{isSelected && isFocused ? "▶ " : "  "}</Text>
+            <Text bold={isSelected} color={col}>{label.padEnd(10)}</Text>
             <Text color={isSelected && isFocused ? "cyan" : "blue"}>{barGraph(value)}</Text>
             <Text>{"  "}</Text>
             <Text bold={isSelected} color={col}>{String(value).padStart(3)}</Text>
-            {isSelected && isFocused && <Text color="yellow"> ◄</Text>}
+            {/* Fixed-width tail: always 2 chars — prevents layout shift on selection change */}
+            <Text color={isSelected && isFocused ? "yellow" : undefined}>
+              {isSelected && isFocused ? " ◄" : "  "}
+            </Text>
           </Box>
         );
       })}

@@ -61,6 +61,7 @@ export function App({ baseUrl }: AppProps) {
   const [ccParam, setCCParam]           = useState(0);
   const [ccStepMode, setCCStepMode]     = useState(false);
   const [ccSelectedStep, setCCSelectedStep] = useState(0);
+  const [ccStepInputBuffer, setCCStepInputBuffer] = useState("");
   const [showHelp, setShowHelp]         = useState(false);
   const [showLog, setShowLog]           = useState(false);
   const [answerText, setAnswerText]     = useState<string | null>(null);
@@ -224,13 +225,39 @@ export function App({ baseUrl }: AppProps) {
 
     if (focus === "cc") {
       if (ccStepMode) {
-        // Step-edit mode: navigate steps and adjust per-step CC values
-        if (key.escape) { setCCStepMode(false); return; }
-        if (key.leftArrow)  { setCCSelectedStep((s) => clamp(s - 1, 0, 15)); return; }
-        if (key.rightArrow) { setCCSelectedStep((s) => clamp(s + 1, 0, 15)); return; }
+        const track = TRACK_NAMES[ccTrack] as TrackName;
+        const param = CC_PARAMS[ccParam - 1] as CCParam;
+
+        // Commit number buffer helper
+        const commitBuffer = (buf: string) => {
+          if (buf.length > 0 && track && param) {
+            const val = clamp(parseInt(buf, 10), 0, 127);
+            actions.setCCStep(track, param, ccSelectedStep + 1, val);
+          }
+        };
+
+        if (key.escape) {
+          commitBuffer(ccStepInputBuffer);
+          setCCStepInputBuffer("");
+          setCCStepMode(false);
+          return;
+        }
+
+        if (key.leftArrow || key.rightArrow) {
+          commitBuffer(ccStepInputBuffer);
+          setCCStepInputBuffer("");
+          setCCSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, 15));
+          return;
+        }
+
+        if (key.return) {
+          commitBuffer(ccStepInputBuffer);
+          setCCStepInputBuffer("");
+          return;
+        }
+
         if (key.upArrow || key.downArrow) {
-          const track = TRACK_NAMES[ccTrack] as TrackName;
-          const param = CC_PARAMS[ccParam - 1] as CCParam;
+          setCCStepInputBuffer("");
           if (track && param) {
             const stepOverrides = state.step_cc?.[track]?.[param];
             const current = stepOverrides?.[ccSelectedStep] ?? state.track_cc[track][param];
@@ -239,12 +266,32 @@ export function App({ baseUrl }: AppProps) {
           }
           return;
         }
-        if (input === "d") {
-          const track = TRACK_NAMES[ccTrack] as TrackName;
-          const param = CC_PARAMS[ccParam - 1] as CCParam;
-          if (track && param) actions.setCCStep(track, param, ccSelectedStep + 1, null);
+
+        // Backspace: pop digit from buffer, or revert step to global when buffer empty
+        if (key.backspace || key.delete) {
+          if (ccStepInputBuffer.length > 0) {
+            setCCStepInputBuffer((b) => b.slice(0, -1));
+          } else {
+            if (track && param) actions.setCCStep(track, param, ccSelectedStep + 1, null);
+          }
           return;
         }
+
+        // Digit entry: build number buffer
+        if (/^\d$/.test(input)) {
+          const newBuf = ccStepInputBuffer + input;
+          const val = parseInt(newBuf, 10);
+          if (val <= 127) {
+            setCCStepInputBuffer(newBuf);
+            // Auto-commit at 3 digits
+            if (newBuf.length >= 3 && track && param) {
+              actions.setCCStep(track, param, ccSelectedStep + 1, val);
+              setCCStepInputBuffer("");
+            }
+          }
+          return;
+        }
+
         return;  // swallow other keys while in step-edit mode
       }
 
@@ -259,6 +306,7 @@ export function App({ baseUrl }: AppProps) {
       if ((input === "e" || key.return) && ccParam > 0) {
         setCCStepMode(true);
         setCCSelectedStep(0);
+        setCCStepInputBuffer("");
         return;
       }
 
@@ -311,6 +359,7 @@ export function App({ baseUrl }: AppProps) {
             isFocused={focus === "cc"}
             stepMode={ccStepMode}
             selectedStep={ccSelectedStep}
+            stepInputBuffer={ccStepInputBuffer}
           />
           <Prompt
             isFocused={focus === "prompt"}
