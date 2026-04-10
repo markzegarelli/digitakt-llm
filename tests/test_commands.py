@@ -1,0 +1,143 @@
+# tests/test_commands.py
+import copy
+import pytest
+
+from cli.commands import (
+    parse_random_range,
+    apply_random_velocity,
+    apply_random_prob,
+    apply_prob_step,
+    apply_vel_step,
+    apply_swing,
+)
+from core.state import TRACK_NAMES
+
+
+FIXTURE_PATTERN = {
+    "kick":    [100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0],
+    "snare":   [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0],
+    "tom":     [0] * 16,
+    "clap":    [0] * 16,
+    "bell":    [0] * 16,
+    "hihat":   [60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0, 60, 0],
+    "openhat": [0] * 16,
+    "cymbal":  [0] * 16,
+}
+
+
+def _fresh_pattern():
+    return copy.deepcopy(FIXTURE_PATTERN)
+
+
+# ── parse_random_range ────────────────────────────────────────────────────────
+
+def test_parse_range_explicit():
+    assert parse_random_range("[40-60]", "velocity") == (40, 60)
+
+
+def test_parse_range_none_velocity_defaults():
+    assert parse_random_range(None, "velocity") == (0, 127)
+
+
+def test_parse_range_none_prob_defaults():
+    assert parse_random_range(None, "prob") == (0, 100)
+
+
+def test_parse_range_bad_format_raises():
+    # Missing brackets
+    with pytest.raises(ValueError):
+        parse_random_range("40-60", "velocity")
+
+
+def test_parse_range_inverted_raises():
+    with pytest.raises(ValueError):
+        parse_random_range("[60-40]", "velocity")
+
+
+def test_parse_range_out_of_domain_raises():
+    # 200 > 127 for velocity
+    with pytest.raises(ValueError):
+        parse_random_range("[0-200]", "velocity")
+
+
+# ── apply_random_velocity ─────────────────────────────────────────────────────
+
+def test_apply_random_velocity_preserves_silent_steps():
+    pattern = _fresh_pattern()
+    result = apply_random_velocity(pattern, ["kick"], lo=50, hi=100)
+    for i, v in enumerate(result["kick"]):
+        if pattern["kick"][i] == 0:
+            assert v == 0, f"Silent step {i} should remain 0"
+
+
+def test_apply_random_velocity_modifies_active_steps_in_range():
+    pattern = _fresh_pattern()
+    # lo == hi makes it deterministic
+    result = apply_random_velocity(pattern, ["kick"], lo=50, hi=50)
+    for i, v in enumerate(result["kick"]):
+        if pattern["kick"][i] > 0:
+            assert v == 50, f"Active step {i} should be 50"
+
+
+def test_apply_random_velocity_all_tracks():
+    pattern = _fresh_pattern()
+    result = apply_random_velocity(pattern, ["all"], lo=77, hi=77)
+    for track in TRACK_NAMES:
+        for i, v in enumerate(result[track]):
+            if pattern[track][i] > 0:
+                assert v == 77, f"{track} step {i} should be 77"
+
+
+# ── apply_random_prob ─────────────────────────────────────────────────────────
+
+def test_apply_random_prob_sets_16_values_in_range():
+    pattern = _fresh_pattern()
+    result = apply_random_prob(pattern, ["kick"], lo=50, hi=50)
+    assert len(result["prob"]["kick"]) == 16
+    assert all(v == 50 for v in result["prob"]["kick"])
+
+
+# ── apply_prob_step ───────────────────────────────────────────────────────────
+
+def test_apply_prob_step_sets_correct_index():
+    pattern = _fresh_pattern()
+    result = apply_prob_step(pattern, "kick", 3, 75)
+    assert result["prob"]["kick"][3] == 75
+
+
+# ── apply_vel_step ────────────────────────────────────────────────────────────
+
+def test_apply_vel_step_sets_correct_index():
+    pattern = _fresh_pattern()
+    result = apply_vel_step(pattern, "kick", 5, 99)
+    assert result["kick"][5] == 99
+
+
+# ── apply_swing ───────────────────────────────────────────────────────────────
+
+def test_apply_swing_sets_value():
+    pattern = _fresh_pattern()
+    result = apply_swing(pattern, 42)
+    assert result["swing"] == 42
+
+
+# ── immutability ──────────────────────────────────────────────────────────────
+
+def test_apply_functions_do_not_mutate_input():
+    original = _fresh_pattern()
+    snapshot = copy.deepcopy(original)
+
+    apply_random_velocity(original, ["kick"], lo=50, hi=50)
+    assert original["kick"] == snapshot["kick"]
+
+    apply_random_prob(original, ["kick"], lo=50, hi=50)
+    assert "prob" not in original
+
+    apply_prob_step(original, "kick", 3, 75)
+    assert "prob" not in original
+
+    apply_vel_step(original, "kick", 5, 99)
+    assert original["kick"][5] == snapshot["kick"][5]
+
+    apply_swing(original, 42)
+    assert "swing" not in original
