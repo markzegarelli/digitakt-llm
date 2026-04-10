@@ -16,6 +16,24 @@ interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+// Map UI display labels → canonical API track names
+const TRACK_ALIASES: Record<string, TrackName> = {
+  ophat:  "openhat",
+  cymbl:  "cymbal",
+};
+
+function normalizeTrack(raw: string): string {
+  const lower = raw.toLowerCase();
+  return TRACK_ALIASES[lower] ?? lower;
+}
+
+// Accept common shorthand for the two /random param values
+function normalizeRandomParam(raw: string): string {
+  if (raw === "vel" || raw === "v" || raw === "velocity") return "velocity";
+  if (raw === "p")                                         return "prob";
+  return raw;
+}
+
 function parseRange(rangeStr: string | undefined, param: string): [number, number] {
   if (!rangeStr) {
     return param === "prob" ? [0, 100] : [0, 127];
@@ -78,24 +96,26 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       case "prob": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setProb(track, step, value);
         break;
       }
       case "vel": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setVel(track, step, value);
         break;
       }
       case "random": {
-        const track = parts[1] ?? "all";
-        const param = parts[2] ?? "velocity";
+        const track = normalizeTrack(parts[1] ?? "all");
+        const param = normalizeRandomParam(parts[2] ?? "velocity");
         const [lo, hi] = parseRange(parts[3], param);
-        actions.randomize(track, param, lo, hi);
+        if (param === "velocity" || param === "prob") {
+          actions.randomize(track, param, lo, hi);
+        }
         break;
       }
       case "randbeat":
@@ -105,7 +125,7 @@ export function App({ baseUrl }: AppProps) {
         setShowLog((v) => !v);
         break;
       case "cc": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const param = parts[2] as CCParam;
         const value = parseInt(parts[3] ?? "", 10);
         if (track && param && !isNaN(value)) actions.setCC(track, param, value);
