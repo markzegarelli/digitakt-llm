@@ -69,6 +69,17 @@ class Generator:
             for v in data[k]
         ):
             return None
+        if "prob" in data:
+            prob = data["prob"]
+            if not isinstance(prob, dict):
+                return None
+            for track, values in prob.items():
+                if track not in TRACK_NAMES:
+                    return None
+                if not isinstance(values, list) or len(values) != 16:
+                    return None
+                if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
+                    return None
         return data
 
     def _call_api(self, user_prompt: str, strict: bool = False) -> str:
