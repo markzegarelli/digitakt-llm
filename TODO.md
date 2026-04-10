@@ -6,17 +6,17 @@ See [DIRECTION.md](DIRECTION.md) for the full roadmap and connectivity strategy.
 
 ## Near-term (Phase 1 completion)
 
-- [ ] Multi-track grid display in terminal — show all 8 tracks as a 16-step grid, updating live
-- [ ] Per-track mute/unmute from REPL (`mute 1`, `unmute bd`, etc.)
+- [x] Multi-track grid display in terminal — show all 8 tracks as a 16-step grid, updating live
+- [x] Per-track mute/unmute from REPL (`mute 1`, `unmute bd`, etc.)
 - [ ] Pattern length variants — support 8, 16, 32 steps; Claude should be told the target length
-- [ ] Save/load patterns to disk — JSON files, named by prompt or user label
+- [x] Save/load patterns to disk — JSON files, named by prompt or user label
 
 ## Live performance (Phase 2)
 
 - [ ] Fill generation — `fill 2` generates a 2-bar fill queued for next bar boundary
 - [ ] Named pattern library — `save "verse"`, `load "verse"`, `list patterns`
-- [ ] Per-track probability — expose Digitakt's trig probability concept in the pattern model
-- [ ] Swing offset — add shuffle/swing parameter to BPM control
+- [x] Per-track probability — expose Digitakt's trig probability concept in the pattern model
+- [x] Swing offset — add shuffle/swing parameter to BPM control
 
 ## Digitakt depth (Phase 3)
 

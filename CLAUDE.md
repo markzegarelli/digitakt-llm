@@ -10,6 +10,8 @@ pip install -e ".[dev]"
 digitakt-llm          # requires .env with ANTHROPIC_API_KEY
 ```
 
+Type `/help` in the TUI for a full command reference.
+
 ## Key Documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, data flow, EventBus patterns
@@ -44,7 +46,7 @@ tests/       # one test file per module, TDD throughout
 pytest -v
 ```
 
-87 tests, ~1s. All mocked — no real MIDI or API calls needed.
+119 tests, ~1s. All mocked — no real MIDI or API calls needed.
 
 ## API
 
