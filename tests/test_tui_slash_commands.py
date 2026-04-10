@@ -179,3 +179,36 @@ def test_slash_random_unknown_param_logs_error():
     app._handle_slash("random kick notaparam")
     app._log.assert_called()
     player.queue_pattern.assert_not_called()
+
+
+# ── generation_complete BPM auto-apply ────────────────────────────────────────
+
+def test_generation_complete_with_bpm_calls_set_bpm():
+    app, player, *_ = _make_app()
+    app._cft = lambda fn, *args: fn(*args)
+    app._on_generation_complete({"prompt": "test", "pattern": {}, "bpm": 138.0, "cc_changes": {}})
+    player.set_bpm.assert_called_once_with(138.0)
+
+
+def test_generation_complete_with_none_bpm_skips_set_bpm():
+    app, player, *_ = _make_app()
+    app._cft = lambda fn, *args: fn(*args)
+    app._on_generation_complete({"prompt": "test", "pattern": {}, "bpm": None, "cc_changes": {}})
+    player.set_bpm.assert_not_called()
+
+
+def test_generation_complete_missing_bpm_key_skips_set_bpm():
+    app, player, *_ = _make_app()
+    app._cft = lambda fn, *args: fn(*args)
+    app._on_generation_complete({"prompt": "test", "pattern": {}, "cc_changes": {}})
+    player.set_bpm.assert_not_called()
+
+
+def test_generation_complete_bpm_boundary_values():
+    app, player, *_ = _make_app()
+    app._cft = lambda fn, *args: fn(*args)
+    app._on_generation_complete({"prompt": "t", "pattern": {}, "bpm": 20.0, "cc_changes": {}})
+    player.set_bpm.assert_called_once_with(20.0)
+    player.reset_mock()
+    app._on_generation_complete({"prompt": "t", "pattern": {}, "bpm": 400.0, "cc_changes": {}})
+    player.set_bpm.assert_called_once_with(400.0)

@@ -152,6 +152,8 @@ class DigitaktApp(App):
     def _on_generation_complete(self, p: dict) -> None:
         self._cft(self._log, f"[green]pattern ready:[/green] {p['prompt']}")
         self._cft(self._refresh_pattern)
+        if p.get("bpm") is not None:
+            self._cft(self._player.set_bpm, p["bpm"])
 
     def _on_generation_failed(self, p: dict) -> None:
         self._cft(self._log, f"[red]generation failed:[/red] {p['error']}")
