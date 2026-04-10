@@ -155,3 +155,35 @@ def test_missing_prob_key_fires_normally():
         if c[0][0].type == "note_on" and c[0][0].note == kick_note
     ]
     assert len(kick_calls) == 1
+
+
+def test_swing_delay_returns_positive_when_swing_set():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 100  # max swing
+    delay = player._swing_delay()
+    assert delay > 0
+
+
+def test_no_swing_delay_when_swing_is_zero():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 0
+    delay = player._swing_delay()
+    assert delay == 0.0
+
+
+def test_no_swing_delay_when_swing_absent():
+    player, state, bus, port = _make_player()
+    # No swing key in pattern
+    delay = player._swing_delay()
+    assert delay == 0.0
+
+
+def test_swing_delay_scales_with_bpm():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 50
+    state.bpm = 120.0
+    delay_120 = player._swing_delay()
+    state.bpm = 240.0
+    delay_240 = player._swing_delay()
+    # At double BPM, delay should halve
+    assert abs(delay_120 - delay_240 * 2) < 1e-9
