@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import type { DigitaktState, TrackName } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 
@@ -28,26 +28,27 @@ function StepDot({ velocity, isMuted, isActive }: { velocity: number; isMuted: b
   return <Text color={color}>●</Text>;
 }
 
+// Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
+const OVERHEAD = 24;
+
 export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep }: PatternGridProps) {
+  const { stdout } = useStdout();
+  const termCols = stdout?.columns ?? 80;
+  // Each step column: fit available space evenly, minimum 2, maximum 3
+  const colWidth = Math.min(3, Math.max(2, Math.floor((termCols - OVERHEAD) / 16)));
+
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
-      {/* Header row — programmatic to mirror exact dot column widths */}
+      {/* Header: each step in a fixed-width Box — same colWidth as the dot rows */}
       <Box>
         <Text bold color="cyan">{" PATTERN  "}</Text>
         {Array.from({ length: 16 }, (_, i) => {
-          const stepNum = i + 1;
-          const isDouble = stepNum >= 10;
           const isActive = currentStep === i;
-          // Double-digit active: pad ▼ to 2 chars so column stays 2-wide (no external separator)
-          // Single-digit active: ▼ is 1 char + external separator = 2-wide
-          const label = isActive
-            ? (isDouble ? "▼ " : "▼")
-            : String(stepNum);
+          const label = isActive ? "▼" : String(i + 1);
           return (
-            <React.Fragment key={i}>
+            <Box key={i} width={colWidth}>
               <Text bold color={isActive ? "yellow" : "cyan"}>{label}</Text>
-              {!isDouble && i < 15 && <Text color="cyan">{" "}</Text>}
-            </React.Fragment>
+            </Box>
           );
         })}
       </Box>
@@ -63,10 +64,9 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
             </Text>
             <Text>{"   "}</Text>
             {steps.map((vel, step) => (
-              <React.Fragment key={step}>
+              <Box key={step} width={colWidth}>
                 <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} />
-                {step < 15 && <Text color="gray">{" "}</Text>}
-              </React.Fragment>
+              </Box>
             ))}
             <Text>{"  "}</Text>
             <Text bold color={muted ? "red" : "green"}>
