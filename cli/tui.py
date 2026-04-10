@@ -137,39 +137,46 @@ class DigitaktApp(App):
     def on_unmount(self) -> None:
         self._player.stop()
 
+    def _cft(self, fn, *args) -> None:
+        """call_from_thread, safe to call from the main thread during shutdown."""
+        try:
+            self.call_from_thread(fn, *args)
+        except RuntimeError:
+            pass  # app is shutting down; no UI to update
+
     # ── EventBus callbacks (called from worker threads) ────────────────────
 
     def _on_generation_started(self, p: dict) -> None:
-        self.call_from_thread(self._log, f"[yellow]generating:[/yellow] {p['prompt']}...")
+        self._cft(self._log, f"[yellow]generating:[/yellow] {p['prompt']}...")
 
     def _on_generation_complete(self, p: dict) -> None:
-        self.call_from_thread(self._log, f"[green]pattern ready:[/green] {p['prompt']}")
-        self.call_from_thread(self._refresh_pattern)
+        self._cft(self._log, f"[green]pattern ready:[/green] {p['prompt']}")
+        self._cft(self._refresh_pattern)
 
     def _on_generation_failed(self, p: dict) -> None:
-        self.call_from_thread(self._log, f"[red]generation failed:[/red] {p['error']}")
+        self._cft(self._log, f"[red]generation failed:[/red] {p['error']}")
 
     def _on_pattern_changed(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_pattern)
-        self.call_from_thread(self._refresh_header)
+        self._cft(self._refresh_pattern)
+        self._cft(self._refresh_header)
 
     def _on_bpm_changed(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_header)
+        self._cft(self._refresh_header)
 
     def _on_playback_started(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_header)
+        self._cft(self._refresh_header)
 
     def _on_playback_stopped(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_header)
+        self._cft(self._refresh_header)
 
     def _on_midi_disconnected(self, p: dict) -> None:
-        self.call_from_thread(self._log, f"[red]MIDI disconnected:[/red] {p.get('port')}. Reconnecting...")
+        self._cft(self._log, f"[red]MIDI disconnected:[/red] {p.get('port')}. Reconnecting...")
 
     def _on_cc_changed(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_cc)
+        self._cft(self._refresh_cc)
 
     def _on_mute_changed(self, _p: dict) -> None:
-        self.call_from_thread(self._refresh_pattern)
+        self._cft(self._refresh_pattern)
 
     # ── UI helpers (called on main thread) ────────────────────────────────
 
