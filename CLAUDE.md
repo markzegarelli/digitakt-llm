@@ -41,7 +41,7 @@ tests/       # one test file per module, TDD throughout
 pytest -v
 ```
 
-42 tests, ~1s. All mocked — no real MIDI or API calls needed.
+74 tests, ~1s. All mocked — no real MIDI or API calls needed.
 
 ## API
 
