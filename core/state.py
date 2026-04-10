@@ -25,8 +25,8 @@ _HISTORY_MAX = 20
 
 
 _DEFAULT_CC_PARAMS: dict[str, int] = {
-    "tune": 64, "filter": 64, "resonance": 64,
-    "attack": 64, "decay": 64, "volume": 100,
+    "tune": 64, "filter": 127, "resonance": 0,
+    "attack": 0, "decay": 64, "volume": 100,
     "reverb": 0, "delay": 0,
 }
 

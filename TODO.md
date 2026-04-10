@@ -18,6 +18,10 @@ See [DIRECTION.md](DIRECTION.md) for the full roadmap and connectivity strategy.
 - [x] Per-track probability — expose Digitakt's trig probability concept in the pattern model
 - [x] Swing offset — add shuffle/swing parameter to BPM control
 
+## Bug investigations
+
+- [ ] Sounds triggered by the app are slower / lower pitched than expected — investigate MIDI CC assigned to tune (possible offset/wrong value being sent on note trigger); compare CC values sent by app vs. Digitakt default state
+
 ## Digitakt depth (Phase 3)
 
 - [ ] Velocity and note length per step — currently all steps are full velocity; add per-step values to JSON schema

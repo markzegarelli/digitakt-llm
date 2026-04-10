@@ -4,14 +4,14 @@ from __future__ import annotations
 import mido
 
 NOTE_MAP: dict[str, int] = {
-    "kick":    36,
-    "snare":   37,
-    "tom":     38,
-    "clap":    39,
-    "bell":    40,
-    "hihat":   41,
-    "openhat": 42,
-    "cymbal":  43,
+    "kick":    60,
+    "snare":   60,
+    "tom":     60,
+    "clap":    60,
+    "bell":    60,
+    "hihat":   60,
+    "openhat": 60,
+    "cymbal":  60,
 }
 
 # Maps app track name → 0-indexed MIDI channel (Digitakt: ch 1–8)

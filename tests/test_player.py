@@ -98,16 +98,25 @@ def test_muted_track_does_not_send_midi():
     player, state, bus, port = _make_player()
     state.track_muted["kick"] = True
     player._play_step(0)   # step 0 — kick has velocity 100
-    for call_args in port.send.call_args_list:
-        msg = call_args[0][0]
-        assert msg.note != 36, "Muted kick must not send MIDI"
+    kick_channel = midi_utils.TRACK_CHANNELS["kick"]
+    kick_sends = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "channel") and c[0][0].channel == kick_channel
+        and c[0][0].type == "note_on"
+    ]
+    assert len(kick_sends) == 0, "Muted kick must not send MIDI"
 
 
 def test_unmuted_track_still_sends_midi():
     player, state, bus, port = _make_player()
     state.track_muted["kick"] = False
     player._play_step(0)
-    kick_sends = [c for c in port.send.call_args_list if c[0][0].note == 36]
+    kick_channel = midi_utils.TRACK_CHANNELS["kick"]
+    kick_sends = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "channel") and c[0][0].channel == kick_channel
+        and c[0][0].type == "note_on"
+    ]
     assert len(kick_sends) > 0, "Unmuted kick must send MIDI"
 
 
@@ -144,29 +153,28 @@ def test_clock_ticks_sent_during_playback():
     assert len(clock_calls) >= 96  # at least one full loop
 
 
+def _kick_note_ons(port):
+    """Return note_on calls for the kick track (channel 0)."""
+    kick_channel = midi_utils.TRACK_CHANNELS["kick"]
+    return [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].channel == kick_channel
+    ]
+
+
 def test_step_with_100_prob_always_fires():
     player, state, bus, port = _make_player()
     state.current_pattern["prob"] = {"kick": [100] * 16}
     with patch("random.random", return_value=0.0):
         player._play_step(0)
-    kick_note = midi_utils.NOTE_MAP.get("kick")
-    kick_calls = [
-        c for c in port.send.call_args_list
-        if c[0][0].type == "note_on" and c[0][0].note == kick_note
-    ]
-    assert len(kick_calls) == 1
+    assert len(_kick_note_ons(port)) == 1
 
 
 def test_step_with_0_prob_never_fires():
     player, state, bus, port = _make_player()
     state.current_pattern["prob"] = {"kick": [0] * 16}
     player._play_step(0)
-    kick_note = midi_utils.NOTE_MAP.get("kick")
-    kick_calls = [
-        c for c in port.send.call_args_list
-        if c[0][0].type == "note_on" and c[0][0].note == kick_note
-    ]
-    assert len(kick_calls) == 0
+    assert len(_kick_note_ons(port)) == 0
 
 
 def test_step_fires_when_random_below_prob():
@@ -174,12 +182,7 @@ def test_step_fires_when_random_below_prob():
     state.current_pattern["prob"] = {"kick": [75] * 16}
     with patch("random.random", return_value=0.74):  # 0.74 * 100 = 74 < 75 → fires
         player._play_step(0)
-    kick_note = midi_utils.NOTE_MAP.get("kick")
-    kick_calls = [
-        c for c in port.send.call_args_list
-        if c[0][0].type == "note_on" and c[0][0].note == kick_note
-    ]
-    assert len(kick_calls) == 1
+    assert len(_kick_note_ons(port)) == 1
 
 
 def test_step_skipped_when_random_at_or_above_prob():
@@ -187,24 +190,14 @@ def test_step_skipped_when_random_at_or_above_prob():
     state.current_pattern["prob"] = {"kick": [75] * 16}
     with patch("random.random", return_value=0.75):  # 0.75 * 100 = 75 >= 75 → skipped
         player._play_step(0)
-    kick_note = midi_utils.NOTE_MAP.get("kick")
-    kick_calls = [
-        c for c in port.send.call_args_list
-        if c[0][0].type == "note_on" and c[0][0].note == kick_note
-    ]
-    assert len(kick_calls) == 0
+    assert len(_kick_note_ons(port)) == 0
 
 
 def test_missing_prob_key_fires_normally():
     player, state, bus, port = _make_player()
     # No prob key in pattern — kick step 0 = 100, should fire
     player._play_step(0)
-    kick_note = midi_utils.NOTE_MAP.get("kick")
-    kick_calls = [
-        c for c in port.send.call_args_list
-        if c[0][0].type == "note_on" and c[0][0].note == kick_note
-    ]
-    assert len(kick_calls) == 1
+    assert len(_kick_note_ons(port)) == 1
 
 
 def test_swing_delay_returns_positive_when_swing_set():

@@ -66,8 +66,11 @@ def test_app_state_track_cc_defaults():
         assert cc["volume"] == 100
         assert cc["reverb"] == 0
         assert cc["delay"] == 0
-        for param in ["tune", "filter", "resonance", "attack", "decay"]:
-            assert cc[param] == 64
+        assert cc["tune"] == 64
+        assert cc["filter"] == 127
+        assert cc["resonance"] == 0
+        assert cc["attack"] == 0
+        assert cc["decay"] == 64
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +198,8 @@ def test_send_note_uses_correct_channel():
     send_note(mock_port, NOTE_MAP["snare"], 100, channel=TRACK_CHANNELS["snare"])
 
     calls = mock_port.send.call_args_list
-    kick_msgs = [c[0][0] for c in calls if c[0][0].note == NOTE_MAP["kick"]]
-    snare_msgs = [c[0][0] for c in calls if c[0][0].note == NOTE_MAP["snare"]]
+    kick_msgs = [c[0][0] for c in calls if c[0][0].channel == TRACK_CHANNELS["kick"]]
+    snare_msgs = [c[0][0] for c in calls if c[0][0].channel == TRACK_CHANNELS["snare"]]
 
-    assert all(m.channel == TRACK_CHANNELS["kick"] for m in kick_msgs)
-    assert all(m.channel == TRACK_CHANNELS["snare"] for m in snare_msgs)
+    assert all(m.note == NOTE_MAP["kick"] for m in kick_msgs)
+    assert all(m.note == NOTE_MAP["snare"] for m in snare_msgs)
