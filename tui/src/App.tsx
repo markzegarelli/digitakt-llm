@@ -211,18 +211,17 @@ export function App({ baseUrl }: AppProps) {
       setTimeout(() => process.exit(0), 50);
       return;
     }
-    // Shift+Tab: terminal sends ESC [ Z (\x1B[Z) — toggle Chat/Beat mode
-    if (input === '\x1B[Z') {
-      setInputMode((m) => m === "beat" ? "chat" : "beat");
-      return;
-    }
     if (key.tab) {
-      setFocus((f) => {
-        if (f === "pattern") return "cc";
-        if (f === "cc") return showLog ? "log" : "prompt";
-        if (f === "log") return "prompt";
-        return "pattern";
-      });
+      if (key.shift) {
+        setInputMode((m) => m === "beat" ? "chat" : "beat");
+      } else {
+        setFocus((f) => {
+          if (f === "pattern") return "cc";
+          if (f === "cc") return showLog ? "log" : "prompt";
+          if (f === "log") return "prompt";
+          return "pattern";
+        });
+      }
       return;
     }
     if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
