@@ -59,9 +59,11 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
         const labelColor = isSelected && isFocused ? "cyan" : muted ? "gray" : "white";
         return (
           <Box key={track}>
-            <Text bold={isSelected} color={labelColor}>
-              {isSelected && isFocused ? "▶ " : "  "}{LABELS[track]}
+            <Text bold color={isSelected && isFocused ? "cyan" : undefined}>
+              {isSelected && isFocused ? ">" : " "}
             </Text>
+            <Text>{" "}</Text>
+            <Text bold={isSelected} color={labelColor}>{LABELS[track]}</Text>
             <Text>{"   "}</Text>
             {steps.map((vel, step) => (
               <Box key={step} width={colWidth}>
