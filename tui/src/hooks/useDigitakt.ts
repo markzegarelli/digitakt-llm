@@ -7,6 +7,7 @@ const DEFAULT_STATE: DigitaktState = {
     TRACK_NAMES.map((t) => [t, new Array(16).fill(0)])
   ) as DigitaktState["current_pattern"],
   bpm: 120,
+  swing: 0,
   is_playing: false,
   midi_port_name: null,
   track_cc: Object.fromEntries(
@@ -24,7 +25,29 @@ const DEFAULT_STATE: DigitaktState = {
   generation_status: "idle",
   generation_error: null,
   connected: false,
+  log: [],
 };
+
+function formatLogEntry(event: string, data: Record<string, unknown>): string {
+  switch (event) {
+    case "generation_started":   return `generating: ${data["prompt"]}...`;
+    case "generation_complete":  return `pattern ready: ${data["prompt"]}`;
+    case "generation_failed":    return `generation failed: ${data["error"]}`;
+    case "pattern_changed":      return "pattern changed";
+    case "bpm_changed":          return `BPM: ${data["bpm"]}`;
+    case "playback_started":     return "playback started";
+    case "playback_stopped":     return "playback stopped";
+    case "midi_disconnected":    return `MIDI disconnected: ${data["port"]}`;
+    case "cc_changed":           return `CC: ${data["track"]} ${data["param"]} = ${data["value"]}`;
+    case "mute_changed":         return `mute: ${data["track"]} = ${data["muted"]}`;
+    case "velocity_changed":     return `velocity: ${data["track"]} = ${data["value"]}`;
+    case "prob_changed":         return `prob: ${data["track"]} step ${data["step"]} = ${data["value"]}%`;
+    case "vel_changed":          return `vel: ${data["track"]} step ${data["step"]} = ${data["value"]}`;
+    case "swing_changed":        return `swing: ${data["amount"]}`;
+    case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
+    default:                     return `${event}`;
+  }
+}
 
 export interface DigitaktActions {
   setMute(track: TrackName, muted: boolean): Promise<void>;
@@ -34,6 +57,10 @@ export interface DigitaktActions {
   play(): Promise<void>;
   stop(): Promise<void>;
   generate(prompt: string): Promise<void>;
+  setProb(track: TrackName, step: number, value: number): Promise<void>;
+  setSwing(amount: number): Promise<void>;
+  setVel(track: TrackName, step: number, value: number): Promise<void>;
+  randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -61,6 +88,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         ...prev,
         current_pattern: data["current_pattern"] as DigitaktState["current_pattern"],
         bpm: data["bpm"] as number,
+        swing: (data["swing"] as number) ?? 0,
         is_playing: data["is_playing"] as boolean,
         midi_port_name: data["midi_port_name"] as string | null,
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
@@ -86,29 +114,40 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
           event: string;
           data: Record<string, unknown>;
         };
+
+        // Re-fetch full state for bulk pattern changes
+        if (msg.event === "random_applied") {
+          fetchState();
+        }
+
+        const logEntry = formatLogEntry(msg.event, msg.data);
+
         setState((prev) => {
+          const newLog = [...prev.log, logEntry].slice(-50);
           switch (msg.event) {
             case "pattern_changed":
-              return { ...prev, current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"] };
+              return { ...prev, current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"], log: newLog };
             case "bpm_changed":
-              return { ...prev, bpm: msg.data["bpm"] as number };
+              return { ...prev, bpm: msg.data["bpm"] as number, log: newLog };
             case "playback_started":
-              return { ...prev, is_playing: true };
+              return { ...prev, is_playing: true, log: newLog };
             case "playback_stopped":
-              return { ...prev, is_playing: false };
+              return { ...prev, is_playing: false, log: newLog };
             case "generation_started":
-              return { ...prev, generation_status: "generating", generation_error: null };
+              return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete":
               return {
                 ...prev,
                 generation_status: "idle",
                 current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"],
+                log: newLog,
               };
             case "generation_failed":
               return {
                 ...prev,
                 generation_status: "failed",
                 generation_error: msg.data["error"] as string,
+                log: newLog,
               };
             case "mute_changed":
               return {
@@ -117,6 +156,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                   ...prev.track_muted,
                   [msg.data["track"] as string]: msg.data["muted"] as boolean,
                 },
+                log: newLog,
               };
             case "cc_changed":
               return {
@@ -128,6 +168,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                     [msg.data["param"] as string]: msg.data["value"] as number,
                   },
                 },
+                log: newLog,
               };
             case "velocity_changed":
               return {
@@ -136,9 +177,24 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                   ...prev.track_velocity,
                   [msg.data["track"] as string]: msg.data["value"] as number,
                 },
+                log: newLog,
               };
+            case "swing_changed":
+              return { ...prev, swing: msg.data["amount"] as number, log: newLog };
+            case "vel_changed": {
+              const velTrack = msg.data["track"] as TrackName;
+              const velStep = (msg.data["step"] as number) - 1;
+              const velValue = msg.data["value"] as number;
+              const newPattern = { ...prev.current_pattern };
+              newPattern[velTrack] = [...newPattern[velTrack]];
+              newPattern[velTrack][velStep] = velValue;
+              return { ...prev, current_pattern: newPattern, log: newLog };
+            }
+            case "prob_changed":
+            case "random_applied":
+              return { ...prev, log: newLog };
             default:
-              return prev;
+              return { ...prev, log: newLog };
           }
         });
       } catch { /* ignore malformed frames */ }
@@ -197,6 +253,22 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     generate: useCallback(async (prompt: string) => {
       await api("POST", "/generate", { prompt });
+    }, [api]),
+
+    setProb: useCallback(async (track: TrackName, step: number, value: number) => {
+      await api("POST", "/prob", { track, step, value });
+    }, [api]),
+
+    setSwing: useCallback(async (amount: number) => {
+      await api("POST", "/swing", { amount });
+    }, [api]),
+
+    setVel: useCallback(async (track: TrackName, step: number, value: number) => {
+      await api("POST", "/vel", { track, step, value });
+    }, [api]),
+
+    randomize: useCallback(async (track: string, param: string, lo: number, hi: number) => {
+      await api("POST", "/random", { track, param, lo, hi });
     }, [api]),
   };
 
