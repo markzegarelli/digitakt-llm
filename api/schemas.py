@@ -97,3 +97,25 @@ class RandomRequest(BaseModel):
     param: str
     lo: int = 0
     hi: int = 127
+
+
+class CCStepRequest(BaseModel):
+    track: str
+    param: str
+    step: int = Field(..., ge=1, le=16)   # 1-indexed
+    value: int = Field(..., ge=-1, le=127)  # -1 = clear override
+
+
+class AskRequest(BaseModel):
+    question: str
+
+    @field_validator("question")
+    @classmethod
+    def question_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("question must not be empty")
+        return v.strip()
+
+
+class AskResponse(BaseModel):
+    answer: str

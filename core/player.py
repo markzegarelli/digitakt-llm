@@ -23,6 +23,12 @@ class Player:
         if self.port is None:
             return
         midi_utils.send_start(self.port)
+        # Flush all stored CC values so the Digitakt syncs immediately
+        for track, params in self.state.track_cc.items():
+            channel = TRACK_CHANNELS[track]
+            for param, value in params.items():
+                if param in midi_utils.CC_MAP:
+                    midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], value)
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -60,7 +66,9 @@ class Player:
             return 0.0
         return (swing / 100.0) * self._step_duration() / 3.0
 
-    def _play_step(self, step: int) -> None:
+    def _play_step(self, step: int, dirty_cc: set | None = None) -> None:
+        if dirty_cc is None:
+            dirty_cc = set()
         self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
         for track in TRACK_NAMES:
@@ -88,9 +96,27 @@ class Player:
                     )
                     self._stop_event.set()
                     return
+        # Send per-step CC overrides
+        step_cc = pattern.get("step_cc", {})
+        for track in TRACK_NAMES:
+            channel = TRACK_CHANNELS[track]
+            for param, steps in step_cc.get(track, {}).items():
+                override = steps[step]
+                if override is not None and param in midi_utils.CC_MAP:
+                    dirty_cc.add((track, param))
+                    try:
+                        midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], override)
+                    except Exception:
+                        self.bus.emit(
+                            "midi_disconnected",
+                            {"port": self.state.midi_port_name},
+                        )
+                        self._stop_event.set()
+                        return
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
+            dirty_cc: set[tuple[str, str]] = set()
             next_tick = time.perf_counter()
             for step in range(16):
                 if self._stop_event.is_set():
@@ -103,7 +129,7 @@ class Player:
                             swing_delay = self._swing_delay()
                             if swing_delay > 0:
                                 self._stop_event.wait(swing_delay)
-                        self._play_step(step)
+                        self._play_step(step, dirty_cc)
                     if self._stop_event.is_set():
                         break
                     try:
@@ -119,6 +145,14 @@ class Player:
                     sleep_time = next_tick - time.perf_counter()
                     if sleep_time > 0:
                         self._stop_event.wait(sleep_time)
+
+            # Restore global CC for any params overridden during this loop
+            for track, param in dirty_cc:
+                global_val = self.state.track_cc.get(track, {}).get(param)
+                if global_val is not None and param in midi_utils.CC_MAP:
+                    midi_utils.send_cc(
+                        self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
+                    )
 
             # End of loop: atomic pattern swap
             if self.state.pending_pattern is not None:

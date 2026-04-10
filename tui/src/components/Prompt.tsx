@@ -10,13 +10,18 @@ const HELP_LINES = [
   "  vel <track> <step> <value>           step velocity 0–127 (step 1-indexed)",
   "  random <track|all> <velocity|prob> [lo-hi]  randomize",
   "  randbeat                             random techno beat (BPM + CC randomized)",
-  "  cc <track> <param> <value>           send CC 0–127",
+  "  cc <track> <param> <value>           send CC 0–127 globally",
+  "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
   "  mute <track>                         toggle mute (use /mute via CLI only)",
   "  log                                  toggle activity log panel",
   "  save <name> / load <name>            pattern persistence",
+  "  ask <question>                       ask Claude about the tool",
   "  help                                 show this help",
   "  quit / q                             exit",
   "  <bare text>                          send to Claude LLM",
+  "  ?<question>                          shorthand for /ask",
+  "",
+  "CC panel: Tab to focus · Enter on param = step edit mode · Esc to exit",
   "",
   "Press any key to dismiss.",
 ];
@@ -28,15 +33,33 @@ interface PromptProps {
   onCommand(cmd: string): void;
   showHelp: boolean;
   onClearHelp(): void;
+  answerText: string | null;
+  askPending: boolean;
+  onClearAnswer(): void;
 }
 
-export function Prompt({ isFocused, generationStatus, generationError, onCommand, showHelp, onClearHelp }: PromptProps) {
+export function Prompt({
+  isFocused,
+  generationStatus,
+  generationError,
+  onCommand,
+  showHelp,
+  onClearHelp,
+  answerText,
+  askPending,
+  onClearAnswer,
+}: PromptProps) {
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
 
   useInput((input, key) => {
     if (!isFocused) return;
+
+    if (answerText !== null) {
+      onClearAnswer();
+      return;
+    }
 
     if (showHelp) {
       onClearHelp();
@@ -72,6 +95,18 @@ export function Prompt({ isFocused, generationStatus, generationError, onCommand
     if (input && !key.ctrl && !key.meta) setText((t) => t + input);
   }, { isActive: isFocused });
 
+  if (answerText !== null) {
+    const lines = answerText.split("\n");
+    return (
+      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
+        <Text bold color="cyan">Answer  (press any key to dismiss)</Text>
+        {lines.map((line, i) => (
+          <Text key={i} color="white">{line || " "}</Text>
+        ))}
+      </Box>
+    );
+  }
+
   if (showHelp) {
     return (
       <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
@@ -83,8 +118,9 @@ export function Prompt({ isFocused, generationStatus, generationError, onCommand
   }
 
   const statusLine =
-    generationStatus === "generating" ? "⟳ generating…"
-    : generationStatus === "failed"   ? `✗ ${generationError ?? "generation failed"}`
+    askPending                           ? "⟳ asking…"
+    : generationStatus === "generating" ? "⟳ generating…"
+    : generationStatus === "failed"     ? `✗ ${generationError ?? "generation failed"}`
     : "";
 
   return (
@@ -95,8 +131,8 @@ export function Prompt({ isFocused, generationStatus, generationError, onCommand
         {isFocused && <Text backgroundColor="white" color="black"> </Text>}
       </Box>
       {statusLine
-        ? <Text color={generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
-        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/bpm/play/stop/log/help/quit"}</Text>
+        ? <Text color={askPending ? "yellow" : generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
+        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/cc-step/bpm/play/stop/log/ask/help/quit"}</Text>
       }
     </Box>
   );
