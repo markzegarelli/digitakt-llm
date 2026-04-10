@@ -157,3 +157,42 @@ def test_prob_is_optional():
     result = gen._parse_pattern(json.dumps(pattern))
     assert result is not None
     assert "prob" not in result
+
+
+def test_valid_swing_is_accepted():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["swing"] = 25
+    result = gen._parse_pattern(json.dumps(pattern))
+    assert result is not None
+    assert result["swing"] == 25
+
+
+def test_swing_zero_is_accepted():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["swing"] = 0
+    result = gen._parse_pattern(json.dumps(pattern))
+    assert result is not None
+
+
+def test_swing_out_of_range_is_rejected():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["swing"] = 150
+    assert gen._parse_pattern(json.dumps(pattern)) is None
+
+
+def test_swing_negative_is_rejected():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["swing"] = -5
+    assert gen._parse_pattern(json.dumps(pattern)) is None
+
+
+def test_swing_is_optional():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = gen._parse_pattern(json.dumps(pattern))
+    assert result is not None
+    assert "swing" not in result

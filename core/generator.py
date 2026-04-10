@@ -80,6 +80,10 @@ class Generator:
                     return None
                 if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
                     return None
+        if "swing" in data:
+            swing = data["swing"]
+            if not isinstance(swing, (int, float)) or not (0 <= swing <= 100):
+                return None
         return data
 
     def _call_api(self, user_prompt: str, strict: bool = False) -> str:
