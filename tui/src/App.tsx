@@ -16,6 +16,24 @@ interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+// Map UI display labels → canonical API track names
+const TRACK_ALIASES: Record<string, TrackName> = {
+  ophat:  "openhat",
+  cymbl:  "cymbal",
+};
+
+function normalizeTrack(raw: string): string {
+  const lower = raw.toLowerCase();
+  return TRACK_ALIASES[lower] ?? lower;
+}
+
+// Accept common shorthand for the two /random param values
+function normalizeRandomParam(raw: string): string {
+  if (raw === "vel" || raw === "v" || raw === "velocity") return "velocity";
+  if (raw === "p")                                         return "prob";
+  return raw;
+}
+
 function parseRange(rangeStr: string | undefined, param: string): [number, number] {
   if (!rangeStr) {
     return param === "prob" ? [0, 100] : [0, 127];
@@ -59,6 +77,7 @@ export function App({ baseUrl }: AppProps) {
       case "quit":
       case "q":
         exit();
+        setTimeout(() => process.exit(0), 50);
         break;
       case "bpm": {
         const v = parseFloat(parts[1] ?? "");
@@ -77,24 +96,26 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       case "prob": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setProb(track, step, value);
         break;
       }
       case "vel": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setVel(track, step, value);
         break;
       }
       case "random": {
-        const track = parts[1] ?? "all";
-        const param = parts[2] ?? "velocity";
+        const track = normalizeTrack(parts[1] ?? "all");
+        const param = normalizeRandomParam(parts[2] ?? "velocity");
         const [lo, hi] = parseRange(parts[3], param);
-        actions.randomize(track, param, lo, hi);
+        if (param === "velocity" || param === "prob") {
+          actions.randomize(track, param, lo, hi);
+        }
         break;
       }
       case "randbeat":
@@ -104,7 +125,7 @@ export function App({ baseUrl }: AppProps) {
         setShowLog((v) => !v);
         break;
       case "cc": {
-        const track = parts[1] as TrackName;
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const param = parts[2] as CCParam;
         const value = parseInt(parts[3] ?? "", 10);
         if (track && param && !isNaN(value)) actions.setCC(track, param, value);
@@ -120,7 +141,11 @@ export function App({ baseUrl }: AppProps) {
   }, [actions, baseUrl, exit]);
 
   useInput((input, key) => {
-    if (key.ctrl && input === "c") { exit(); return; }
+    if (key.ctrl && input === "c") {
+      exit();
+      setTimeout(() => process.exit(0), 50);
+      return;
+    }
     if (key.tab) {
       setFocus((f) => {
         if (f === "pattern") return "cc";
@@ -188,37 +213,44 @@ export function App({ baseUrl }: AppProps) {
         connected={state.connected}
         generationStatus={state.generation_status}
       />
-      <PatternGrid
-        pattern={state.current_pattern}
-        trackMuted={state.track_muted}
-        selectedTrack={patternTrack}
-        isFocused={focus === "pattern"}
-      />
-      <CCPanel
-        trackCC={state.track_cc}
-        trackVelocity={state.track_velocity}
-        selectedTrack={ccTrack}
-        selectedParam={ccParam}
-        isFocused={focus === "cc"}
-      />
-      {showLog && (
-        <ActivityLog
-          log={state.log}
-          isFocused={focus === "log"}
-        />
-      )}
-      <Prompt
-        isFocused={focus === "prompt"}
-        generationStatus={state.generation_status}
-        generationError={state.generation_error}
-        onCommand={handleCommand}
-        showHelp={showHelp}
-        onClearHelp={() => setShowHelp(false)}
-      />
-      <Box paddingX={1}>
-        <Text color="gray">
-          {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
-        </Text>
+      <Box flexDirection="row">
+        <Box flexDirection="column" flexGrow={1}>
+          <PatternGrid
+            pattern={state.current_pattern}
+            trackMuted={state.track_muted}
+            selectedTrack={patternTrack}
+            isFocused={focus === "pattern"}
+            currentStep={state.current_step}
+          />
+          <CCPanel
+            trackCC={state.track_cc}
+            trackVelocity={state.track_velocity}
+            selectedTrack={ccTrack}
+            selectedParam={ccParam}
+            isFocused={focus === "cc"}
+          />
+          <Prompt
+            isFocused={focus === "prompt"}
+            generationStatus={state.generation_status}
+            generationError={state.generation_error}
+            onCommand={handleCommand}
+            showHelp={showHelp}
+            onClearHelp={() => setShowHelp(false)}
+          />
+          <Box paddingX={1}>
+            <Text color="gray">
+              {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+            </Text>
+          </Box>
+        </Box>
+        {showLog && (
+          <Box width={44}>
+            <ActivityLog
+              log={state.log}
+              isFocused={focus === "log"}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

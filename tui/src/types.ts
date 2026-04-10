@@ -23,6 +23,7 @@ export interface DigitaktState {
   generation_error: string | null;
   connected: boolean;
   log: string[];
+  current_step: number | null;
 }
 
 export type FocusPanel = "pattern" | "cc" | "log" | "prompt";

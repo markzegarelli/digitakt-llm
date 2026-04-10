@@ -37,6 +37,7 @@ _ALL_EVENTS = [
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
     "cc_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
+    "step_changed",
 ]
 
 
