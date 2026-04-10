@@ -255,22 +255,28 @@ class DigitaktApp(App):
         if not args:
             self._log("Usage: /save <name>")
             return
-        _PATTERNS_DIR.mkdir(exist_ok=True)
-        path = _PATTERNS_DIR / f"{args}.json"
-        path.write_text(json.dumps(self._state.current_pattern, indent=2))
-        self._log(f"Saved to {path}")
+        try:
+            _PATTERNS_DIR.mkdir(exist_ok=True)
+            path = _PATTERNS_DIR / f"{args}.json"
+            path.write_text(json.dumps(self._state.current_pattern, indent=2))
+            self._log(f"Saved to {path}")
+        except OSError as e:
+            self._log(f"[red]Save failed:[/red] {e}")
 
     def _cmd_load(self, args: str) -> None:
         if not args:
             self._log("Usage: /load <name>")
             return
-        path = _PATTERNS_DIR / f"{args}.json"
-        if not path.exists():
-            self._log(f"Pattern '{args}' not found.")
-        else:
+        try:
+            path = _PATTERNS_DIR / f"{args}.json"
+            if not path.exists():
+                self._log(f"Pattern '{args}' not found.")
+                return
             pattern = json.loads(path.read_text())
             self._player.queue_pattern(pattern)
             self._log(f"Queued '{args}' for next loop.")
+        except (OSError, json.JSONDecodeError) as e:
+            self._log(f"[red]Load failed:[/red] {e}")
 
     def _cmd_cc(self, args: str) -> None:
         cc_parts = args.split()
@@ -413,7 +419,7 @@ class DigitaktApp(App):
             self._log(str(e))
             return
 
-        tracks = [track_arg]
+        tracks = list(TRACK_NAMES) if track_arg == "all" else [track_arg]
         if param == "velocity":
             new_pattern = apply_random_velocity(self._state.current_pattern, tracks, lo, hi)
         else:
