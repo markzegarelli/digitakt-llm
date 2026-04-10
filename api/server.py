@@ -12,12 +12,13 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
 from api.schemas import (
-    BpmRequest, CCRequest, CCResponse, GenerateRequest,
+    BpmRequest, CCRequest, CCResponse, CCStepRequest, GenerateRequest,
     MuteRequest, MuteResponse, PatternListResponse, StateResponse,
     VelocityRequest, VelocityResponse,
     ProbRequest, SwingRequest, VelRequest, RandomRequest,
+    AskRequest, AskResponse,
 )
-from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat
+from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat, apply_cc_step
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -35,7 +36,7 @@ _ws_clients: Set[WebSocket] = set()
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
-    "cc_changed", "mute_changed", "velocity_changed",
+    "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed",
 ]
@@ -142,6 +143,25 @@ def set_cc(req: CCRequest):
 @app.get("/cc")
 def get_cc():
     return _state.track_cc
+
+
+@app.post("/cc-step")
+def set_cc_step(req: CCStepRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    if req.param not in CC_MAP:
+        raise HTTPException(422, f"Unknown param: {req.param}")
+    value = None if req.value == -1 else req.value
+    new_pattern = apply_cc_step(_state.current_pattern, req.track, req.param, req.step - 1, value)
+    _state.current_pattern = new_pattern
+    _bus.emit("cc_step_changed", {"track": req.track, "param": req.param, "step": req.step, "value": req.value})
+    return {"track": req.track, "param": req.param, "step": req.step, "value": req.value}
+
+
+@app.post("/ask", response_model=AskResponse)
+def post_ask(req: AskRequest):
+    answer = _generator.answer_question(req.question)
+    return AskResponse(answer=answer)
 
 
 @app.post("/mute", response_model=MuteResponse)

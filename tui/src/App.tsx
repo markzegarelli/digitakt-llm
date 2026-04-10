@@ -59,8 +59,12 @@ export function App({ baseUrl }: AppProps) {
   const [patternTrack, setPatternTrack] = useState(0);
   const [ccTrack, setCCTrack]           = useState(0);
   const [ccParam, setCCParam]           = useState(0);
+  const [ccStepMode, setCCStepMode]     = useState(false);
+  const [ccSelectedStep, setCCSelectedStep] = useState(0);
   const [showHelp, setShowHelp]         = useState(false);
   const [showLog, setShowLog]           = useState(false);
+  const [answerText, setAnswerText]     = useState<string | null>(null);
+  const [askPending, setAskPending]     = useState(false);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -135,8 +139,51 @@ export function App({ baseUrl }: AppProps) {
         setShowHelp(true);
         setFocus("prompt");
         break;
+      case "ask": {
+        const question = parts.slice(1).join(" ");
+        if (question) {
+          setAskPending(true);
+          setFocus("prompt");
+          actions.ask(question).then((answer) => {
+            setAskPending(false);
+            setAnswerText(answer);
+          }).catch(() => {
+            setAskPending(false);
+            setAnswerText("Error: could not get answer. Check your API key and connection.");
+          });
+        }
+        break;
+      }
+      case "cc-step": {
+        const track = normalizeTrack(parts[1] ?? "") as TrackName;
+        const param = parts[2] as CCParam;
+        const step = parseInt(parts[3] ?? "", 10);
+        const value = parseInt(parts[4] ?? "", 10);
+        if (track && param && !isNaN(step) && !isNaN(value)) {
+          actions.setCCStep(track, param, step, value === -1 ? null : value);
+        }
+        break;
+      }
       default:
-        if (stripped.trim()) actions.generate(stripped.trim());
+        if (stripped.trim()) {
+          // Support "?" prefix as shorthand for /ask
+          if (stripped.startsWith("?")) {
+            const question = stripped.slice(1).trim();
+            if (question) {
+              setAskPending(true);
+              setFocus("prompt");
+              actions.ask(question).then((answer) => {
+                setAskPending(false);
+                setAnswerText(answer);
+              }).catch(() => {
+                setAskPending(false);
+                setAnswerText("Error: could not get answer. Check your API key and connection.");
+              });
+            }
+          } else {
+            actions.generate(stripped.trim());
+          }
+        }
     }
   }, [actions, baseUrl, exit]);
 
@@ -176,11 +223,44 @@ export function App({ baseUrl }: AppProps) {
     }
 
     if (focus === "cc") {
+      if (ccStepMode) {
+        // Step-edit mode: navigate steps and adjust per-step CC values
+        if (key.escape) { setCCStepMode(false); return; }
+        if (key.leftArrow)  { setCCSelectedStep((s) => clamp(s - 1, 0, 15)); return; }
+        if (key.rightArrow) { setCCSelectedStep((s) => clamp(s + 1, 0, 15)); return; }
+        if (key.upArrow || key.downArrow) {
+          const track = TRACK_NAMES[ccTrack] as TrackName;
+          const param = CC_PARAMS[ccParam - 1] as CCParam;
+          if (track && param) {
+            const stepOverrides = state.step_cc?.[track]?.[param];
+            const current = stepOverrides?.[ccSelectedStep] ?? state.track_cc[track][param];
+            const sign = key.upArrow ? 1 : -1;
+            actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + sign, 0, 127));
+          }
+          return;
+        }
+        if (input === "d") {
+          const track = TRACK_NAMES[ccTrack] as TrackName;
+          const param = CC_PARAMS[ccParam - 1] as CCParam;
+          if (track && param) actions.setCCStep(track, param, ccSelectedStep + 1, null);
+          return;
+        }
+        return;  // swallow other keys while in step-edit mode
+      }
+
+      // Normal CC panel navigation
       if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, CC_PANEL_MAX));
       if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, CC_PANEL_MAX));
 
       if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
       if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
+
+      // Enter step-edit mode for the selected CC param (not velocity row)
+      if ((input === "e" || key.return) && ccParam > 0) {
+        setCCStepMode(true);
+        setCCSelectedStep(0);
+        return;
+      }
 
       if (key.leftArrow || key.rightArrow) {
         const sign = key.rightArrow ? 1 : -1;
@@ -225,9 +305,12 @@ export function App({ baseUrl }: AppProps) {
           <CCPanel
             trackCC={state.track_cc}
             trackVelocity={state.track_velocity}
+            stepCC={state.step_cc}
             selectedTrack={ccTrack}
             selectedParam={ccParam}
             isFocused={focus === "cc"}
+            stepMode={ccStepMode}
+            selectedStep={ccSelectedStep}
           />
           <Prompt
             isFocused={focus === "prompt"}
@@ -236,6 +319,9 @@ export function App({ baseUrl }: AppProps) {
             onCommand={handleCommand}
             showHelp={showHelp}
             onClearHelp={() => setShowHelp(false)}
+            answerText={answerText}
+            askPending={askPending}
+            onClearAnswer={() => setAnswerText(null)}
           />
           <Box paddingX={1}>
             <Text color="gray">

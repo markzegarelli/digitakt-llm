@@ -22,6 +22,7 @@ const DEFAULT_STATE: DigitaktState = {
   track_velocity: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, 127])
   ) as DigitaktState["track_velocity"],
+  step_cc: null,
   generation_status: "idle",
   generation_error: null,
   connected: false,
@@ -40,6 +41,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "playback_stopped":     return "playback stopped";
     case "midi_disconnected":    return `MIDI disconnected: ${data["port"]}`;
     case "cc_changed":           return `CC: ${data["track"]} ${data["param"]} = ${data["value"]}`;
+    case "cc_step_changed":      return `CC step: ${data["track"]} ${data["param"]} step ${data["step"]} = ${data["value"]}`;
     case "mute_changed":         return `mute: ${data["track"]} = ${data["muted"]}`;
     case "velocity_changed":     return `velocity: ${data["track"]} = ${data["value"]}`;
     case "prob_changed":         return `prob: ${data["track"]} step ${data["step"]} = ${data["value"]}%`;
@@ -54,6 +56,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
 export interface DigitaktActions {
   setMute(track: TrackName, muted: boolean): Promise<void>;
   setCC(track: TrackName, param: CCParam, value: number): Promise<void>;
+  setCCStep(track: TrackName, param: CCParam, step: number, value: number | null): Promise<void>;
   setVelocity(track: TrackName, value: number): Promise<void>;
   setBpm(bpm: number): Promise<void>;
   play(): Promise<void>;
@@ -64,6 +67,7 @@ export interface DigitaktActions {
   setVel(track: TrackName, step: number, value: number): Promise<void>;
   randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
   randbeat(): Promise<void>;
+  ask(question: string): Promise<string>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -88,9 +92,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
   const fetchState = useCallback(async () => {
     try {
       const data = await api("GET", "/state") as Record<string, unknown>;
+      const pattern = data["current_pattern"] as Record<string, unknown>;
       setState((prev) => ({
         ...prev,
-        current_pattern: data["current_pattern"] as DigitaktState["current_pattern"],
+        current_pattern: pattern as DigitaktState["current_pattern"],
         bpm: data["bpm"] as number,
         swing: (data["swing"] as number) ?? 0,
         is_playing: data["is_playing"] as boolean,
@@ -98,6 +103,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
         track_muted: data["track_muted"] as DigitaktState["track_muted"],
         track_velocity: data["track_velocity"] as DigitaktState["track_velocity"],
+        step_cc: (pattern["step_cc"] as DigitaktState["step_cc"]) ?? null,
         connected: true,
       }));
     } catch {
@@ -179,6 +185,28 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 },
                 log: newLog,
               };
+            case "cc_step_changed": {
+              const csTrack = msg.data["track"] as TrackName;
+              const csParam = msg.data["param"] as CCParam;
+              const csStep = (msg.data["step"] as number) - 1;
+              const csValue = msg.data["value"] as number;
+              const prevStepCC = prev.step_cc ?? ({} as DigitaktState["step_cc"]);
+              const prevTrack = (prevStepCC as Record<string, Record<string, (number | null)[]>>)[csTrack] ?? {};
+              const prevParam = prevTrack[csParam] ?? new Array(16).fill(null) as (number | null)[];
+              const newParam = [...prevParam];
+              newParam[csStep] = csValue === -1 ? null : csValue;
+              return {
+                ...prev,
+                step_cc: {
+                  ...prevStepCC,
+                  [csTrack]: {
+                    ...prevTrack,
+                    [csParam]: newParam,
+                  },
+                } as DigitaktState["step_cc"],
+                log: newLog,
+              };
+            }
             case "velocity_changed":
               return {
                 ...prev,
@@ -248,6 +276,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       await api("POST", "/cc", { track, param, value });
     }, [api]),
 
+    setCCStep: useCallback(async (track: TrackName, param: CCParam, step: number, value: number | null) => {
+      await api("POST", "/cc-step", { track, param, step, value: value ?? -1 });
+    }, [api]),
+
     setVelocity: useCallback(async (track: TrackName, value: number) => {
       setState((prev) => ({
         ...prev,
@@ -285,6 +317,11 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     randbeat: useCallback(async () => {
       await api("POST", "/randbeat");
+    }, [api]),
+
+    ask: useCallback(async (question: string) => {
+      const data = await api("POST", "/ask", { question }) as { answer: string };
+      return data.answer;
     }, [api]),
   };
 

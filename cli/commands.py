@@ -179,6 +179,31 @@ def apply_vel_step(pattern: dict, track: str, step: int, value: int) -> dict:
     return result
 
 
+def apply_cc_step(pattern: dict, track: str, param: str, step: int, value: int | None) -> dict:
+    """
+    Set or clear a per-step CC override.
+
+    Args:
+        pattern: Pattern dict
+        track: Track name
+        param: CC param name (e.g. "filter")
+        step: Step index (0-15)
+        value: CC value (0-127), or None to clear the override
+
+    Returns:
+        New pattern dict with updated step_cc
+    """
+    result = copy.deepcopy(pattern)
+    if "step_cc" not in result:
+        result["step_cc"] = {}
+    if track not in result["step_cc"]:
+        result["step_cc"][track] = {}
+    if param not in result["step_cc"][track]:
+        result["step_cc"][track][param] = [None] * 16
+    result["step_cc"][track][param][step] = value
+    return result
+
+
 def apply_swing(pattern: dict, amount: int) -> dict:
     """
     Set swing amount.
