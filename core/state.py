@@ -19,6 +19,8 @@ DEFAULT_PATTERN: dict = {
     "cymbal":  [0] * 16,
 }
 
+EMPTY_PATTERN: dict = {track: [0] * 16 for track in ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]}
+
 _HISTORY_MAX = 20
 
 
@@ -63,6 +65,17 @@ class AppState:
     def update_mute(self, track: str, muted: bool) -> None:
         with self._lock:
             self.track_muted[track] = muted
+
+    def undo_pattern(self) -> dict | None:
+        """Pop the most recent history entry and queue it as pending. Returns the pattern or None."""
+        with self._lock:
+            if not self.pattern_history:
+                return None
+            popped = self.pattern_history.pop()
+            entry = self.pattern_history[-1] if self.pattern_history else popped
+            self.pending_pattern = entry["pattern"]
+            self.last_prompt = entry.get("prompt")
+            return entry["pattern"]
 
     def update_pattern(self, pattern: dict, prompt: str | None = None) -> None:
         with self._lock:

@@ -1,7 +1,7 @@
 # tests/test_state.py
 import threading
 import time
-from core.state import AppState, DEFAULT_PATTERN, TRACK_NAMES
+from core.state import AppState, DEFAULT_PATTERN, EMPTY_PATTERN, TRACK_NAMES
 
 
 def test_initial_values():
@@ -71,6 +71,40 @@ def test_default_pattern_has_all_tracks():
     for track in TRACK_NAMES:
         assert len(DEFAULT_PATTERN[track]) == 16
         assert all(isinstance(v, int) and 0 <= v <= 127 for v in DEFAULT_PATTERN[track])
+
+
+def test_empty_pattern_is_all_zeros():
+    for track in TRACK_NAMES:
+        assert EMPTY_PATTERN[track] == [0] * 16, f"{track} should be all zeros"
+
+
+def test_empty_pattern_has_all_tracks():
+    assert set(EMPTY_PATTERN.keys()) == set(TRACK_NAMES)
+
+
+def test_undo_pattern_returns_previous():
+    state = AppState()
+    pattern_a = {track: [1] * 16 for track in TRACK_NAMES}
+    pattern_b = {track: [2] * 16 for track in TRACK_NAMES}
+    state.update_pattern(pattern_a, prompt="first")
+    state.update_pattern(pattern_b, prompt="second")
+    result = state.undo_pattern()
+    assert result is not None
+    assert result["kick"] == [1] * 16
+    assert state.last_prompt == "first"
+
+
+def test_undo_pattern_returns_none_when_empty():
+    state = AppState()
+    result = state.undo_pattern()
+    assert result is None
+
+
+def test_undo_pattern_removes_entry_from_history():
+    state = AppState()
+    state.update_pattern({track: [1] * 16 for track in TRACK_NAMES}, prompt="first")
+    state.undo_pattern()
+    assert len(state.pattern_history) == 0
 
 
 def test_initial_mute_state_all_unmuted():

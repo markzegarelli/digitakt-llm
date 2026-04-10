@@ -70,6 +70,15 @@ pytest -v
 
 ~160 tests, ~15s. All mocked — no real MIDI or API calls needed.
 
+## Development Workflow
+
+When closing a feature branch, invoke the `superpowers:finishing-a-development-branch` skill. Before merging, verify:
+
+1. `CLAUDE.md` command reference is updated if any slash commands changed
+2. `ARCHITECTURE.md` is updated if data flow or module structure changed
+3. All new API endpoints are documented in `ARCHITECTURE.md`
+4. `VISION.md` milestone status is current
+
 ## API
 
 FastAPI starts automatically on `http://localhost:8000`. WebSocket at `/ws` streams all internal events. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full event list.
