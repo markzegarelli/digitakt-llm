@@ -102,10 +102,28 @@ def _prompt_bpm() -> float:
     return 120.0
 
 
+_HELP_TEXT = """\
+Commands:
+  play                        Start playback
+  stop                        Stop playback
+  bpm <n>                     Set BPM (20–400)
+  show                        Print ASCII step grid
+  save <name>                 Save current pattern to patterns/<name>.json
+  load <name>                 Load pattern from patterns/<name>.json (queued for next loop)
+  cc <track> <param> <value>  Set a CC parameter (0–127) on a track
+  cc show                     Print CC table for all tracks
+  help                        Show this help
+
+Tracks:  kick  snare  tom  clap  bell  hihat  openhat  cymbal
+CC params:  tune  filter  resonance  attack  decay  volume  reverb  delay
+
+Anything else is sent to Claude as a pattern prompt.
+First prompt generates a new pattern; subsequent prompts are treated as variations.\
+"""
+
+
 def _run_repl(player: Player, generator: Generator, state: AppState, port) -> None:
-    print("\nReady. Commands: bpm <n>, stop, play, show, save <name>, load <name>")
-    print("                 cc <track> <param> <value>  |  cc show")
-    print("Anything else is sent to Claude as a pattern prompt.\n")
+    print("\nReady. Type 'help' for commands or enter a prompt to generate a pattern.\n")
 
     while True:
         try:
@@ -154,6 +172,9 @@ def _run_repl(player: Player, generator: Generator, state: AppState, port) -> No
                 pattern = json.loads(path.read_text())
                 player.queue_pattern(pattern)
                 print(f"Queued '{arg}' for next loop.")
+
+        elif cmd == "help":
+            print(_HELP_TEXT)
 
         elif cmd == "cc":
             cc_parts = line.split()
