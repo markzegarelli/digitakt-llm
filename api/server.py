@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Set
 
@@ -23,7 +24,20 @@ from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
 
-app = FastAPI(title="Digitakt LLM")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if _state is not None:
+        _state.event_loop = asyncio.get_running_loop()
+    if _bus is not None:
+        for event_name in _ALL_EVENTS:
+            _bus.subscribe(
+                event_name,
+                lambda p, name=event_name: _broadcast_event(name, p),
+            )
+    yield
+
+
+app = FastAPI(title="Digitakt LLM", lifespan=lifespan)
 
 # Module-level singletons set by init()
 _state: AppState | None = None
@@ -70,19 +84,6 @@ async def _broadcast_to_clients(message: dict) -> None:
     _ws_clients.difference_update(dead)
 
 
-@app.on_event("startup")
-async def _startup() -> None:
-    # Capture the running event loop so worker threads can schedule broadcasts
-    if _state is not None:
-        _state.event_loop = asyncio.get_running_loop()
-    if _bus is not None:
-        for event_name in _ALL_EVENTS:
-            _bus.subscribe(
-                event_name,
-                lambda p, name=event_name: _broadcast_event(name, p),
-            )
-
-
 # REST endpoints
 
 @app.get("/state", response_model=StateResponse)
@@ -125,6 +126,29 @@ def post_play():
 def post_stop():
     _player.stop()
     return {"status": "stopped"}
+
+
+@app.post("/new")
+def post_new():
+    import copy
+    from core.state import EMPTY_PATTERN
+    _state.pending_pattern = copy.deepcopy(EMPTY_PATTERN)
+    _state.bpm = 120.0
+    _state.last_prompt = None
+    if _state.is_playing:
+        _player.stop()
+    _broadcast_event("bpm_changed", {"bpm": 120.0})
+    _broadcast_event("pattern_changed", {})
+    return {"status": "ok"}
+
+
+@app.post("/undo")
+def post_undo():
+    pattern = _state.undo_pattern()
+    if pattern is None:
+        raise HTTPException(status_code=404, detail="No pattern history to undo")
+    _broadcast_event("pattern_changed", {})
+    return {"status": "ok"}
 
 
 @app.post("/cc", response_model=CCResponse)

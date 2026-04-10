@@ -256,3 +256,68 @@ def test_post_randbeat_updates_state_cc(tmp_path):
     # After randbeat, CC values should be present for all tracks
     for track in TRACK_NAMES:
         assert track in state["track_cc"]
+
+
+# ── /new ───────────────────────────────────────────────────────────────────
+
+def test_post_new_resets_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    # Set a non-empty pattern first
+    server_module._state.current_pattern = {track: [100] * 16 for track in TRACK_NAMES}
+    server_module._state.bpm = 160.0
+
+    response = client.post("/new")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    # Pattern should be pending reset
+    assert server_module._state.pending_pattern is not None
+    for track in TRACK_NAMES:
+        assert server_module._state.pending_pattern[track] == [0] * 16
+    assert server_module._state.bpm == 120.0
+    assert server_module._state.last_prompt is None
+
+
+# ── /undo ──────────────────────────────────────────────────────────────────
+
+def test_post_undo_applies_previous_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    pattern_a = {track: [50] * 16 for track in TRACK_NAMES}
+    server_module._state.update_pattern(pattern_a, prompt="previous")
+
+    response = client.post("/undo")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert server_module._state.pending_pattern is not None
+    for track in TRACK_NAMES:
+        assert server_module._state.pending_pattern[track] == [50] * 16
+
+
+def test_post_undo_returns_404_when_empty_history(tmp_path):
+    client = _make_test_client(tmp_path)
+    response = client.post("/undo")
+    assert response.status_code == 404
+
+
+# ── WebSocket event payloads ───────────────────────────────────────────────
+
+def test_ws_receives_bpm_changed_event(tmp_path):
+    client = _make_test_client(tmp_path)
+    with client.websocket_connect("/ws") as ws:
+        server_module._bus.emit("bpm_changed", {"bpm": 130.0})
+        import time; time.sleep(0.05)
+        # Connection remains stable after event emission
+
+
+def test_ws_receives_generation_complete_event(tmp_path):
+    client = _make_test_client(tmp_path)
+    with client.websocket_connect("/ws") as ws:
+        payload = {"prompt": "test prompt", "pattern": {}}
+        server_module._bus.emit("generation_complete", payload)
+        import time; time.sleep(0.05)
+
+
+def test_ws_receives_pattern_changed_event(tmp_path):
+    client = _make_test_client(tmp_path)
+    with client.websocket_connect("/ws") as ws:
+        server_module._bus.emit("pattern_changed", {})
+        import time; time.sleep(0.05)

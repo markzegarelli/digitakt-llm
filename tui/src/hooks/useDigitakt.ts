@@ -28,6 +28,7 @@ const DEFAULT_STATE: DigitaktState = {
   connected: false,
   log: [],
   current_step: null,
+  pattern_history: [],
 };
 
 function formatLogEntry(event: string, data: Record<string, unknown>): string {
@@ -68,6 +69,9 @@ export interface DigitaktActions {
   randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
   randbeat(): Promise<void>;
   ask(question: string): Promise<string>;
+  callNew(): Promise<void>;
+  callUndo(): Promise<void>;
+  clearLog(): void;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -104,6 +108,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_muted: data["track_muted"] as DigitaktState["track_muted"],
         track_velocity: data["track_velocity"] as DigitaktState["track_velocity"],
         step_cc: (pattern["step_cc"] as DigitaktState["step_cc"]) ?? null,
+        pattern_history: (data["pattern_history"] as DigitaktState["pattern_history"]) ?? [],
         connected: true,
       }));
     } catch {
@@ -323,6 +328,20 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       const data = await api("POST", "/ask", { question }) as { answer: string };
       return data.answer;
     }, [api]),
+
+    callNew: useCallback(async () => {
+      await api("POST", "/new");
+    }, [api]),
+
+    callUndo: useCallback(async () => {
+      await api("POST", "/undo").catch(() => {
+        // 404 = no history, silently ignore
+      });
+    }, [api]),
+
+    clearLog: useCallback(() => {
+      setState((s) => ({ ...s, log: [] }));
+    }, []),
   };
 
   return [state, actions];

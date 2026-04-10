@@ -2,26 +2,36 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 
 const HELP_LINES = [
-  "Commands (slash prefix optional):",
+  "── Playback & Pattern ─────────────────────────────────────────",
   "  play / stop                          start or stop playback",
   "  bpm <n>                              set BPM (20–400)",
   "  swing <n>                            set swing 0–100",
-  "  prob <track> <step> <value>          step probability 0–100 (step 1-indexed)",
-  "  vel <track> <step> <value>           step velocity 0–127 (step 1-indexed)",
-  "  random <track|all> <velocity|prob> [lo-hi]  randomize",
-  "  randbeat                             random techno beat (BPM + CC randomized)",
-  "  cc <track> <param> <value>           send CC 0–127 globally",
+  "  prob <track> <step> <value>          step probability 0–100 (1-indexed)",
+  "  vel <track> <step> <value>           step velocity 0–127 (1-indexed)",
+  "  random <track|all> <vel|prob> [lo-hi]  randomize",
+  "  randbeat                             random techno beat",
+  "  cc <track> <param> <value>           CC 0–127 globally",
   "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
-  "  mute <track>                         toggle mute (use /mute via CLI only)",
-  "  log                                  toggle activity log panel",
+  "  mute <track>                         toggle track mute",
+  "  log                                  toggle activity log",
   "  save <name> / load <name>            pattern persistence",
-  "  ask <question>                       ask Claude about the tool",
+  "  new                                  reset to empty pattern",
+  "  undo                                 revert to previous pattern",
+  "  history                              show pattern history",
+  "  clear                                clear activity log",
+  "",
+  "── Chat & Generation ──────────────────────────────────────────",
+  "  <bare text>                          generate beat (BEAT mode)",
+  "                                       or ask Claude (CHAT mode)",
+  "  ask <question>                       ask Claude (any mode)",
+  "  mode [chat|beat]                     switch input mode",
+  "",
+  "── App ────────────────────────────────────────────────────────",
   "  help                                 show this help",
   "  quit / q                             exit",
-  "  <bare text>                          send to Claude LLM",
-  "  ?<question>                          shorthand for /ask",
+  "  Shift+Tab                            toggle Chat/Beat mode",
   "",
-  "CC panel: Tab to focus · Enter on param = step edit mode · Esc to exit",
+  "CC panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "",
   "Press any key to dismiss.",
 ];
@@ -36,6 +46,10 @@ interface PromptProps {
   answerText: string | null;
   askPending: boolean;
   onClearAnswer(): void;
+  inputMode: "beat" | "chat";
+  showHistory: boolean;
+  historyItems: Array<{ prompt: string; timestamp: number }>;
+  onClearHistory(): void;
 }
 
 export function Prompt({
@@ -48,6 +62,10 @@ export function Prompt({
   answerText,
   askPending,
   onClearAnswer,
+  inputMode,
+  showHistory,
+  historyItems,
+  onClearHistory,
 }: PromptProps) {
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -58,6 +76,11 @@ export function Prompt({
 
     if (answerText !== null) {
       onClearAnswer();
+      return;
+    }
+
+    if (showHistory) {
+      onClearHistory();
       return;
     }
 
@@ -107,11 +130,29 @@ export function Prompt({
     );
   }
 
+  if (showHistory) {
+    const lines = historyItems.length === 0
+      ? ["No pattern history."]
+      : historyItems.map((entry, i) => {
+          const d = new Date(entry.timestamp * 1000);
+          const time = d.toLocaleTimeString();
+          return `${i + 1}. [${time}] ${entry.prompt}`;
+        });
+    return (
+      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
+        <Text bold color="cyan">Pattern History  (press any key to dismiss)</Text>
+        {lines.map((line, i) => (
+          <Text key={i} color="white">{line}</Text>
+        ))}
+      </Box>
+    );
+  }
+
   if (showHelp) {
     return (
       <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
         {HELP_LINES.map((line, i) => (
-          <Text key={i} color={i === 0 ? "cyan" : line.startsWith("  ") ? "white" : "gray"}>{line || " "}</Text>
+          <Text key={i} color={line.startsWith("──") ? "cyan" : line.startsWith("  ") ? "white" : "gray"}>{line || " "}</Text>
         ))}
       </Box>
     );
@@ -126,13 +167,16 @@ export function Prompt({
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
       <Box>
+        <Text bold color={inputMode === "beat" ? "magenta" : "cyan"}>
+          [{inputMode.toUpperCase()}]{" "}
+        </Text>
         <Text bold color="cyan">› </Text>
         <Text>{text}</Text>
         {isFocused && <Text backgroundColor="white" color="black"> </Text>}
       </Box>
       {statusLine
         ? <Text color={askPending ? "yellow" : generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
-        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/cc-step/bpm/play/stop/log/ask/help/quit"}</Text>
+        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/bpm/play/stop/new/undo/history/log/ask/help/quit · Shift+Tab: toggle mode"}</Text>
       }
     </Box>
   );

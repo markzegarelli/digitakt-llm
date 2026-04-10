@@ -66,6 +66,8 @@ export function App({ baseUrl }: AppProps) {
   const [showLog, setShowLog]           = useState(false);
   const [answerText, setAnswerText]     = useState<string | null>(null);
   const [askPending, setAskPending]     = useState(false);
+  const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
+  const [showHistory, setShowHistory]   = useState(false);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -140,6 +142,24 @@ export function App({ baseUrl }: AppProps) {
         setShowHelp(true);
         setFocus("prompt");
         break;
+      case "new":
+        actions.callNew();
+        break;
+      case "undo":
+        actions.callUndo();
+        break;
+      case "clear":
+        actions.clearLog();
+        break;
+      case "history":
+        setShowHistory(true);
+        setFocus("prompt");
+        break;
+      case "mode": {
+        const m = parts[1]?.toLowerCase();
+        if (m === "chat" || m === "beat") setInputMode(m);
+        break;
+      }
       case "ask": {
         const question = parts.slice(1).join(" ");
         if (question) {
@@ -167,26 +187,23 @@ export function App({ baseUrl }: AppProps) {
       }
       default:
         if (stripped.trim()) {
-          // Support "?" prefix as shorthand for /ask
-          if (stripped.startsWith("?")) {
-            const question = stripped.slice(1).trim();
-            if (question) {
-              setAskPending(true);
-              setFocus("prompt");
-              actions.ask(question).then((answer) => {
-                setAskPending(false);
-                setAnswerText(answer);
-              }).catch(() => {
-                setAskPending(false);
-                setAnswerText("Error: could not get answer. Check your API key and connection.");
-              });
-            }
+          if (inputMode === "chat") {
+            const question = stripped.trim();
+            setAskPending(true);
+            setFocus("prompt");
+            actions.ask(question).then((answer) => {
+              setAskPending(false);
+              setAnswerText(answer);
+            }).catch(() => {
+              setAskPending(false);
+              setAnswerText("Error: could not get answer. Check your API key and connection.");
+            });
           } else {
             actions.generate(stripped.trim());
           }
         }
     }
-  }, [actions, baseUrl, exit]);
+  }, [actions, baseUrl, exit, inputMode]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
@@ -195,12 +212,16 @@ export function App({ baseUrl }: AppProps) {
       return;
     }
     if (key.tab) {
-      setFocus((f) => {
-        if (f === "pattern") return "cc";
-        if (f === "cc") return showLog ? "log" : "prompt";
-        if (f === "log") return "prompt";
-        return "pattern";
-      });
+      if (key.shift) {
+        setInputMode((m) => m === "beat" ? "chat" : "beat");
+      } else {
+        setFocus((f) => {
+          if (f === "pattern") return "cc";
+          if (f === "cc") return showLog ? "log" : "prompt";
+          if (f === "log") return "prompt";
+          return "pattern";
+        });
+      }
       return;
     }
     if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
@@ -371,6 +392,10 @@ export function App({ baseUrl }: AppProps) {
             answerText={answerText}
             askPending={askPending}
             onClearAnswer={() => setAnswerText(null)}
+            inputMode={inputMode}
+            showHistory={showHistory}
+            historyItems={state.pattern_history ?? []}
+            onClearHistory={() => setShowHistory(false)}
           />
           <Box paddingX={1}>
             <Text color="gray">

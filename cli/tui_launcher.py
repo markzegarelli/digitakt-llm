@@ -36,7 +36,7 @@ def _kill_stale_server(port: int) -> None:
 
 
 def _start_server(api_port: int) -> None:
-    from core.state import AppState, DEFAULT_PATTERN, TRACK_NAMES
+    from core.state import AppState, EMPTY_PATTERN, TRACK_NAMES
     from core.events import EventBus
     from core.player import Player
     from core.generator import Generator
@@ -60,7 +60,7 @@ def _start_server(api_port: int) -> None:
 
     bus.subscribe("generation_complete", on_gen_complete)
 
-    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    state.current_pattern = {k: list(EMPTY_PATTERN[k]) for k in TRACK_NAMES}
     player.set_bpm(120.0)
 
     server_module.init(state, bus, player, generator)

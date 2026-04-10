@@ -25,6 +25,7 @@ export interface DigitaktState {
   connected: boolean;
   log: string[];
   current_step: number | null;
+  pattern_history: Array<{ prompt: string; timestamp: number }>;
 }
 
 export type FocusPanel = "pattern" | "cc" | "log" | "prompt";
