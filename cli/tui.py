@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from textual.app import App, ComposeResult
+from textual.reactive import reactive
 from textual.widgets import Header, Footer, Static, RichLog, Input
 from textual.containers import Horizontal, Vertical
 
@@ -22,6 +23,7 @@ from cli.commands import (
     apply_random_velocity,
     apply_random_prob,
     parse_random_range,
+    generate_random_beat,
 )
 
 
@@ -59,11 +61,16 @@ class DigitaktApp(App):
     #pattern-panel {
         width: 2fr;
     }
-    #cc-panel {
+    #right-col {
         width: 1fr;
     }
+    #cc-panel {
+        height: 100%;
+        border: solid $primary;
+    }
     #event-log {
-        height: 8;
+        display: none;
+        height: 100%;
         border: solid $primary;
     }
     #cmd-input {
@@ -74,6 +81,8 @@ class DigitaktApp(App):
     TITLE = "digitakt-llm"
 
     BINDINGS = [("ctrl+c", "quit_app", "Quit"), ("ctrl+q", "quit_app", "Quit")]
+
+    show_log: reactive[bool] = reactive(False)
 
     def action_quit_app(self) -> None:
         self._player.stop()
@@ -98,8 +107,9 @@ class DigitaktApp(App):
         yield Static(self._header_text(), id="header-bar")
         with Horizontal(id="top-row"):
             yield PatternPanel(_ascii_grid(self._state.current_pattern, self._state.track_muted), id="pattern-panel")
-            yield CcPanel(_cc_table(self._state.track_cc), id="cc-panel")
-        yield RichLog(id="event-log", markup=True)
+            with Vertical(id="right-col"):
+                yield CcPanel(_cc_table(self._state.track_cc), id="cc-panel")
+                yield RichLog(id="event-log", markup=True)
         yield Input(placeholder="> ", id="cmd-input")
 
     def on_mount(self) -> None:
@@ -128,7 +138,9 @@ class DigitaktApp(App):
             "prob":   self._cmd_prob,
             "swing":  self._cmd_swing,
             "vel":    self._cmd_vel,
-            "random": self._cmd_random,
+            "random":   self._cmd_random,
+            "log":      self._cmd_log,
+            "randbeat": self._cmd_randbeat,
         }
 
         log = self.query_one("#event-log", RichLog)
@@ -179,6 +191,10 @@ class DigitaktApp(App):
 
     def _on_mute_changed(self, _p: dict) -> None:
         self._cft(self._refresh_pattern)
+
+    def watch_show_log(self, value: bool) -> None:
+        self.query_one("#event-log").display = value
+        self.query_one("#cc-panel").display = not value
 
     # ── UI helpers (called on main thread) ────────────────────────────────
 
@@ -333,6 +349,8 @@ class DigitaktApp(App):
         self._log("  /swing <n>        set swing 0–100")
         self._log("  /vel <track> <step> <value>   set step velocity (step is 1-indexed)")
         self._log("  /random <track|all> <velocity|prob> [lo-hi]  randomize")
+        self._log("  /log              toggle activity log panel")
+        self._log("  /randbeat         generate a random techno beat (BPM + CC randomized)")
         self._log("  /quit or /q       quit")
         self._log("  Bare text → Claude LLM prompt")
 
@@ -448,3 +466,17 @@ class DigitaktApp(App):
         self._player.queue_pattern(new_pattern)
         range_desc = f"[{lo}-{hi}]" if range_str else "default range"
         self._log(f"Randomized {param} for {track_arg} ({range_desc})")
+
+    def _cmd_log(self, args: str) -> None:
+        self.show_log = not self.show_log
+
+    def _cmd_randbeat(self, args: str) -> None:
+        pattern, bpm, swing, cc_changes = generate_random_beat()
+        pattern = apply_swing(pattern, swing)
+        self._player.queue_pattern(pattern)
+        self._player.set_bpm(bpm)
+        for track, params in cc_changes.items():
+            for param, value in params.items():
+                self._state.update_cc(track, param, value)
+        self._refresh_cc()
+        self._log(f"randbeat: {bpm} BPM, swing {swing}")
