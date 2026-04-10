@@ -73,6 +73,12 @@ class DigitaktApp(App):
 
     TITLE = "digitakt-llm"
 
+    BINDINGS = [("ctrl+c", "quit_app", "Quit"), ("ctrl+q", "quit_app", "Quit")]
+
+    def action_quit_app(self) -> None:
+        self._player.stop()
+        self.exit()
+
     def __init__(
         self,
         player: Player,
@@ -127,6 +133,9 @@ class DigitaktApp(App):
 
         log = self.query_one("#event-log", RichLog)
         log.write("Ready. Type /help for commands. Bare text → Claude prompt.")
+
+    def on_unmount(self) -> None:
+        self._player.stop()
 
     # ── EventBus callbacks (called from worker threads) ────────────────────
 

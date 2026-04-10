@@ -121,7 +121,12 @@ def main() -> None:
 
     from cli.tui import DigitaktApp
     app = DigitaktApp(player=player, generator=generator, state=state, port=port, bus=bus)
-    app.run()
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        player.stop()
 
 
 if __name__ == "__main__":
