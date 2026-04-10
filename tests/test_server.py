@@ -228,3 +228,31 @@ def test_post_random_invalid_param_returns_422(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/random", json={"track": "kick", "param": "tempo", "lo": 0, "hi": 127})
     assert resp.status_code == 422
+
+
+# ── /randbeat ──────────────────────────────────────────────────────────────
+
+def test_post_randbeat_returns_200(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/randbeat")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "bpm" in data
+    assert "swing" in data
+
+
+def test_post_randbeat_bpm_in_techno_range(tmp_path):
+    client = _make_test_client(tmp_path)
+    for _ in range(5):
+        resp = client.post("/randbeat")
+        bpm = resp.json()["bpm"]
+        assert 128 <= bpm <= 160, f"BPM {bpm} out of techno range"
+
+
+def test_post_randbeat_updates_state_cc(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/randbeat")
+    state = client.get("/state").json()
+    # After randbeat, CC values should be present for all tracks
+    for track in TRACK_NAMES:
+        assert track in state["track_cc"]

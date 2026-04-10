@@ -53,7 +53,12 @@ def _start_server(api_port: int) -> None:
     player = Player(state, bus, port)
     generator = Generator(state, bus)
 
-    bus.subscribe("generation_complete", lambda p: player.queue_pattern(p["pattern"]))
+    def on_gen_complete(p: dict) -> None:
+        player.queue_pattern(p["pattern"])
+        if p.get("bpm"):
+            player.set_bpm(p["bpm"])
+
+    bus.subscribe("generation_complete", on_gen_complete)
 
     state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
     player.set_bpm(120.0)

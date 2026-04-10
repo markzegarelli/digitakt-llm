@@ -9,6 +9,7 @@ from cli.commands import (
     apply_prob_step,
     apply_vel_step,
     apply_swing,
+    generate_random_beat,
 )
 from core.state import TRACK_NAMES
 
@@ -141,3 +142,82 @@ def test_apply_functions_do_not_mutate_input():
 
     apply_swing(original, 42)
     assert "swing" not in original
+
+
+# ── generate_random_beat ──────────────────────────────────────────────────────
+
+def test_randbeat_returns_four_values():
+    result = generate_random_beat()
+    assert len(result) == 4
+    pattern, bpm, swing, cc_changes = result
+
+
+def test_randbeat_pattern_has_all_tracks():
+    pattern, *_ = generate_random_beat()
+    for track in ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]:
+        assert track in pattern
+        assert len(pattern[track]) == 16
+
+
+def test_randbeat_kick_on_four_on_the_floor():
+    for _ in range(10):  # run multiple times — structural guarantee
+        pattern, *_ = generate_random_beat()
+        for step in [0, 4, 8, 12]:
+            assert pattern["kick"][step] > 0, f"kick missing at step {step}"
+
+
+def test_randbeat_snare_on_backbeats():
+    for _ in range(10):
+        pattern, *_ = generate_random_beat()
+        assert pattern["snare"][4] > 0, "snare missing at step 4"
+        assert pattern["snare"][12] > 0, "snare missing at step 12"
+
+
+def test_randbeat_bpm_in_techno_range():
+    for _ in range(20):
+        _, bpm, *_ = generate_random_beat()
+        assert 128 <= bpm <= 160, f"BPM {bpm} out of range"
+
+
+def test_randbeat_swing_in_range():
+    for _ in range(20):
+        _, _, swing, _ = generate_random_beat()
+        assert 0 <= swing <= 30, f"swing {swing} out of range"
+
+
+def test_randbeat_all_velocities_valid():
+    pattern, *_ = generate_random_beat()
+    for track in ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]:
+        for i, v in enumerate(pattern[track]):
+            assert 0 <= v <= 127, f"{track}[{i}] = {v} out of range"
+
+
+def test_randbeat_cc_has_all_tracks():
+    _, _, _, cc_changes = generate_random_beat()
+    for track in ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]:
+        assert track in cc_changes
+
+
+def test_randbeat_cc_values_in_range():
+    _, _, _, cc_changes = generate_random_beat()
+    ranges = {
+        "filter":    (40, 110),
+        "resonance": (20, 80),
+        "decay":     (30, 100),
+        "tune":      (58, 70),
+        "reverb":    (0, 40),
+        "delay":     (0, 30),
+        "attack":    (0, 30),
+        "volume":    (100, 100),
+    }
+    for track, params in cc_changes.items():
+        for param, value in params.items():
+            lo, hi = ranges[param]
+            assert lo <= value <= hi, f"{track}.{param} = {value} out of [{lo},{hi}]"
+
+
+def test_randbeat_hihat_has_hits():
+    # hihat must have at least some steps active (8th or 16th pattern)
+    for _ in range(10):
+        pattern, *_ = generate_random_beat()
+        assert any(v > 0 for v in pattern["hihat"]), "hihat has no hits"

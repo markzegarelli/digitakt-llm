@@ -9,8 +9,10 @@ const HELP_LINES = [
   "  prob <track> <step> <value>          step probability 0–100 (step 1-indexed)",
   "  vel <track> <step> <value>           step velocity 0–127 (step 1-indexed)",
   "  random <track|all> <velocity|prob> [lo-hi]  randomize",
+  "  randbeat                             random techno beat (BPM + CC randomized)",
   "  cc <track> <param> <value>           send CC 0–127",
   "  mute <track>                         toggle mute (use /mute via CLI only)",
+  "  log                                  toggle activity log panel",
   "  save <name> / load <name>            pattern persistence",
   "  help                                 show this help",
   "  quit / q                             exit",
@@ -94,7 +96,7 @@ export function Prompt({ isFocused, generationStatus, generationError, onCommand
       </Box>
       {statusLine
         ? <Text color={generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
-        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/cc/bpm/play/stop/save/load/help/quit"}</Text>
+        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/bpm/play/stop/log/help/quit"}</Text>
       }
     </Box>
   );
