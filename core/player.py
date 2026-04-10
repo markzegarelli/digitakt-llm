@@ -61,6 +61,7 @@ class Player:
         return (swing / 100.0) * self._step_duration() / 3.0
 
     def _play_step(self, step: int) -> None:
+        self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
         for track in TRACK_NAMES:
             note = midi_utils.NOTE_MAP.get(track)

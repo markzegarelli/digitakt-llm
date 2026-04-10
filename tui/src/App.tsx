@@ -59,6 +59,7 @@ export function App({ baseUrl }: AppProps) {
       case "quit":
       case "q":
         exit();
+        setTimeout(() => process.exit(0), 50);
         break;
       case "bpm": {
         const v = parseFloat(parts[1] ?? "");
@@ -120,7 +121,11 @@ export function App({ baseUrl }: AppProps) {
   }, [actions, baseUrl, exit]);
 
   useInput((input, key) => {
-    if (key.ctrl && input === "c") { exit(); return; }
+    if (key.ctrl && input === "c") {
+      exit();
+      setTimeout(() => process.exit(0), 50);
+      return;
+    }
     if (key.tab) {
       setFocus((f) => {
         if (f === "pattern") return "cc";
@@ -188,37 +193,44 @@ export function App({ baseUrl }: AppProps) {
         connected={state.connected}
         generationStatus={state.generation_status}
       />
-      <PatternGrid
-        pattern={state.current_pattern}
-        trackMuted={state.track_muted}
-        selectedTrack={patternTrack}
-        isFocused={focus === "pattern"}
-      />
-      <CCPanel
-        trackCC={state.track_cc}
-        trackVelocity={state.track_velocity}
-        selectedTrack={ccTrack}
-        selectedParam={ccParam}
-        isFocused={focus === "cc"}
-      />
-      {showLog && (
-        <ActivityLog
-          log={state.log}
-          isFocused={focus === "log"}
-        />
-      )}
-      <Prompt
-        isFocused={focus === "prompt"}
-        generationStatus={state.generation_status}
-        generationError={state.generation_error}
-        onCommand={handleCommand}
-        showHelp={showHelp}
-        onClearHelp={() => setShowHelp(false)}
-      />
-      <Box paddingX={1}>
-        <Text color="gray">
-          {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
-        </Text>
+      <Box flexDirection="row">
+        <Box flexDirection="column" flexGrow={1}>
+          <PatternGrid
+            pattern={state.current_pattern}
+            trackMuted={state.track_muted}
+            selectedTrack={patternTrack}
+            isFocused={focus === "pattern"}
+            currentStep={state.current_step}
+          />
+          <CCPanel
+            trackCC={state.track_cc}
+            trackVelocity={state.track_velocity}
+            selectedTrack={ccTrack}
+            selectedParam={ccParam}
+            isFocused={focus === "cc"}
+          />
+          <Prompt
+            isFocused={focus === "prompt"}
+            generationStatus={state.generation_status}
+            generationError={state.generation_error}
+            onCommand={handleCommand}
+            showHelp={showHelp}
+            onClearHelp={() => setShowHelp(false)}
+          />
+          <Box paddingX={1}>
+            <Text color="gray">
+              {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+            </Text>
+          </Box>
+        </Box>
+        {showLog && (
+          <Box width={44}>
+            <ActivityLog
+              log={state.log}
+              isFocused={focus === "log"}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

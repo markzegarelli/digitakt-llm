@@ -26,6 +26,7 @@ const DEFAULT_STATE: DigitaktState = {
   generation_error: null,
   connected: false,
   log: [],
+  current_step: null,
 };
 
 function formatLogEntry(event: string, data: Record<string, unknown>): string {
@@ -69,6 +70,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
   const [state, setState] = useState<DigitaktState>(DEFAULT_STATE);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shuttingDown = useRef(false);
 
   const api = useCallback(
     async (method: string, path: string, body?: unknown) => {
@@ -134,7 +136,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "playback_started":
               return { ...prev, is_playing: true, log: newLog };
             case "playback_stopped":
-              return { ...prev, is_playing: false, log: newLog };
+              return { ...prev, is_playing: false, current_step: null, log: newLog };
+            case "step_changed":
+              return { ...prev, current_step: msg.data["step"] as number };
             case "generation_started":
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete": {
@@ -207,6 +211,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     };
 
     ws.onclose = () => {
+      if (shuttingDown.current) return;
       setState((prev) => ({ ...prev, connected: false }));
       reconnectTimer.current = setTimeout(connect, 2000);
     };
@@ -217,6 +222,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
   useEffect(() => {
     connect();
     return () => {
+      shuttingDown.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
