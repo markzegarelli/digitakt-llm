@@ -25,8 +25,10 @@ Anthropic API → JSON → validate
          API broadcasts via WebSocket
 
 Player._loop()                  ← runs in daemon thread
-    │  16 steps × step_duration (60/bpm/4 seconds)
-    │  calls midi_utils.send_note() per active step
+    │  16 steps × 6 MIDI clock ticks (24 PPQN)
+    │  per step: apply swing delay on odd steps, check per-step prob,
+    │            scale velocity by track_velocity, send note + clock ticks
+    │  check track_muted before sending
     │
     └── end of loop: if pending_pattern → swap atomically
         emits: pattern_changed
@@ -37,17 +39,19 @@ Player._loop()                  ← runs in daemon thread
 | Event | Emitter | Payload |
 |-------|---------|---------|
 | `generation_started` | Generator | `{prompt}` |
-| `generation_complete` | Generator | `{pattern, prompt}` |
+| `generation_complete` | Generator | `{pattern, prompt, bpm, cc_changes}` |
 | `generation_failed` | Generator | `{prompt, error}` |
 | `pattern_changed` | Player | `{pattern, prompt}` |
 | `bpm_changed` | Player | `{bpm}` |
 | `playback_started` | Player | `{}` |
 | `playback_stopped` | Player | `{}` |
 | `midi_disconnected` | Player | `{port}` |
+| `cc_changed` | Generator | `{track, param, value}` |
+| `velocity_changed` | Generator | `{track, value}` |
 
 ## Threading Model
 
-- **Main thread**: REPL (blocks on `input()`)
+- **Main thread**: Textual TUI event loop; worker threads call `app.call_from_thread()` to update UI
 - **Generator thread**: one daemon thread per generation call
 - **Player thread**: one long-lived daemon thread, stopped via `threading.Event`
 - **Uvicorn thread**: one daemon thread running the asyncio event loop

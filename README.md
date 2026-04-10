@@ -16,26 +16,27 @@ export ANTHROPIC_API_KEY=sk-ant-...
 digitakt-llm
 ```
 
-## CLI Usage
+## Usage
 
-```
-     1 . . . 2 . . . 3 . . . 4 . . .
-kick [X . . . X . . . X . . . X . . .]
-snr  [. . . . X . . . . . . . X . . .]
-hhat [X . X . X . X . X . X . X . X .]
-clap [. . . . . . . . . . . . . . . .]
-```
+`digitakt-llm` launches a Textual terminal UI with four sections:
+
+- **Pattern Grid** — 16-step ASCII view for all 8 tracks, live-updating
+- **CC Panel** — per-track parameter values (filter, decay, reverb, etc.)
+- **Event Log** — scrolling status messages (generation, MIDI, errors)
+- **Command Input** — type commands or prompts at the bottom
+
+### Commands
+
+Type into the command input at the bottom of the TUI:
 
 | Command | Description |
 |---------|-------------|
 | `bpm 140` | Set tempo |
 | `stop` | Stop playback |
 | `play` | Resume playback |
-| `show` | Print ASCII step grid |
 | `save <name>` | Save current pattern to `patterns/<name>.json` |
 | `load <name>` | Queue a saved pattern for the next loop |
 | `cc <track> <param> <value>` | Send a CC message to a track (value 0–127) |
-| `cc show` | Print the current CC state for all tracks |
 | *(anything else)* | Generate a new pattern or variation from your description |
 
 **First prompt** generates a fresh pattern. **Subsequent prompts** are treated as variations (prior pattern and prompt are passed as context).

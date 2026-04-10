@@ -46,6 +46,19 @@ _SYSTEM_PROMPT = (
     '  "cymbal":  [16 integers 0-127],\n'
     '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
     "}"
+    "\n\nOPTIONAL: Per-step probability (prob):\n"
+    "- Add a \"prob\" key containing a dict of track → 16-element list of integers (0–100).\n"
+    "- 100 = always trigger. 75 = fires 75% of the time. 0 = never fires.\n"
+    "- Omit tracks that should always fire. Omit \"prob\" entirely for fully deterministic patterns.\n"
+    "- Use prob to: add ghost note uncertainty (snare ghost notes at 50–75%), randomize hi-hat repetitions, make fills feel organic. Do NOT apply prob to kick on downbeats.\n"
+    "- Example: \"prob\": {\"snare\": [100,100,50,100,100,100,75,100,100,100,50,100,100,100,75,100]}\n"
+    "\n"
+    "OPTIONAL: Swing (swing):\n"
+    "- Add a \"swing\" key with a single integer 0–100.\n"
+    "- 0 = perfectly quantized (no swing). 25 = light shuffle. 50 = strong triplet shuffle.\n"
+    "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
+    "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
+    "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno)."
 )
 
 _STRICT_SUFFIX = (
@@ -92,9 +105,29 @@ class Generator:
             for v in data[k]
         ):
             return None
+        if "prob" in data:
+            prob = data["prob"]
+            if not isinstance(prob, dict):
+                return None
+            for track, values in prob.items():
+                if track not in TRACK_NAMES:
+                    return None
+                if not isinstance(values, list) or len(values) != 16:
+                    return None
+                if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
+                    return None
+        if "swing" in data:
+            swing = data["swing"]
+            if not isinstance(swing, (int, float)) or not (0 <= swing <= 100):
+                return None
+
         raw_bpm = data.get("bpm")
         bpm = int(raw_bpm) if isinstance(raw_bpm, (int, float)) and 20 <= raw_bpm <= 400 else None
         pattern = {k: data[k] for k in TRACK_NAMES}
+        if "prob" in data:
+            pattern["prob"] = data["prob"]
+        if "swing" in data:
+            pattern["swing"] = data["swing"]
 
         cc_changes: dict = {}
         raw_cc = data.get("cc", {})

@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import os
-import sys
 import json
-import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,7 +13,6 @@ from core.events import EventBus
 from core.player import Player
 from core.generator import Generator
 from core import midi_utils
-from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 import api.server as server_module
 
 
@@ -44,24 +41,6 @@ def _cc_table(track_cc: dict) -> str:
         lines.append(f"{track:<6}" + "".join(f"{v:>6}" for v in vals))
     return "\n".join(lines)
 
-
-def _subscribe_cli_events(bus: EventBus) -> None:
-    def on_generation_started(p):
-        print(f"\n[generating: {p['prompt']}...]")
-
-    def on_generation_complete(p):
-        print(f"\n[pattern ready: {p['prompt']}]")
-
-    def on_generation_failed(p):
-        print(f"\n[generation failed: {p['error']}]")
-
-    def on_midi_disconnected(p):
-        print(f"\n[MIDI disconnected: {p.get('port')}. Reconnecting...]")
-
-    bus.subscribe("generation_started", on_generation_started)
-    bus.subscribe("generation_complete", on_generation_complete)
-    bus.subscribe("generation_failed", on_generation_failed)
-    bus.subscribe("midi_disconnected", on_midi_disconnected)
 
 
 def _select_midi_port() -> str | None:
@@ -102,112 +81,6 @@ def _prompt_bpm() -> float:
     return 120.0
 
 
-_HELP_TEXT = """\
-Commands:
-  play                        Start playback
-  stop                        Stop playback
-  bpm <n>                     Set BPM (20–400)
-  show                        Print ASCII step grid
-  save <name>                 Save current pattern to patterns/<name>.json
-  load <name>                 Load pattern from patterns/<name>.json (queued for next loop)
-  cc <track> <param> <value>  Set a CC parameter (0–127) on a track
-  cc show                     Print CC table for all tracks
-  help                        Show this help
-
-Tracks:  kick  snare  tom  clap  bell  hihat  openhat  cymbal
-CC params:  tune  filter  resonance  attack  decay  volume  reverb  delay
-
-Anything else is sent to Claude as a pattern prompt.
-First prompt generates a new pattern; subsequent prompts are treated as variations.\
-"""
-
-
-def _run_repl(player: Player, generator: Generator, state: AppState, port) -> None:
-    print("\nReady. Type 'help' for commands or enter a prompt to generate a pattern.\n")
-
-    while True:
-        try:
-            line = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nExiting.")
-            player.stop()
-            sys.exit(0)
-
-        if not line:
-            continue
-
-        parts = line.split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
-
-        if cmd == "bpm" and arg:
-            try:
-                player.set_bpm(float(arg))
-                print(f"BPM set to {arg}")
-            except ValueError:
-                print("Usage: bpm <number>")
-
-        elif cmd == "stop":
-            player.stop()
-            print("Stopped.")
-
-        elif cmd == "play":
-            player.start()
-            print("Playing.")
-
-        elif cmd == "show":
-            print(_ascii_grid(state.current_pattern))
-
-        elif cmd == "save" and arg:
-            _PATTERNS_DIR.mkdir(exist_ok=True)
-            path = _PATTERNS_DIR / f"{arg}.json"
-            path.write_text(json.dumps(state.current_pattern, indent=2))
-            print(f"Saved to {path}")
-
-        elif cmd == "load" and arg:
-            path = _PATTERNS_DIR / f"{arg}.json"
-            if not path.exists():
-                print(f"Pattern '{arg}' not found.")
-            else:
-                pattern = json.loads(path.read_text())
-                player.queue_pattern(pattern)
-                print(f"Queued '{arg}' for next loop.")
-
-        elif cmd == "help":
-            print(_HELP_TEXT)
-
-        elif cmd == "cc":
-            cc_parts = line.split()
-            if len(cc_parts) == 2 and cc_parts[1] == "show":
-                print(_cc_table(state.track_cc))
-            elif len(cc_parts) == 4:
-                _, cc_track, cc_param, cc_raw = cc_parts
-                if cc_track not in TRACK_NAMES:
-                    print(f"Unknown track '{cc_track}'. Tracks: {', '.join(TRACK_NAMES)}")
-                elif cc_param not in CC_MAP and cc_param != "velocity":
-                    print(f"Unknown param '{cc_param}'. Params: {', '.join(CC_MAP)}, velocity")
-                else:
-                    try:
-                        cc_value = int(cc_raw)
-                        if not (0 <= cc_value <= 127):
-                            raise ValueError
-                        if cc_param == "velocity":
-                            state.update_velocity(cc_track, cc_value)
-                        else:
-                            state.update_cc(cc_track, cc_param, cc_value)
-                            if port:
-                                send_cc(port, TRACK_CHANNELS[cc_track], CC_MAP[cc_param], cc_value)
-                        print(f"CC set: {cc_track} {cc_param} = {cc_value}")
-                    except ValueError:
-                        print("Value must be an integer 0–127.")
-            else:
-                print("Usage: cc <track> <param> <value>  |  cc show")
-
-        else:
-            # Everything else → send to generator
-            variation = state.last_prompt is not None
-            generator.generate(line, variation=variation)
-
 
 def main() -> None:
     state = AppState()
@@ -232,13 +105,11 @@ def main() -> None:
     generator = Generator(state, bus)
 
     bus.subscribe("generation_complete", on_generation_complete)
-    _subscribe_cli_events(bus)
 
     # Start FastAPI in background
     api_port = int(os.environ.get("PORT", "8000"))
     server_module.init(state, bus, player, generator)
     server_module.start_background(port=api_port)
-    print(f"API server started at http://localhost:{api_port}")
 
     # Load default pattern and start
     bpm = _prompt_bpm()
@@ -247,11 +118,10 @@ def main() -> None:
 
     if port:
         player.start()
-        print(f"Playing at {bpm} BPM.")
-    else:
-        print("No MIDI port — playback disabled. Generate patterns to preview in 'show'.")
 
-    _run_repl(player, generator, state, port)
+    from cli.tui import DigitaktApp
+    app = DigitaktApp(player=player, generator=generator, state=state, port=port, bus=bus)
+    app.run()
 
 
 if __name__ == "__main__":

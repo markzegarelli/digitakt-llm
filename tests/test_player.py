@@ -1,9 +1,10 @@
 import time
 import threading
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES, DEFAULT_PATTERN
 from core.events import EventBus
 from core.player import Player
+from core import midi_utils
 
 
 def _make_player() -> tuple[Player, AppState, EventBus, MagicMock]:
@@ -141,3 +142,98 @@ def test_clock_ticks_sent_during_playback():
         if c[0][0].type == "clock"
     ]
     assert len(clock_calls) >= 96  # at least one full loop
+
+
+def test_step_with_100_prob_always_fires():
+    player, state, bus, port = _make_player()
+    state.current_pattern["prob"] = {"kick": [100] * 16}
+    with patch("random.random", return_value=0.0):
+        player._play_step(0)
+    kick_note = midi_utils.NOTE_MAP.get("kick")
+    kick_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].note == kick_note
+    ]
+    assert len(kick_calls) == 1
+
+
+def test_step_with_0_prob_never_fires():
+    player, state, bus, port = _make_player()
+    state.current_pattern["prob"] = {"kick": [0] * 16}
+    player._play_step(0)
+    kick_note = midi_utils.NOTE_MAP.get("kick")
+    kick_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].note == kick_note
+    ]
+    assert len(kick_calls) == 0
+
+
+def test_step_fires_when_random_below_prob():
+    player, state, bus, port = _make_player()
+    state.current_pattern["prob"] = {"kick": [75] * 16}
+    with patch("random.random", return_value=0.74):  # 0.74 * 100 = 74 < 75 → fires
+        player._play_step(0)
+    kick_note = midi_utils.NOTE_MAP.get("kick")
+    kick_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].note == kick_note
+    ]
+    assert len(kick_calls) == 1
+
+
+def test_step_skipped_when_random_at_or_above_prob():
+    player, state, bus, port = _make_player()
+    state.current_pattern["prob"] = {"kick": [75] * 16}
+    with patch("random.random", return_value=0.75):  # 0.75 * 100 = 75 >= 75 → skipped
+        player._play_step(0)
+    kick_note = midi_utils.NOTE_MAP.get("kick")
+    kick_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].note == kick_note
+    ]
+    assert len(kick_calls) == 0
+
+
+def test_missing_prob_key_fires_normally():
+    player, state, bus, port = _make_player()
+    # No prob key in pattern — kick step 0 = 100, should fire
+    player._play_step(0)
+    kick_note = midi_utils.NOTE_MAP.get("kick")
+    kick_calls = [
+        c for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].note == kick_note
+    ]
+    assert len(kick_calls) == 1
+
+
+def test_swing_delay_returns_positive_when_swing_set():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 100  # max swing
+    delay = player._swing_delay()
+    assert delay > 0
+
+
+def test_no_swing_delay_when_swing_is_zero():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 0
+    delay = player._swing_delay()
+    assert delay == 0.0
+
+
+def test_no_swing_delay_when_swing_absent():
+    player, state, bus, port = _make_player()
+    # No swing key in pattern
+    delay = player._swing_delay()
+    assert delay == 0.0
+
+
+def test_swing_delay_scales_with_bpm():
+    player, state, bus, port = _make_player()
+    state.current_pattern["swing"] = 50
+    state.bpm = 120.0
+    delay_120 = player._swing_delay()
+    state.bpm = 240.0
+    delay_240 = player._swing_delay()
+    # At double BPM, delay should halve
+    assert abs(delay_120 - delay_240 * 2) < 1e-9

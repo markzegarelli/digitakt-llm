@@ -19,18 +19,21 @@ digitakt-llm          # requires .env with ANTHROPIC_API_KEY
 
 ```
 core/        # all logic — no I/O dependencies
-  state.py   # AppState dataclass (single shared instance)
-  events.py  # EventBus pub/sub (decouples all modules)
+  state.py      # AppState dataclass (single shared instance)
+  events.py     # EventBus pub/sub (decouples all modules)
   generator.py  # Anthropic API → JSON pattern → EventBus
-  player.py     # background thread, 16th-note timing, atomic swap
+  player.py     # background thread, MIDI clock, prob/swing, atomic swap
   midi_utils.py # port discovery, NOTE_MAP, send_note
 
 api/         # thin FastAPI adapter
   server.py  # REST + WebSocket, init() wires singletons
   schemas.py # Pydantic request/response models
 
-cli/         # thin REPL adapter
-  main.py    # wires core, starts API server, runs REPL
+cli/         # primary interface
+  main.py    # wires core, starts API server, launches Textual TUI
+  tui.py     # Textual TUI — pattern grid, CC panel, event log, command input
+
+tui/         # alternate Ink/Bun TUI (connects to FastAPI backend)
 
 tests/       # one test file per module, TDD throughout
 ```
@@ -41,7 +44,7 @@ tests/       # one test file per module, TDD throughout
 pytest -v
 ```
 
-42 tests, ~1s. All mocked — no real MIDI or API calls needed.
+87 tests, ~1s. All mocked — no real MIDI or API calls needed.
 
 ## API
 
