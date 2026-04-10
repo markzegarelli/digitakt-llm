@@ -126,3 +126,105 @@ def test_post_mute_invalid_track_returns_422(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/mute", json={"track": "cowbell", "muted": True})
     assert resp.status_code == 422
+
+
+# ── /prob ──────────────────────────────────────────────────────────────────
+
+def test_post_prob_sets_step(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/prob", json={"track": "kick", "step": 1, "value": 50})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "kick", "step": 1, "value": 50}
+
+
+def test_post_prob_updates_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/prob", json={"track": "snare", "step": 3, "value": 75})
+    state = client.get("/state").json()
+    assert state["current_pattern"]["prob"]["snare"][2] == 75
+
+
+def test_post_prob_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/prob", json={"track": "cowbell", "step": 1, "value": 50})
+    assert resp.status_code == 422
+
+
+def test_post_prob_step_out_of_range_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/prob", json={"track": "kick", "step": 17, "value": 50})
+    assert resp.status_code == 422
+
+
+# ── /swing ─────────────────────────────────────────────────────────────────
+
+def test_post_swing_sets_amount(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/swing", json={"amount": 25})
+    assert resp.status_code == 200
+    assert resp.json() == {"amount": 25}
+
+
+def test_post_swing_reflected_in_state(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/swing", json={"amount": 30})
+    state = client.get("/state").json()
+    assert state["swing"] == 30
+
+
+def test_post_swing_out_of_range_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/swing", json={"amount": 101})
+    assert resp.status_code == 422
+
+
+# ── /vel ───────────────────────────────────────────────────────────────────
+
+def test_post_vel_sets_step(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/vel", json={"track": "snare", "step": 4, "value": 64})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "snare", "step": 4, "value": 64}
+
+
+def test_post_vel_updates_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/vel", json={"track": "kick", "step": 1, "value": 80})
+    state = client.get("/state").json()
+    assert state["current_pattern"]["kick"][0] == 80
+
+
+def test_post_vel_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/vel", json={"track": "cowbell", "step": 1, "value": 64})
+    assert resp.status_code == 422
+
+
+# ── /random ────────────────────────────────────────────────────────────────
+
+def test_post_random_velocity_single_track(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/random", json={"track": "kick", "param": "velocity", "lo": 40, "hi": 100})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["track"] == "kick"
+    assert data["param"] == "velocity"
+
+
+def test_post_random_prob_all_tracks(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/random", json={"track": "all", "param": "prob", "lo": 0, "hi": 100})
+    assert resp.status_code == 200
+    assert resp.json()["track"] == "all"
+
+
+def test_post_random_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/random", json={"track": "cowbell", "param": "velocity", "lo": 0, "hi": 127})
+    assert resp.status_code == 422
+
+
+def test_post_random_invalid_param_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/random", json={"track": "kick", "param": "tempo", "lo": 0, "hi": 127})
+    assert resp.status_code == 422

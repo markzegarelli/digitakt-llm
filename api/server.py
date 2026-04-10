@@ -11,7 +11,13 @@ from typing import Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
-from api.schemas import BpmRequest, CCRequest, CCResponse, GenerateRequest, MuteRequest, MuteResponse, PatternListResponse, StateResponse, VelocityRequest, VelocityResponse
+from api.schemas import (
+    BpmRequest, CCRequest, CCResponse, GenerateRequest,
+    MuteRequest, MuteResponse, PatternListResponse, StateResponse,
+    VelocityRequest, VelocityResponse,
+    ProbRequest, SwingRequest, VelRequest, RandomRequest,
+)
+from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -30,6 +36,7 @@ _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
     "cc_changed", "mute_changed", "velocity_changed",
+    "swing_changed", "prob_changed", "vel_changed", "random_applied",
 ]
 
 
@@ -89,6 +96,7 @@ def get_state():
         track_cc=_state.track_cc,
         track_muted=_state.track_muted,
         track_velocity=_state.track_velocity,
+        swing=_state.current_pattern.get("swing", 0),
     )
 
 
@@ -151,6 +159,54 @@ def set_velocity(req: VelocityRequest):
     _state.update_velocity(req.track, req.value)
     _bus.emit("velocity_changed", {"track": req.track, "value": req.value})
     return VelocityResponse(track=req.track, value=req.value)
+
+
+@app.post("/prob")
+def set_prob(req: ProbRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    new_pattern = apply_prob_step(_state.current_pattern, req.track, req.step - 1, req.value)
+    _state.current_pattern = new_pattern
+    _player.queue_pattern(new_pattern)
+    _bus.emit("prob_changed", {"track": req.track, "step": req.step, "value": req.value})
+    return {"track": req.track, "step": req.step, "value": req.value}
+
+
+@app.post("/swing")
+def set_swing(req: SwingRequest):
+    new_pattern = apply_swing(_state.current_pattern, req.amount)
+    _state.current_pattern = new_pattern
+    _player.queue_pattern(new_pattern)
+    _bus.emit("swing_changed", {"amount": req.amount})
+    return {"amount": req.amount}
+
+
+@app.post("/vel")
+def set_vel(req: VelRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    new_pattern = apply_vel_step(_state.current_pattern, req.track, req.step - 1, req.value)
+    _state.current_pattern = new_pattern
+    _player.queue_pattern(new_pattern)
+    _bus.emit("vel_changed", {"track": req.track, "step": req.step, "value": req.value})
+    return {"track": req.track, "step": req.step, "value": req.value}
+
+
+@app.post("/random")
+def set_random(req: RandomRequest):
+    if req.track != "all" and req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    if req.param not in ("velocity", "prob"):
+        raise HTTPException(422, "param must be 'velocity' or 'prob'")
+    tracks = list(TRACK_NAMES) if req.track == "all" else [req.track]
+    if req.param == "velocity":
+        new_pattern = apply_random_velocity(_state.current_pattern, tracks, req.lo, req.hi)
+    else:
+        new_pattern = apply_random_prob(_state.current_pattern, tracks, req.lo, req.hi)
+    _state.current_pattern = new_pattern
+    _player.queue_pattern(new_pattern)
+    _bus.emit("random_applied", {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi})
+    return {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi}
 
 
 @app.get("/patterns", response_model=PatternListResponse)

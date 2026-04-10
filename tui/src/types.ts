@@ -13,6 +13,7 @@ export type CCParam = typeof CC_PARAMS[number];
 export interface DigitaktState {
   current_pattern: Record<TrackName, number[]>;
   bpm: number;
+  swing: number;
   is_playing: boolean;
   midi_port_name: string | null;
   track_cc: Record<TrackName, Record<CCParam, number>>;
@@ -21,6 +22,7 @@ export interface DigitaktState {
   generation_status: "idle" | "generating" | "failed";
   generation_error: string | null;
   connected: boolean;
+  log: string[];
 }
 
-export type FocusPanel = "pattern" | "cc" | "prompt";
+export type FocusPanel = "pattern" | "cc" | "log" | "prompt";

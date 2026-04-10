@@ -49,6 +49,7 @@ class StateResponse(BaseModel):
     track_cc: dict
     track_muted: dict
     track_velocity: dict
+    swing: int = 0
 
 
 class PatternListResponse(BaseModel):
@@ -73,3 +74,26 @@ class VelocityRequest(BaseModel):
 class VelocityResponse(BaseModel):
     track: str
     value: int
+
+
+class ProbRequest(BaseModel):
+    track: str
+    step: int = Field(..., ge=1, le=16)
+    value: int = Field(..., ge=0, le=100)
+
+
+class SwingRequest(BaseModel):
+    amount: int = Field(..., ge=0, le=100)
+
+
+class VelRequest(BaseModel):
+    track: str
+    step: int = Field(..., ge=1, le=16)
+    value: int = Field(..., ge=0, le=127)
+
+
+class RandomRequest(BaseModel):
+    track: str
+    param: str
+    lo: int = 0
+    hi: int = 127
