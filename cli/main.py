@@ -19,15 +19,27 @@ import api.server as server_module
 _PATTERNS_DIR = Path("patterns")
 
 
-def _ascii_grid(pattern: dict) -> str:
-    beats = "     1 . . . 2 . . . 3 . . . 4 . . ."
+def _ascii_grid(pattern: dict, track_muted: dict | None = None) -> str:
+    swing = pattern.get("swing", 0)
+    swing_str = f"  swing:{swing}" if swing else ""
+    beats = f"        1  .  .  . 2  .  .  . 3  .  .  . 4  .  .  .{swing_str}"
     labels = {"kick": "kick", "snare": "snr ", "tom": "tom ", "clap": "clap",
               "bell": "bell", "hihat": "hhat", "openhat": "opht", "cymbal": "cymb"}
     lines = [beats]
     for track in TRACK_NAMES:
         steps = pattern.get(track, [0] * 16)
-        cells = " ".join("X" if v > 0 else "." for v in steps)
-        lines.append(f"{labels[track]} [{cells}]")
+        prob_steps = pattern.get("prob", {}).get(track)
+        mute_prefix = "[M]" if track_muted and track_muted.get(track) else "   "
+        cells = ""
+        for i in range(16):
+            v = steps[i]
+            p = (prob_steps[i] if prob_steps else 100)
+            if v > 0:
+                cell = f"●{p:02d}" if p < 100 else "X  "
+            else:
+                cell = ".  "
+            cells += cell
+        lines.append(f"{mute_prefix}{labels[track]} [{cells}]")
     return "\n".join(lines)
 
 

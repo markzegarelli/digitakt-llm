@@ -34,8 +34,8 @@ class PatternPanel(Static):
     }
     """
 
-    def render_pattern(self, pattern: dict) -> None:
-        self.update(_ascii_grid(pattern))
+    def render_pattern(self, pattern: dict, track_muted: dict | None = None) -> None:
+        self.update(_ascii_grid(pattern, track_muted))
 
 
 class CcPanel(Static):
@@ -97,7 +97,7 @@ class DigitaktApp(App):
     def compose(self) -> ComposeResult:
         yield Static(self._header_text(), id="header-bar")
         with Horizontal(id="top-row"):
-            yield PatternPanel(_ascii_grid(self._state.current_pattern), id="pattern-panel")
+            yield PatternPanel(_ascii_grid(self._state.current_pattern, self._state.track_muted), id="pattern-panel")
             yield CcPanel(_cc_table(self._state.track_cc), id="cc-panel")
         yield RichLog(id="event-log", markup=True)
         yield Input(placeholder="> ", id="cmd-input")
@@ -177,7 +177,7 @@ class DigitaktApp(App):
         self.query_one("#event-log", RichLog).write(msg)
 
     def _refresh_pattern(self) -> None:
-        self.query_one("#pattern-panel", PatternPanel).render_pattern(self._state.current_pattern)
+        self.query_one("#pattern-panel", PatternPanel).render_pattern(self._state.current_pattern, self._state.track_muted)
 
     def _refresh_cc(self) -> None:
         self.query_one("#cc-panel", CcPanel).render_cc(self._state.track_cc)
@@ -189,7 +189,9 @@ class DigitaktApp(App):
         state = self._state
         playback = "▶ PLAYING" if state.is_playing else "■ STOPPED"
         port = state.midi_port_name or "no MIDI"
-        return f"  digitakt-llm   ● {state.bpm:.0f} BPM   {playback}   [{port}]"
+        swing = state.current_pattern.get("swing", 0)
+        swing_str = f"   swing:{swing}" if swing else ""
+        return f"  digitakt-llm   ● {state.bpm:.0f} BPM   {playback}   [{port}]{swing_str}"
 
     # ── Input handler ──────────────────────────────────────────────────────
 
