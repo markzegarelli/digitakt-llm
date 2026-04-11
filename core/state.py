@@ -50,6 +50,9 @@ class AppState:
     track_velocity: dict = field(default_factory=lambda: {
         track: 127 for track in TRACK_NAMES
     })
+    track_pitch: dict = field(default_factory=lambda: {
+        track: 60 for track in TRACK_NAMES
+    })
     pattern_length: int = 16
     fill_pattern: dict | None = None
     _fill_active: bool = field(default=False, init=False, repr=False)

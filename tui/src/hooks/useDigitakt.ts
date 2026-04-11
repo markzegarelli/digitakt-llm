@@ -25,6 +25,9 @@ const DEFAULT_STATE: DigitaktState = {
   track_velocity: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, 127])
   ) as DigitaktState["track_velocity"],
+  track_pitch: Object.fromEntries(
+    TRACK_NAMES.map((t) => [t, 60])
+  ) as Record<string, number>,
   step_cc: null,
   generation_status: "idle",
   generation_error: null,
@@ -80,6 +83,9 @@ export interface DigitaktActions {
   clearLog(): void;
   addLog(msg: string): void;
   queueFill(name: string): Promise<void>;
+  setGate(track: string, step: number, value: number): Promise<Response>;
+  setPitch(track: string, value: number): Promise<Response>;
+  setCond(track: string, step: number, value: string | null): Promise<Response>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -116,6 +122,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
         track_muted: data["track_muted"] as DigitaktState["track_muted"],
         track_velocity: data["track_velocity"] as DigitaktState["track_velocity"],
+        track_pitch: (data["track_pitch"] as Record<string, number>) ?? {},
         step_cc: (pattern["step_cc"] as DigitaktState["step_cc"]) ?? null,
         pattern_history: (data["pattern_history"] as DigitaktState["pattern_history"]) ?? [],
         connected: true,
@@ -247,6 +254,18 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               newPattern[velTrack][velStep] = velValue;
               return { ...prev, current_pattern: newPattern, log: newLog };
             }
+            case "gate_changed":
+              fetchState();
+              return { ...prev, log: newLog };
+            case "pitch_changed":
+              return {
+                ...prev,
+                track_pitch: { ...prev.track_pitch, [msg.data["track"] as string]: msg.data["value"] as number },
+                log: newLog,
+              };
+            case "cond_changed":
+              fetchState();
+              return { ...prev, log: newLog };
             case "prob_changed":
             case "random_applied":
             case "randbeat_applied":
@@ -370,6 +389,29 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         throw new Error(`Pattern '${name}' not found`);
       }
     }, [baseUrl]),
+
+    setGate: useCallback((track: string, step: number, value: number) =>
+      fetch(`${baseUrl}/gate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track, step, value }),
+      }), [baseUrl]),
+
+    setPitch: useCallback((track: string, value: number) => {
+      setState((s) => ({ ...s, track_pitch: { ...s.track_pitch, [track]: value } }));
+      return fetch(`${baseUrl}/pitch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track, value }),
+      });
+    }, [baseUrl]),
+
+    setCond: useCallback((track: string, step: number, value: string | null) =>
+      fetch(`${baseUrl}/cond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track, step, value }),
+      }), [baseUrl]),
   };
 
   return [state, actions];

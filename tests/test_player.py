@@ -260,6 +260,57 @@ def test_loop_respects_pattern_length_32():
     assert all(s < 32 for s in steps_seen)
 
 
+def test_gate_under_100_sends_note_off():
+    """A step with gate < 100 should trigger a note_off after a delay."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["gate"] = {k: [100] * 16 for k in TRACK_NAMES}
+    pattern["gate"]["kick"][0] = 50
+    state.current_pattern = pattern
+
+    player.start()
+    time.sleep(0.15)
+    player.stop()
+    time.sleep(0.05)  # let any pending Timers fire
+
+    # note_off is sent as note_on with velocity=0 on kick channel (ch 0)
+    kick_note_offs = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "type")
+        and c[0][0].type == "note_on"
+        and c[0][0].channel == 0
+        and c[0][0].velocity == 0
+    ]
+    assert kick_note_offs, "Expected a note_off (velocity=0) for kick with gate=50"
+
+
+def test_gate_100_does_not_send_note_off():
+    """Default gate=100 should not send any note_off (preserves original behavior)."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    state.current_pattern = pattern  # no gate key = default 100
+
+    player.start()
+    time.sleep(0.15)
+    player.stop()
+    time.sleep(0.05)
+
+    # No note_on with velocity=0 should appear on kick channel
+    kick_note_offs = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "type")
+        and c[0][0].type == "note_on"
+        and c[0][0].channel == 0
+        and c[0][0].velocity == 0
+    ]
+    assert not kick_note_offs, "Unexpected note_off found for kick with gate=100"
+
+
 def test_fill_plays_once_then_reverts():
     player, state, bus, _ = _make_player()
     state.bpm = 9000.0
@@ -280,3 +331,52 @@ def test_fill_plays_once_then_reverts():
     assert "started" in fill_events
     assert "ended" in fill_events
     assert state.current_pattern[TRACK_NAMES[0]][0] == 10  # reverted
+
+
+def test_player_uses_track_pitch():
+    """When track_pitch[kick] = 48, the note sent for kick should be 48."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+    state.track_pitch["kick"] = 48
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    state.current_pattern = pattern
+
+    player.start()
+    time.sleep(0.1)
+    player.stop()
+
+    found = False
+    for c in port.send.call_args_list:
+        msg = c[0][0]
+        if hasattr(msg, "type") and msg.type == "note_on" and msg.channel == 0 and msg.note == 48 and msg.velocity > 0:
+            found = True
+            break
+    assert found, "Expected note_on with pitch 48 for kick"
+
+
+def test_condition_1_2_fires_on_even_loops():
+    """A step with condition '1:2' should fire on loop 0, 2, 4 but not 1, 3."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["cond"] = {k: [None] * 16 for k in TRACK_NAMES}
+    pattern["cond"]["kick"][0] = "1:2"
+    state.current_pattern = pattern
+
+    player.start()
+    time.sleep(0.3)
+    player.stop()
+
+    kick_note_ons = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "type")
+        and c[0][0].type == "note_on"
+        and c[0][0].channel == 0
+        and c[0][0].velocity > 0
+    ]
+    # At 9000 BPM, ~11 loops in 0.3s; 1:2 fires on even loops only (~half)
+    total_loops_approx = 12  # generous upper bound
+    assert len(kick_note_ons) <= total_loops_approx // 2 + 1, \
+        f"1:2 condition fired too often: {len(kick_note_ons)} times in ~{total_loops_approx} loops"

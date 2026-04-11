@@ -18,19 +18,26 @@ def test_find_digitakt_empty_list():
     assert midi_utils.find_digitakt([]) is None
 
 
-def test_send_note_sends_note_on_and_off():
+def test_send_note_sends_note_on():
     port = MagicMock()
     midi_utils.send_note(port, note=36, velocity=100, channel=0)
-    assert port.send.call_count == 2
+    assert port.send.call_count == 1
     on_msg = port.send.call_args_list[0][0][0]
-    off_msg = port.send.call_args_list[1][0][0]
     assert on_msg.type == "note_on"
     assert on_msg.note == 36
     assert on_msg.velocity == 100
     assert on_msg.channel == 0
-    assert off_msg.type == "note_off"
-    assert off_msg.note == 36
-    assert off_msg.velocity == 0
+
+
+def test_send_note_off_sends_note_on_velocity_zero():
+    port = MagicMock()
+    midi_utils.send_note_off(port, note=36, channel=0)
+    port.send.assert_called_once()
+    msg = port.send.call_args[0][0]
+    assert msg.type == "note_on"
+    assert msg.note == 36
+    assert msg.velocity == 0
+    assert msg.channel == 0
 
 
 def test_send_note_zero_velocity_does_nothing():

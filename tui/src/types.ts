@@ -22,6 +22,7 @@ export interface DigitaktState {
   track_cc: Record<TrackName, Record<CCParam, number>>;
   track_muted: Record<TrackName, boolean>;
   track_velocity: Record<TrackName, number>;
+  track_pitch: Record<string, number>;
   step_cc: Record<TrackName, Partial<Record<CCParam, (number | null)[]>>> | null;
   generation_status: "idle" | "generating" | "failed";
   generation_error: string | null;

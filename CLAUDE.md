@@ -28,6 +28,9 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
 - `/patterns [#tag]` — list saved patterns, optionally filtered by tag
 - `/save <name> [#tag1 #tag2]` — save pattern with optional tags
+- `/gate <track> <step> <0-100>` — set note gate length (% of step duration before note_off)
+- `/pitch <track> <0-127>` — set MIDI note number for track (chromatic mode)
+- `/cond <track> <step> <1:2|not:2|fill|clear>` — set/clear conditional trig on a step
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 
@@ -72,7 +75,7 @@ tests/       # one test file per module, TDD throughout
 pytest -v
 ```
 
-~160 tests, ~15s. All mocked — no real MIDI or API calls needed.
+~166 tests, ~10s. All mocked — no real MIDI or API calls needed.
 
 ## Development Workflow
 
@@ -97,6 +100,9 @@ Key endpoints:
 - `GET/POST /patterns/{name}` — save/load patterns
 - `POST /length` — set pattern step count (8, 16, 32)
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
+- `POST /gate` — set per-step gate (0–100% of step duration before note_off)
+- `POST /pitch` — set per-track MIDI note pitch (0–127)
+- `POST /cond` — set conditional trig on a step (1:2 / not:2 / fill / null)
 
 ## Environment
 
