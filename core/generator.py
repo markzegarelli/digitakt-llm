@@ -1,6 +1,7 @@
 # core/generator.py
 from __future__ import annotations
 
+import functools
 import json
 import threading
 import anthropic
@@ -8,6 +9,7 @@ from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.midi_utils import CC_MAP
 
+@functools.lru_cache(maxsize=3)
 def _build_system_prompt(steps: int = 16) -> str:
     return (
         "You are an expert drum pattern generator specializing in techno and electronic music production. "
@@ -59,13 +61,9 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- 0 = perfectly quantized (no swing). 25 = light shuffle. 50 = strong triplet shuffle.\n"
         "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
         "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
-        "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno)."
+        "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno).\n\n"
+        "IMPORTANT: Output ONLY the JSON object. No text before, no text after, no markdown fences."
     )
-
-_STRICT_SUFFIX = (
-    "\n\nIMPORTANT: Output ONLY the JSON object. "
-    "No text before, no text after, no markdown fences."
-)
 
 _HELP_SYSTEM_PROMPT = (
     "You are a helpful assistant for the digitakt-llm drum sequencer CLI tool. "
@@ -118,9 +116,13 @@ class Generator:
 
     def _build_user_prompt(self, prompt: str, variation: bool) -> str:
         if variation and self.state.last_prompt and self.state.current_pattern:
+            active = {
+                k: v for k, v in self.state.current_pattern.items()
+                if not isinstance(v, list) or any(s > 0 for s in v)
+            }
             return (
                 f"Previous prompt: {self.state.last_prompt}\n"
-                f"Previous pattern: {json.dumps(self.state.current_pattern)}\n\n"
+                f"Previous pattern (active tracks): {json.dumps(active)}\n\n"
                 f"Apply this variation: {prompt}"
             )
         return prompt
@@ -182,12 +184,18 @@ class Generator:
 
         return pattern, bpm, cc_changes
 
-    def _call_api(self, user_prompt: str, strict: bool = False) -> str:
-        content = user_prompt + (_STRICT_SUFFIX if strict else "")
+    def _call_api(self, user_prompt: str, retry: bool = False) -> str:
+        content = user_prompt
+        if retry:
+            content += "\n\nRemember: output ONLY the JSON object, no other text."
         response = self._client.messages.create(
             model="claude-opus-4-6",
             max_tokens=1024,
-            system=_build_system_prompt(self.state.pattern_length),
+            system=[{
+                "type": "text",
+                "text": _build_system_prompt(self.state.pattern_length),
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": content}],
         )
         return response.content[0].text
@@ -201,7 +209,7 @@ class Generator:
             result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
-                text = self._call_api(user_prompt, strict=True)
+                text = self._call_api(user_prompt, retry=True)
                 result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
@@ -234,7 +242,7 @@ class Generator:
     def answer_question(self, question: str) -> str:
         """Answer a question about the tool. Returns plain text."""
         response = self._client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=256,
             system=_HELP_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": question}],
