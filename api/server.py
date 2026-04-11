@@ -37,6 +37,7 @@ from cli.commands import (
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
+from core.tracing import tracer
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -398,6 +399,12 @@ def load_pattern(name: str):
     _player.queue_pattern(pattern)
     _state.last_prompt = name
     return {"loaded": name}
+
+
+@app.get("/traces")
+def get_traces():
+    """Return recent LLM prompt/response traces for observability."""
+    return {"traces": tracer.traces}
 
 
 @app.websocket("/ws")

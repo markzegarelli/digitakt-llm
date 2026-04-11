@@ -120,6 +120,7 @@ Key endpoints:
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)
 - `POST /pitch` — set per-track MIDI note pitch (0–127)
 - `POST /cond` — set conditional trig on a step (1:2 / not:2 / fill / null)
+- `GET /traces` — return recent LLM prompt/response traces (observability)
 
 ## Environment
 
@@ -128,3 +129,4 @@ Key endpoints:
 | `ANTHROPIC_API_KEY` | — | yes (or `.env`) |
 | `PORT` | `8000` | no |
 | `DIGITAKT_URL` | `http://localhost:8000` | no |
+| `DIGITAKT_TRACE_FILE` | — | no (enables JSONL trace file output) |

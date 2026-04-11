@@ -298,3 +298,36 @@ def test_conversation_history_bounded():
 
     # History should be bounded (max 20 entries = 10 pairs)
     assert len(gen.conversation_history) <= 20
+
+
+# ── P2-8: Genre awareness in system prompt ───────────────────────────────
+
+def test_system_prompt_includes_expanded_genres():
+    from core.generator import _build_system_prompt
+    prompt = _build_system_prompt(16)
+    # Should include new genres beyond original set
+    assert "dub techno" in prompt
+    assert "breakbeat" in prompt
+    assert "house" in prompt
+    assert "jungle" in prompt
+    assert "EBM" in prompt
+    assert "electro" in prompt
+    assert "ambient" in prompt
+
+
+def test_system_prompt_includes_genre_conventions():
+    from core.generator import _build_system_prompt
+    prompt = _build_system_prompt(16)
+    assert "GENRE-SPECIFIC PATTERN CONVENTIONS" in prompt
+    assert "four-on-the-floor" in prompt
+
+
+# ── P2-9: Sound design guidance ───────────────────────────────────────
+
+def test_system_prompt_includes_sound_design_guidance():
+    from core.generator import _build_system_prompt
+    prompt = _build_system_prompt(16)
+    assert "SOUND DESIGN GUIDANCE" in prompt
+    assert "lowpass cutoff" in prompt
+    assert "sample pitch" in prompt
+    assert "amp envelope" in prompt
