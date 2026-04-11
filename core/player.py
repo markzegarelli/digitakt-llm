@@ -118,7 +118,7 @@ class Player:
         while not self._stop_event.is_set():
             dirty_cc: set[tuple[str, str]] = set()
             next_tick = time.perf_counter()
-            for step in range(16):
+            for step in range(self.state.pattern_length):
                 if self._stop_event.is_set():
                     break
                 for tick in range(6):
@@ -154,14 +154,26 @@ class Player:
                         self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                     )
 
-            # End of loop: atomic pattern swap
+            # End of loop: permanent swap, then fill logic
+
             if self.state.pending_pattern is not None:
                 self.state.current_pattern = self.state.pending_pattern
                 self.state.pending_pattern = None
                 self.bus.emit(
                     "pattern_changed",
-                    {
-                        "pattern": self.state.current_pattern,
-                        "prompt": self.state.last_prompt or "",
-                    },
+                    {"pattern": self.state.current_pattern, "prompt": self.state.last_prompt or ""},
                 )
+
+            if self.state.fill_pattern is not None:
+                # Begin fill: save current, play fill next loop
+                self.state._pre_fill_pattern = self.state.current_pattern
+                self.state.current_pattern = self.state.fill_pattern
+                self.state.fill_pattern = None
+                self.state._fill_active = True
+                self.bus.emit("fill_started", {"pattern": self.state.current_pattern})
+            elif self.state._fill_active:
+                # End fill: restore pre-fill pattern
+                self.state.current_pattern = self.state._pre_fill_pattern
+                self.state._pre_fill_pattern = None
+                self.state._fill_active = False
+                self.bus.emit("fill_ended", {"pattern": self.state.current_pattern})

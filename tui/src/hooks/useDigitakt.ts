@@ -8,6 +8,9 @@ const DEFAULT_STATE: DigitaktState = {
   ) as DigitaktState["current_pattern"],
   bpm: 120,
   swing: 0,
+  pattern_length: 16,
+  fill_active: false,
+  fill_queued: false,
   is_playing: false,
   midi_port_name: null,
   track_cc: Object.fromEntries(
@@ -48,6 +51,9 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "prob_changed":         return `prob: ${data["track"]} step ${data["step"]} = ${data["value"]}%`;
     case "vel_changed":          return `vel: ${data["track"]} step ${data["step"]} = ${data["value"]}`;
     case "swing_changed":        return `swing: ${data["amount"]}`;
+    case "length_changed":       return `Pattern length → ${data["steps"]} steps`;
+    case "fill_started":         return "Fill playing";
+    case "fill_ended":           return "Fill ended — reverted";
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
     default:                     return `${event}`;
@@ -72,6 +78,8 @@ export interface DigitaktActions {
   callNew(): Promise<void>;
   callUndo(): Promise<void>;
   clearLog(): void;
+  addLog(msg: string): void;
+  queueFill(name: string): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -102,6 +110,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         current_pattern: pattern as DigitaktState["current_pattern"],
         bpm: data["bpm"] as number,
         swing: (data["swing"] as number) ?? 0,
+        pattern_length: (data["pattern_length"] as number) ?? 16,
         is_playing: data["is_playing"] as boolean,
         midi_port_name: data["midi_port_name"] as string | null,
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
@@ -223,6 +232,12 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               };
             case "swing_changed":
               return { ...prev, swing: msg.data["amount"] as number, log: newLog };
+            case "length_changed":
+              return { ...prev, pattern_length: (msg.data["steps"] as number) ?? 16, log: newLog };
+            case "fill_started":
+              return { ...prev, fill_active: true, fill_queued: false, log: newLog };
+            case "fill_ended":
+              return { ...prev, fill_active: false, log: newLog };
             case "vel_changed": {
               const velTrack = msg.data["track"] as TrackName;
               const velStep = (msg.data["step"] as number) - 1;
@@ -339,9 +354,22 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       });
     }, [api]),
 
-    clearLog: useCallback(() => {
+      clearLog: useCallback(() => {
       setState((s) => ({ ...s, log: [] }));
     }, []),
+
+    addLog: useCallback((msg: string) => {
+      setState((s) => ({ ...s, log: [...s.log, msg].slice(-50) }));
+    }, []),
+
+    queueFill: useCallback(async (name: string) => {
+      setState((s) => ({ ...s, fill_queued: true }));
+      const resp = await fetch(`${baseUrl}/fill/${encodeURIComponent(name)}`, { method: "POST" });
+      if (!resp.ok) {
+        setState((s) => ({ ...s, fill_queued: false }));
+        throw new Error(`Pattern '${name}' not found`);
+      }
+    }, [baseUrl]),
   };
 
   return [state, actions];

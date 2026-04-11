@@ -12,12 +12,16 @@ from typing import Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
+import datetime
+
 from api.schemas import (
     BpmRequest, CCRequest, CCResponse, CCStepRequest, GenerateRequest,
     MuteRequest, MuteResponse, PatternListResponse, StateResponse,
     VelocityRequest, VelocityResponse,
     ProbRequest, SwingRequest, VelRequest, RandomRequest,
     AskRequest, AskResponse,
+    LengthRequest, LengthResponse,
+    SavePatternRequest, PatternEntry,
 )
 from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat, apply_cc_step
 from core.events import EventBus
@@ -52,7 +56,7 @@ _ALL_EVENTS = [
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
-    "step_changed",
+    "step_changed", "length_changed", "fill_started", "fill_ended",
 ]
 
 
@@ -100,6 +104,7 @@ def get_state():
         track_muted=_state.track_muted,
         track_velocity=_state.track_velocity,
         swing=_state.current_pattern.get("swing", 0),
+        pattern_length=_state.pattern_length,
     )
 
 
@@ -226,6 +231,21 @@ def set_swing(req: SwingRequest):
     return {"amount": req.amount}
 
 
+@app.post("/length", response_model=LengthResponse)
+def set_length(req: LengthRequest):
+    _state.pattern_length = req.steps
+    # Resize current_pattern to match new length (pad with 0 or truncate)
+    for track in TRACK_NAMES:
+        cur = _state.current_pattern.get(track, [])
+        if len(cur) < req.steps:
+            _state.current_pattern[track] = cur + [0] * (req.steps - len(cur))
+        elif len(cur) > req.steps:
+            _state.current_pattern[track] = cur[:req.steps]
+    _bus.emit("length_changed", {"steps": req.steps})
+    _bus.emit("pattern_changed", {"pattern": _state.current_pattern, "prompt": _state.last_prompt or ""})
+    return LengthResponse(steps=req.steps)
+
+
 @app.post("/vel")
 def set_vel(req: VelRequest):
     if req.track not in TRACK_NAMES:
@@ -271,26 +291,58 @@ def post_randbeat():
 
 @app.get("/patterns", response_model=PatternListResponse)
 def get_patterns():
-    names = [
-        p.stem for p in Path(_patterns_dir).glob("*.json")
-    ]
-    return PatternListResponse(names=sorted(names))
+    entries = []
+    for fname in sorted(os.listdir(_patterns_dir)):
+        if not fname.endswith(".json"):
+            continue
+        name = fname[:-5]
+        try:
+            with open(os.path.join(_patterns_dir, fname)) as f:
+                data = json.load(f)
+            tags = data.get("tags", []) if isinstance(data, dict) and isinstance(data.get("tags"), list) else []
+        except Exception:
+            tags = []
+        entries.append(PatternEntry(name=name, tags=tags))
+    return PatternListResponse(patterns=entries)
 
 
 @app.post("/patterns/{name}")
-def save_pattern(name: str):
-    path = Path(_patterns_dir) / f"{name}.json"
-    path.write_text(json.dumps(_state.current_pattern, indent=2))
+async def save_pattern(name: str, req: SavePatternRequest = SavePatternRequest()):
+    path = os.path.join(_patterns_dir, f"{name}.json")
+    payload = {
+        "pattern": _state.current_pattern,
+        "tags": req.tags,
+        "saved_at": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f)
     return {"saved": name}
+
+
+@app.post("/fill/{name}")
+async def queue_fill_pattern(name: str):
+    path = os.path.join(_patterns_dir, f"{name}.json")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
+    with open(path) as f:
+        data = json.load(f)
+    # Support both old format (raw pattern dict) and new format ({"pattern": ...})
+    pattern = data.get("pattern", data)
+    _state.queue_fill(pattern)
+    return {"queued": name}
 
 
 @app.get("/patterns/{name}")
 def load_pattern(name: str):
-    path = Path(_patterns_dir) / f"{name}.json"
-    if not path.exists():
+    path = os.path.join(_patterns_dir, f"{name}.json")
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
-    pattern = json.loads(path.read_text())
+    with open(path) as f:
+        data = json.load(f)
+    # Old format: raw pattern dict. New format: {"pattern": {...}, "tags": [...]}
+    pattern = data.get("pattern", data) if isinstance(data, dict) and "pattern" in data else data
     _player.queue_pattern(pattern)
+    _state.last_prompt = name
     return {"loaded": name}
 
 

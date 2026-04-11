@@ -24,6 +24,10 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - The launcher starts FastAPI on `http://localhost:8000`, then spawns the Bun process
 - The Bun TUI connects via REST + WebSocket at that URL
 - Type `/help` in the prompt panel for a full command reference
+- `/length [8|16|32]` — set pattern step count
+- `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
+- `/patterns [#tag]` — list saved patterns, optionally filtered by tag
+- `/save <name> [#tag1 #tag2]` — save pattern with optional tags
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 
@@ -91,6 +95,8 @@ Key endpoints:
 - `POST /cc`, `POST /mute`, `POST /velocity`
 - `POST /play`, `POST /stop`
 - `GET/POST /patterns/{name}` — save/load patterns
+- `POST /length` — set pattern step count (8, 16, 32)
+- `POST /fill/{name}` — queue saved pattern as one-shot fill
 
 ## Environment
 

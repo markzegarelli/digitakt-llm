@@ -141,3 +141,10 @@ def test_update_mute_thread_safety():
     for t in threads:
         t.join()
     assert errors == []
+
+
+def test_queue_fill_sets_fill_pattern():
+    state = AppState()
+    fill = {k: [50] * 16 for k in TRACK_NAMES}
+    state.queue_fill(fill)
+    assert state.fill_pattern == fill

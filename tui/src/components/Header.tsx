@@ -8,9 +8,11 @@ interface HeaderProps {
   midiPort: string | null;
   connected: boolean;
   generationStatus: "idle" | "generating" | "failed";
+  fillActive: boolean;
+  fillQueued: boolean;
 }
 
-export function Header({ bpm, swing, isPlaying, midiPort, connected, generationStatus }: HeaderProps) {
+export function Header({ bpm, swing, isPlaying, midiPort, connected, generationStatus, fillActive, fillQueued }: HeaderProps) {
   const statusColor = isPlaying ? "green" : "red";
   const statusLabel = isPlaying ? "▶ PLAYING" : "■ STOPPED";
   const connColor = connected ? "green" : "yellow";
@@ -32,6 +34,8 @@ export function Header({ bpm, swing, isPlaying, midiPort, connected, generationS
       {generationStatus === "failed" && (
         <Text color="red">{"  ✗ GEN FAILED"}</Text>
       )}
+      {fillQueued && <Text color="yellow"> FILL QUEUED</Text>}
+      {fillActive && <Text color="cyan"> FILLING</Text>}
     </Box>
   );
 }

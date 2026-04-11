@@ -230,3 +230,53 @@ def test_swing_delay_scales_with_bpm():
     delay_240 = player._swing_delay()
     # At double BPM, delay should halve
     assert abs(delay_120 - delay_240 * 2) < 1e-9
+
+
+def test_loop_respects_pattern_length_8():
+    player, state, bus, _ = _make_player()
+    state.bpm = 9000.0
+    state.pattern_length = 8
+    state.current_pattern = {k: [64] * 8 for k in TRACK_NAMES}
+    steps_seen = []
+    bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
+    player.start()
+    time.sleep(0.05)
+    player.stop()
+    assert steps_seen, "No steps emitted"
+    assert all(s < 8 for s in steps_seen)
+
+
+def test_loop_respects_pattern_length_32():
+    player, state, bus, _ = _make_player()
+    state.bpm = 9000.0
+    state.pattern_length = 32
+    state.current_pattern = {k: [64] * 32 for k in TRACK_NAMES}
+    steps_seen = []
+    bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
+    player.start()
+    time.sleep(0.05)
+    player.stop()
+    assert any(s >= 16 for s in steps_seen), "No steps > 15 seen for 32-step pattern"
+    assert all(s < 32 for s in steps_seen)
+
+
+def test_fill_plays_once_then_reverts():
+    player, state, bus, _ = _make_player()
+    state.bpm = 9000.0
+    original = {k: [10] * 16 for k in TRACK_NAMES}
+    fill_pat = {k: [99] * 16 for k in TRACK_NAMES}
+    state.current_pattern = dict(original)
+
+    fill_events = []
+    bus.subscribe("fill_started", lambda p: fill_events.append("started"))
+    bus.subscribe("fill_ended", lambda p: fill_events.append("ended"))
+
+    player.start()
+    time.sleep(0.05)
+    state.queue_fill(fill_pat)
+    time.sleep(0.3)  # wait for fill loop + revert at 9000 BPM
+    player.stop()
+
+    assert "started" in fill_events
+    assert "ended" in fill_events
+    assert state.current_pattern[TRACK_NAMES[0]][0] == 10  # reverted
