@@ -58,7 +58,7 @@ class TraceSpan:
         return {
             "operation": self.operation,
             "prompt": self.prompt[:500],  # truncate for safety
-            "response": self.response[:500],
+            "response": self.response,
             "status": self.status,
             "error": self.error,
             "latency_ms": self.latency_ms,
