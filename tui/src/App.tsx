@@ -173,6 +173,48 @@ export function App({ baseUrl }: AppProps) {
         if (track && !isNaN(step) && !isNaN(value)) actions.setVel(track, step, value);
         break;
       }
+      case "gate": {
+        // /gate <track> <step 1-32> <0-100>
+        const [, trackArg, stepArg, valArg] = parts;
+        const stepN = parseInt(stepArg ?? "", 10);
+        const valN = parseInt(valArg ?? "", 10);
+        if (!trackArg || isNaN(stepN) || isNaN(valN)) {
+          actions.addLog("Usage: /gate <track> <step> <0-100>");
+          return;
+        }
+        actions.setGate(normalizeTrack(trackArg), stepN, valN)
+          .catch(() => actions.addLog("Error setting gate"));
+        break;
+      }
+      case "pitch": {
+        // /pitch <track> <0-127>
+        const [, trackArg, valArg] = parts;
+        const valN = parseInt(valArg ?? "", 10);
+        if (!trackArg || isNaN(valN) || valN < 0 || valN > 127) {
+          actions.addLog("Usage: /pitch <track> <0-127>");
+          return;
+        }
+        actions.setPitch(normalizeTrack(trackArg), valN)
+          .catch(() => actions.addLog("Error setting pitch"));
+        break;
+      }
+      case "cond": {
+        // /cond <track> <step 1-32> <1:2|not:2|fill|clear>
+        const [, trackArg, stepArg, condArg] = parts;
+        const stepN = parseInt(stepArg ?? "", 10);
+        if (!trackArg || isNaN(stepN) || !condArg) {
+          actions.addLog("Usage: /cond <track> <step> <1:2|not:2|fill|clear>");
+          return;
+        }
+        const condValue = condArg === "clear" ? null : condArg;
+        if (condValue !== null && !["1:2", "not:2", "fill"].includes(condValue)) {
+          actions.addLog("Condition must be: 1:2, not:2, fill, or clear");
+          return;
+        }
+        actions.setCond(normalizeTrack(trackArg), stepN, condValue)
+          .catch(() => actions.addLog("Error setting condition"));
+        break;
+      }
       case "random": {
         const track = normalizeTrack(parts[1] ?? "all");
         const param = normalizeRandomParam(parts[2] ?? "velocity");
@@ -430,6 +472,7 @@ export function App({ baseUrl }: AppProps) {
             isFocused={focus === "pattern"}
             currentStep={state.current_step}
             patternLength={state.pattern_length}
+            condMap={(state.current_pattern as Record<string, unknown>)["cond"] as Record<string, (string | null)[]> | undefined}
           />
           <CCPanel
             trackCC={state.track_cc}

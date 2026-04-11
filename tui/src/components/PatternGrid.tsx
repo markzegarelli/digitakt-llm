@@ -10,6 +10,7 @@ interface PatternGridProps {
   isFocused: boolean;
   currentStep: number | null;
   patternLength: number;
+  condMap?: Record<string, (string | null)[]>;
 }
 
 const LABELS: Record<TrackName, string> = {
@@ -17,22 +18,23 @@ const LABELS: Record<TrackName, string> = {
   bell:    "BELL ", hihat:   "HIHAT", openhat: "OPHAT", cymbal: "CYMBL",
 };
 
-function StepDot({ velocity, isMuted, isActive }: { velocity: number; isMuted: boolean; isActive: boolean }) {
+function StepDot({ velocity, isMuted, isActive, hasCond }: { velocity: number; isMuted: boolean; isActive: boolean; hasCond: boolean }) {
+  const marker = velocity > 0 ? (hasCond ? "◆" : "●") : (hasCond ? "◇" : "·");
   if (isActive) {
-    if (velocity === 0) return <Text color="white">·</Text>;
-    if (isMuted)        return <Text color="yellow">○</Text>;
-    return <Text color="yellow">●</Text>;
+    if (velocity === 0) return <Text color="white">{marker}</Text>;
+    if (isMuted)        return <Text color="yellow">{marker}</Text>;
+    return <Text color="yellow">{marker}</Text>;
   }
-  if (velocity === 0) return <Text color="gray">·</Text>;
-  if (isMuted)        return <Text color="gray">○</Text>;
+  if (velocity === 0) return <Text color="gray">{marker}</Text>;
+  if (isMuted)        return <Text color="gray">{marker}</Text>;
   const color = velocity >= 101 ? "white" : velocity >= 64 ? "cyan" : "blue";
-  return <Text color={color}>●</Text>;
+  return <Text color={color}>{marker}</Text>;
 }
 
 // Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
 const OVERHEAD = 24;
 
-export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength }: PatternGridProps) {
+export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength, condMap }: PatternGridProps) {
   const { stdout } = useStdout();
   const termCols = stdout?.columns ?? 80;
   // Each step column: fit available space evenly, minimum 2, maximum 3
@@ -66,11 +68,14 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
             <Text>{" "}</Text>
             <Text bold={isSelected} color={labelColor}>{LABELS[track]}</Text>
             <Text>{"   "}</Text>
-            {steps.map((vel, step) => (
-              <Box key={step} width={colWidth}>
-                <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} />
-              </Box>
-            ))}
+            {steps.map((vel, step) => {
+              const cond = condMap?.[track]?.[step];
+              return (
+                <Box key={step} width={colWidth}>
+                  <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} hasCond={cond != null} />
+                </Box>
+              );
+            })}
             <Text>{"  "}</Text>
             <Text bold color={muted ? "red" : "green"}>
               {muted ? "[MUTED]" : "[  ON  ]"}

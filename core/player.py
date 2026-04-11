@@ -6,7 +6,7 @@ import threading
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core import midi_utils
-from core.midi_utils import TRACK_CHANNELS
+from core.midi_utils import TRACK_CHANNELS, send_note_off
 
 
 class Player:
@@ -16,6 +16,7 @@ class Player:
         self.port = port
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._loop_count: int = 0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -72,7 +73,7 @@ class Player:
         self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
         for track in TRACK_NAMES:
-            note = midi_utils.NOTE_MAP.get(track)
+            note = self.state.track_pitch.get(track, midi_utils.NOTE_MAP.get(track, 60))
             if note is None or track not in pattern:
                 continue
             if self.state.track_muted.get(track, False):
@@ -82,6 +83,16 @@ class Player:
             if prob_track is not None:
                 step_prob = prob_track[step]
                 if random.random() * 100 >= step_prob:
+                    continue
+            # Check conditional trig
+            cond_track = pattern.get("cond", {}).get(track)
+            if cond_track is not None:
+                cond = cond_track[step]
+                if cond == "1:2" and self._loop_count % 2 != 0:
+                    continue
+                elif cond == "not:2" and self._loop_count % 2 == 0:
+                    continue
+                elif cond == "fill" and not self.state._fill_active:
                     continue
             velocity = pattern[track][step]
             if velocity > 0:
@@ -96,6 +107,20 @@ class Player:
                     )
                     self._stop_event.set()
                     return
+                # Schedule note_off if gate < 100
+                gate_track = pattern.get("gate", {}).get(track)
+                gate_pct = gate_track[step] if gate_track is not None else 100
+                if gate_pct < 100:
+                    note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
+                    port_ref = self.port
+                    note_ref = note
+                    ch_ref = TRACK_CHANNELS[track]
+                    def _send_off(p=port_ref, n=note_ref, ch=ch_ref):
+                        try:
+                            send_note_off(p, n, channel=ch)
+                        except Exception:
+                            pass
+                    threading.Timer(note_off_delay, _send_off).start()
         # Send per-step CC overrides
         step_cc = pattern.get("step_cc", {})
         for track in TRACK_NAMES:
@@ -177,3 +202,5 @@ class Player:
                 self.state._pre_fill_pattern = None
                 self.state._fill_active = False
                 self.bus.emit("fill_ended", {"pattern": self.state.current_pattern})
+
+            self._loop_count += 1
