@@ -300,6 +300,26 @@ export function App({ baseUrl }: AppProps) {
         }
         break;
       }
+      case "mute": {
+        // /mute <track> [on|off|toggle]  — bar-synced; applies at next loop boundary
+        const trackArg = normalizeTrack(parts[1] ?? "") as TrackName;
+        if (!trackArg) {
+          actions.addLog("Usage: /mute <track> [on|off|toggle]");
+          break;
+        }
+        const flag = parts[2]?.toLowerCase() ?? "toggle";
+        let muted: boolean;
+        if (flag === "on")          muted = true;
+        else if (flag === "off")    muted = false;
+        else if (flag === "toggle") muted = !state.track_muted[trackArg];
+        else {
+          actions.addLog("Usage: /mute <track> [on|off|toggle]");
+          break;
+        }
+        actions.setMuteQueued(trackArg, muted)
+          .catch(() => actions.addLog("Error setting mute"));
+        break;
+      }
       default:
         if (cmd.startsWith("/")) {
           actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);

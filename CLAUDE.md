@@ -34,6 +34,7 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - `/cond <track> <step> <1:2|not:2|fill|clear>` — set/clear conditional trig on a step
 - `/random [track|all] [vel|prob] [lo-hi]` — randomize velocity or probability
 - `/randbeat` — generate a random techno beat
+- `/mute <track> [on|off|toggle]` — queue a mute change to apply at the next bar boundary (default: toggle)
 - `/cc <track> <param> <value>` — global CC control (0–127)
 - `/cc-step <track> <param> <step> <v>` — per-step CC override (-1 to clear)
 - `/save <name> [#tag1 #tag2]` — save pattern with optional tags
@@ -49,6 +50,12 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - `/ask <question>` — ask Claude (works in any mode)
 - `/gen` — generate a beat from the last `/ask` response
 
+> **Muting tracks — two modes:**
+> - **`m` key** (pattern grid focus): immediately toggles the selected track on/off mid-loop. Use for one-off silencing when timing doesn't matter.
+> - **`/mute <track> [on|off|toggle]`**: queues the change to apply at the next bar boundary (end of the 16-step loop). Use this when performing live — the mute lands cleanly on the downbeat with no mid-bar glitch. Default state when no flag is given is `toggle`.
+>
+> Examples: `/mute kick off` · `/mute hihat` · `/mute snare on`
+
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 
 ## Key Documents
@@ -60,11 +67,13 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 
 ```
 core/        # all logic — no I/O dependencies
-  state.py      # AppState dataclass (single shared instance)
-  events.py     # EventBus pub/sub (decouples all modules)
-  generator.py  # Anthropic API → JSON pattern → EventBus
-  player.py     # background thread, MIDI clock, prob/swing, atomic swap
-  midi_utils.py # port discovery, NOTE_MAP, send_note
+  state.py         # AppState dataclass (single shared instance)
+  events.py        # EventBus pub/sub (decouples all modules)
+  generator.py     # Anthropic API → JSON pattern → EventBus
+  player.py        # background thread, MIDI clock, prob/swing, atomic swap
+  midi_utils.py    # port discovery, NOTE_MAP, send_note
+  logging_config.py # JSONFormatter, get_logger() — structured log output
+  tracing.py       # TraceSpan / Tracer — LLM call observability
 
 api/         # thin FastAPI adapter
   server.py  # REST + WebSocket, init() wires singletons
@@ -92,7 +101,7 @@ tests/       # one test file per module, TDD throughout
 pytest -v
 ```
 
-~166 tests, ~10s. All mocked — no real MIDI or API calls needed.
+~206 tests, ~3s. All mocked — no real MIDI or API calls needed.
 
 ## Development Workflow
 
@@ -112,7 +121,7 @@ Key endpoints:
 - `POST /randbeat` — generate a random techno beat (BPM 128-160, CC randomized)
 - `POST /bpm`, `POST /swing`, `POST /prob`, `POST /vel`
 - `POST /random` — randomize velocity or prob for a track
-- `POST /cc`, `POST /mute`, `POST /velocity`
+- `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
 - `GET/POST /patterns/{name}` — save/load patterns
 - `POST /length` — set pattern step count (8, 16, 32)
@@ -129,4 +138,5 @@ Key endpoints:
 | `ANTHROPIC_API_KEY` | — | yes (or `.env`) |
 | `PORT` | `8000` | no |
 | `DIGITAKT_URL` | `http://localhost:8000` | no |
-| `DIGITAKT_TRACE_FILE` | — | no (enables JSONL trace file output) |
+| `DIGITAKT_LOG_FILE` | — | no (enables JSON-lines structured log file) |
+| `DIGITAKT_TRACE_FILE` | — | no (enables JSON-lines LLM trace file) |
