@@ -6,15 +6,21 @@ const HELP_LINES = [
   "  play / stop                          start or stop playback",
   "  bpm <n>                              set BPM (20–400)",
   "  swing <n>                            set swing 0–100",
+  "  length [8|16|32]                     set pattern step count",
   "  prob <track> <step> <value>          step probability 0–100 (1-indexed)",
   "  vel <track> <step> <value>           step velocity 0–127 (1-indexed)",
+  "  gate <track> <step> <0-100>          note gate length (% of step duration)",
+  "  pitch <track> <0-127>                MIDI note number for track",
+  "  cond <track> <step> <1:2|not:2|fill|clear>  conditional trig",
   "  random <track|all> <vel|prob> [lo-hi]  randomize",
   "  randbeat                             random techno beat",
   "  cc <track> <param> <value>           CC 0–127 globally",
   "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
-  "  mute <track>                         toggle track mute",
+  "  save <name> [#tag1 #tag2]            save pattern with optional tags",
+  "  load <name>                          queue saved pattern for next loop",
+  "  patterns [#tag]                      list saved patterns (filter by tag)",
+  "  fill <name>                          one-shot fill (plays once, reverts)",
   "  log                                  toggle activity log",
-  "  save <name> / load <name>            pattern persistence",
   "  new                                  reset to empty pattern",
   "  undo                                 revert to previous pattern",
   "  history                              show pattern history",
@@ -30,6 +36,7 @@ const HELP_LINES = [
   "  help                                 show this help",
   "  quit / q                             exit",
   "  Shift+Tab                            toggle Chat/Beat mode",
+  "  m (Pattern panel)                    toggle mute on selected track",
   "",
   "CC panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "",
@@ -176,7 +183,7 @@ export function Prompt({
       </Box>
       {statusLine
         ? <Text color={askPending ? "yellow" : generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
-        : <Text color="gray">{"type a prompt · or: prob/vel/swing/random/randbeat/cc/bpm/play/stop/new/undo/history/log/ask/help/quit · Shift+Tab: toggle mode"}</Text>
+        : <Text color="gray">{"type a prompt · /help for commands · Shift+Tab: toggle mode"}</Text>
       }
     </Box>
   );

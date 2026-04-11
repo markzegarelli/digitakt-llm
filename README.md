@@ -18,26 +18,46 @@ digitakt-llm
 
 ## Usage
 
-`digitakt-llm` launches a Textual terminal UI with four sections:
+`digitakt` launches a Bun/Ink terminal UI with three panels:
 
 - **Pattern Grid** — 16-step ASCII view for all 8 tracks, live-updating
 - **CC Panel** — per-track parameter values (filter, decay, reverb, etc.)
-- **Event Log** — scrolling status messages (generation, MIDI, errors)
-- **Command Input** — type commands or prompts at the bottom
+- **Prompt** — type commands or free-text generation prompts at the bottom
 
 ### Commands
 
-Type into the command input at the bottom of the TUI:
+Type `/help` in the prompt panel for the full reference. All commands are prefixed with `/` or entered as bare text:
 
 | Command | Description |
 |---------|-------------|
-| `bpm 140` | Set tempo |
-| `stop` | Stop playback |
-| `play` | Resume playback |
-| `save <name>` | Save current pattern to `patterns/<name>.json` |
+| `play` / `stop` | Start or stop playback |
+| `bpm <n>` | Set tempo (20–400) |
+| `swing <n>` | Set swing amount (0–100) |
+| `length [8\|16\|32]` | Set pattern step count |
+| `prob <track> <step> <value>` | Step probability 0–100 (1-indexed) |
+| `vel <track> <step> <value>` | Step velocity 0–127 (1-indexed) |
+| `gate <track> <step> <0-100>` | Note gate length (% of step duration) |
+| `pitch <track> <0-127>` | MIDI note number for track (chromatic mode) |
+| `cond <track> <step> <1:2\|not:2\|fill\|clear>` | Conditional trig on a step |
+| `random [track\|all] [vel\|prob] [lo-hi]` | Randomize velocity or probability |
+| `randbeat` | Generate a random techno beat |
+| `cc <track> <param> <value>` | Send CC to track globally (0–127) |
+| `cc-step <track> <param> <step> <v>` | Per-step CC override (-1 to clear) |
+| `save <name> [#tag1 #tag2]` | Save pattern with optional tags |
 | `load <name>` | Queue a saved pattern for the next loop |
-| `cc <track> <param> <value>` | Send a CC message to a track (value 0–127) |
-| *(anything else)* | Generate a new pattern or variation from your description |
+| `patterns [#tag]` | List saved patterns, optionally filtered by tag |
+| `fill <name>` | Queue pattern as a one-shot fill (plays once, reverts) |
+| `new` | Reset to empty pattern |
+| `undo` | Revert to previous pattern |
+| `history` | Show pattern history |
+| `log` | Toggle activity log |
+| `clear` | Clear activity log |
+| `mode [chat\|beat]` | Switch input mode |
+| `ask <question>` | Ask Claude a question (any mode) |
+| `help` | Show command reference |
+| `quit` / `q` | Exit |
+| *(bare text in BEAT mode)* | Generate a new pattern from your description |
+| *(bare text in CHAT mode)* | Ask Claude a question |
 
 **First prompt** generates a fresh pattern. **Subsequent prompts** are treated as variations (prior pattern and prompt are passed as context).
 
@@ -71,35 +91,7 @@ snare     64      64   64   64   64  100    0    0
 ...
 ```
 
-## TUI
-
-An interactive terminal UI built with [Ink](https://github.com/vadimdemedes/ink) runs on top of the same FastAPI backend.
-
-### Requirements
-
-- [Bun](https://bun.sh) runtime
-
-### Setup
-
-```bash
-cd tui && bun install
-```
-
-### Running
-
-Start the backend first (`digitakt-llm` in one terminal), then in another:
-
-```bash
-digitakt-tui
-```
-
-Or point it at a non-default backend:
-
-```bash
-DIGITAKT_URL=http://localhost:8000 digitakt-tui
-```
-
-### Panels
+## Panels
 
 | Panel | Description |
 |-------|-------------|
@@ -109,7 +101,7 @@ DIGITAKT_URL=http://localhost:8000 digitakt-tui
 
 Use **Tab** to cycle between panels.
 
-### Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -123,8 +115,6 @@ Use **Tab** to cycle between panels.
 | `Meta+←` / `Meta+→` | Switch CC track (CC panel) |
 | `Enter` | Submit prompt or command (Prompt panel) |
 | `Ctrl+C` | Quit |
-
-Prompt commands are identical to the CLI (`play`, `stop`, `bpm <n>`, `save <name>`, `load <name>`, or free text to generate a pattern).
 
 ## Environment Variables
 

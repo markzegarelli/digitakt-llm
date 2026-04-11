@@ -24,13 +24,29 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - The launcher starts FastAPI on `http://localhost:8000`, then spawns the Bun process
 - The Bun TUI connects via REST + WebSocket at that URL
 - Type `/help` in the prompt panel for a full command reference
+- `/bpm <n>` — set tempo (20–400)
+- `/swing <n>` — set swing amount (0–100)
 - `/length [8|16|32]` — set pattern step count
-- `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
-- `/patterns [#tag]` — list saved patterns, optionally filtered by tag
-- `/save <name> [#tag1 #tag2]` — save pattern with optional tags
+- `/prob <track> <step> <value>` — step probability 0–100
+- `/vel <track> <step> <value>` — step velocity 0–127
 - `/gate <track> <step> <0-100>` — set note gate length (% of step duration before note_off)
 - `/pitch <track> <0-127>` — set MIDI note number for track (chromatic mode)
 - `/cond <track> <step> <1:2|not:2|fill|clear>` — set/clear conditional trig on a step
+- `/random [track|all] [vel|prob] [lo-hi]` — randomize velocity or probability
+- `/randbeat` — generate a random techno beat
+- `/cc <track> <param> <value>` — global CC control (0–127)
+- `/cc-step <track> <param> <step> <v>` — per-step CC override (-1 to clear)
+- `/save <name> [#tag1 #tag2]` — save pattern with optional tags
+- `/load <name>` — queue a saved pattern for the next loop
+- `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
+- `/patterns [#tag]` — list saved patterns, optionally filtered by tag
+- `/new` — reset to empty pattern
+- `/undo` — revert to previous pattern
+- `/history` — show pattern history
+- `/log` — toggle activity log
+- `/clear` — clear activity log
+- `/mode [chat|beat]` — switch input mode
+- `/ask <question>` — ask Claude (works in any mode)
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 
