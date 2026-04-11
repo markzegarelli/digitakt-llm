@@ -355,6 +355,42 @@ def test_player_uses_track_pitch():
     assert found, "Expected note_on with pitch 48 for kick"
 
 
+def test_start_with_no_port_returns_false():
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    bus = EventBus()
+    player = Player(state, bus, None)
+
+    events = []
+    bus.subscribe("playback_started", lambda p: events.append(p))
+
+    result = player.start()
+
+    assert result is False
+    assert state.is_playing is False
+    assert events == []
+
+
+def test_midi_error_during_step_emits_playback_stopped():
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    bus = EventBus()
+    port = MagicMock()
+    port.send.side_effect = Exception("MIDI disconnected")
+    player = Player(state, bus, port)
+
+    stopped_events = []
+    disconnected_events = []
+    bus.subscribe("playback_stopped", lambda p: stopped_events.append(p))
+    bus.subscribe("midi_disconnected", lambda p: disconnected_events.append(p))
+
+    player._play_step(0)
+
+    assert state.is_playing is False
+    assert stopped_events == [{}]
+    assert len(disconnected_events) == 1
+
+
 def test_condition_1_2_fires_on_even_loops():
     """A step with condition '1:2' should fire on loop 0, 2, 4 but not 1, 3."""
     player, state, bus, port = _make_player()

@@ -331,7 +331,16 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       await api("POST", "/bpm", { bpm });
     }, [api]),
 
-    play: useCallback(async () => { await api("POST", "/play"); }, [api]),
+    play: useCallback(async () => {
+      try {
+        await api("POST", "/play");
+      } catch {
+        setState((s) => ({
+          ...s,
+          log: [...s.log, "✗ No MIDI device connected"].slice(-50),
+        }));
+      }
+    }, [api]),
     stop: useCallback(async () => { await api("POST", "/stop"); }, [api]),
 
     generate: useCallback(async (prompt: string) => {

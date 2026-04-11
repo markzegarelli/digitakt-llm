@@ -132,7 +132,8 @@ def post_bpm(req: BpmRequest):
 
 @app.post("/play")
 def post_play():
-    _player.start()
+    if not _player.start():
+        raise HTTPException(status_code=503, detail="No MIDI device connected")
     return {"status": "playing"}
 
 

@@ -18,11 +18,11 @@ class Player:
         self._stop_event = threading.Event()
         self._loop_count: int = 0
 
-    def start(self) -> None:
+    def start(self) -> bool:
         if self._thread and self._thread.is_alive():
-            return
+            return True
         if self.port is None:
-            return
+            return False
         midi_utils.send_start(self.port)
         # Flush all stored CC values so the Digitakt syncs immediately
         for track, params in self.state.track_cc.items():
@@ -35,6 +35,7 @@ class Player:
         self._thread.start()
         self.state.is_playing = True
         self.bus.emit("playback_started", {})
+        return True
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -101,6 +102,8 @@ class Player:
                 try:
                     midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
                 except Exception:
+                    self.state.is_playing = False
+                    self.bus.emit("playback_stopped", {})
                     self.bus.emit(
                         "midi_disconnected",
                         {"port": self.state.midi_port_name},
@@ -132,6 +135,8 @@ class Player:
                     try:
                         midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], override)
                     except Exception:
+                        self.state.is_playing = False
+                        self.bus.emit("playback_stopped", {})
                         self.bus.emit(
                             "midi_disconnected",
                             {"port": self.state.midi_port_name},
@@ -160,6 +165,8 @@ class Player:
                     try:
                         midi_utils.send_clock(self.port)
                     except Exception:
+                        self.state.is_playing = False
+                        self.bus.emit("playback_stopped", {})
                         self.bus.emit(
                             "midi_disconnected",
                             {"port": self.state.midi_port_name},
