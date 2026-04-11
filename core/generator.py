@@ -4,10 +4,14 @@ from __future__ import annotations
 import functools
 import json
 import threading
+import time
 import anthropic
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
+from core.logging_config import get_logger
 from core.midi_utils import CC_MAP
+
+logger = get_logger("generator")
 
 @functools.lru_cache(maxsize=3)
 def _build_system_prompt(steps: int = 16) -> str:
@@ -241,6 +245,7 @@ class Generator:
         content = user_prompt
         if retry:
             content += "\n\nRemember: output ONLY the JSON object, no other text."
+        t0 = time.monotonic()
         response = self._client.messages.create(
             model="claude-opus-4-6",
             max_tokens=1024,
@@ -251,21 +256,45 @@ class Generator:
             }],
             messages=[{"role": "user", "content": content}],
         )
-        return response.content[0].text
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        text = response.content[0].text
+        logger.info(
+            "API call completed",
+            extra={"latency_ms": latency_ms, "status": "ok", "prompt": content[:200]},
+        )
+        return text
 
     def _run(self, prompt: str, variation: bool = False) -> None:
         self.bus.emit("generation_started", {"prompt": prompt})
         user_prompt = self._build_user_prompt(prompt, variation)
+        logger.info("Generation started", extra={"prompt": prompt})
 
         try:
             text = self._call_api(user_prompt)
             result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
+                # Log the invalid JSON response (truncated for safety)
+                logger.warning(
+                    "Invalid JSON from model, retrying",
+                    extra={
+                        "prompt": prompt,
+                        "raw_response": text[:500],
+                        "error_type": "json_parse_failed",
+                    },
+                )
                 text = self._call_api(user_prompt, retry=True)
                 result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
+                logger.error(
+                    "Invalid JSON after retry — generation failed",
+                    extra={
+                        "prompt": prompt,
+                        "raw_response": text[:500],
+                        "error_type": "json_parse_failed_after_retry",
+                    },
+                )
                 self.bus.emit(
                     "generation_failed",
                     {"prompt": prompt, "error": "Invalid JSON after retry"},
@@ -285,6 +314,7 @@ class Generator:
                         self.state.update_cc(track, param, value)
                         self.bus.emit("cc_changed", {"track": track, "param": param, "value": value})
 
+            logger.info("Generation complete", extra={"prompt": prompt, "status": "ok"})
             # Store in conversation history for cross-mode continuity
             self._add_to_history("user", f"[beat generation] {prompt}")
             self._add_to_history("assistant", f"[generated pattern at {bpm or self.state.bpm} BPM]")
@@ -292,6 +322,11 @@ class Generator:
             self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm, "cc_changes": cc_changes})
 
         except Exception as exc:
+            logger.error(
+                "Generation crashed",
+                extra={"prompt": prompt, "error_type": type(exc).__name__},
+                exc_info=True,
+            )
             self.bus.emit(
                 "generation_failed", {"prompt": prompt, "error": str(exc)}
             )
