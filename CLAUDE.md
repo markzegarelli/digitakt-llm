@@ -47,6 +47,7 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - `/clear` — clear activity log
 - `/mode [chat|beat]` — switch input mode
 - `/ask <question>` — ask Claude (works in any mode)
+- `/gen` — generate a beat from the last `/ask` response
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 

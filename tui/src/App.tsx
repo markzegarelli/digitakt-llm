@@ -263,6 +263,14 @@ export function App({ baseUrl }: AppProps) {
         if (m === "chat" || m === "beat") setInputMode(m);
         break;
       }
+      case "gen": {
+        if (answerText) {
+          actions.generate(answerText);
+        } else {
+          actions.addLog("✗ No ask response to generate from. Use /ask first.");
+        }
+        break;
+      }
       case "ask": {
         const question = parts.slice(1).join(" ");
         if (question) {
