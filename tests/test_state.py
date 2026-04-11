@@ -154,3 +154,37 @@ def test_track_pitch_defaults_to_60():
     state = AppState()
     for track in TRACK_NAMES:
         assert state.track_pitch[track] == 60
+
+
+# ── Queue mutes (bar-synced) ───────────────────────────────────────────
+
+def test_queue_mute_does_not_apply_immediately():
+    state = AppState()
+    state.queue_mute("kick", True)
+    assert state.track_muted["kick"] is False  # not applied yet
+    assert state.pending_mutes == {"kick": True}
+
+
+def test_apply_pending_mutes_applies_and_clears():
+    state = AppState()
+    state.queue_mute("kick", True)
+    state.queue_mute("snare", True)
+    changes = state.apply_pending_mutes()
+    assert changes == {"kick": True, "snare": True}
+    assert state.track_muted["kick"] is True
+    assert state.track_muted["snare"] is True
+    assert state.pending_mutes == {}
+
+
+def test_apply_pending_mutes_returns_none_when_empty():
+    state = AppState()
+    assert state.apply_pending_mutes() is None
+
+
+def test_queue_mute_overwrites_previous():
+    state = AppState()
+    state.queue_mute("kick", True)
+    state.queue_mute("kick", False)
+    changes = state.apply_pending_mutes()
+    assert changes == {"kick": False}
+    assert state.track_muted["kick"] is False
