@@ -69,6 +69,7 @@ export function App({ baseUrl }: AppProps) {
   const [askPending, setAskPending]     = useState(false);
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
+  const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -361,6 +362,25 @@ export function App({ baseUrl }: AppProps) {
         const track = TRACK_NAMES[patternTrack];
         if (track) actions.setMute(track, !state.track_muted[track]);
       }
+      // Shift+M: stage selected track for queued mute (toggle)
+      if (input === "M") {
+        const track = TRACK_NAMES[patternTrack];
+        if (track) {
+          setPendingMuteTracks((prev) => {
+            const next = new Set(prev);
+            if (next.has(track)) { next.delete(track); } else { next.add(track); }
+            return next;
+          });
+        }
+      }
+      // Shift+Enter: fire all staged mutes via /mute-queued
+      if (key.return && key.shift && pendingMuteTracks.size > 0) {
+        const tracksToQueue = Array.from(pendingMuteTracks) as TrackName[];
+        setPendingMuteTracks(new Set());
+        for (const track of tracksToQueue) {
+          actions.setMuteQueued(track, !state.track_muted[track]);
+        }
+      }
       return;
     }
 
@@ -495,6 +515,7 @@ export function App({ baseUrl }: AppProps) {
             currentStep={state.current_step}
             patternLength={state.pattern_length}
             condMap={(state.current_pattern as Record<string, unknown>)["cond"] as Record<string, (string | null)[]> | undefined}
+            pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
             trackCC={state.track_cc}

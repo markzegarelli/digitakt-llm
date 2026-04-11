@@ -11,6 +11,7 @@ interface PatternGridProps {
   currentStep: number | null;
   patternLength: number;
   condMap?: Record<string, (string | null)[]>;
+  pendingMuteTracks: Set<TrackName>;
 }
 
 const LABELS: Record<TrackName, string> = {
@@ -35,7 +36,7 @@ function StepDot({ velocity, isMuted, isActive, cond }: { velocity: number; isMu
 // Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
 const OVERHEAD = 24;
 
-export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength, condMap }: PatternGridProps) {
+export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength, condMap, pendingMuteTracks }: PatternGridProps) {
   const { stdout } = useStdout();
   const termCols = stdout?.columns ?? 80;
   // Each step column: fit available space evenly, minimum 2, maximum 3
@@ -59,6 +60,7 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
       {TRACK_NAMES.map((track, i) => {
         const steps = pattern[track] ?? new Array(patternLength).fill(0);
         const muted = trackMuted[track];
+        const pending = pendingMuteTracks.has(track);
         const isSelected = i === selectedTrack;
         const labelColor = isSelected && isFocused ? "cyan" : muted ? "gray" : "white";
         return (
@@ -78,9 +80,13 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
               );
             })}
             <Text>{"  "}</Text>
-            <Text bold color={muted ? "red" : "green"}>
-              {muted ? "[M]" : "[ ]"}
-            </Text>
+            {pending ? (
+              <Text bold color="yellow">[Q]</Text>
+            ) : (
+              <Text bold color={muted ? "red" : "green"}>
+                {muted ? "[M]" : "[ ]"}
+              </Text>
+            )}
           </Box>
         );
       })}
