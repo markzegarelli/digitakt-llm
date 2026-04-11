@@ -36,7 +36,7 @@ from cli.commands import (
 )
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
-from core.state import AppState, TRACK_NAMES
+from core.state import AppState, TRACK_NAMES, _DEFAULT_CC_PARAMS
 from core.tracing import tracer
 
 @asynccontextmanager
@@ -68,7 +68,7 @@ _ALL_EVENTS = [
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
-    "gate_changed", "pitch_changed", "cond_changed",
+    "gate_changed", "pitch_changed", "cond_changed", "state_reset",
 ]
 
 
@@ -155,10 +155,17 @@ def post_new():
     _state.pending_pattern = copy.deepcopy(EMPTY_PATTERN)
     _state.bpm = 120.0
     _state.last_prompt = None
+    for track in TRACK_NAMES:
+        _state.track_muted[track] = False
+    _state.pending_mutes.clear()
+    for track in TRACK_NAMES:
+        _state.track_cc[track] = dict(_DEFAULT_CC_PARAMS)
+        _state.track_velocity[track] = 127
     if _state.is_playing:
         _player.stop()
     _broadcast_event("bpm_changed", {"bpm": 120.0})
     _broadcast_event("pattern_changed", {"pattern": _state.pending_pattern, "prompt": ""})
+    _broadcast_event("state_reset", {})
     return {"status": "ok"}
 
 

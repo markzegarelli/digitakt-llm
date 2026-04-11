@@ -472,3 +472,32 @@ def test_post_new_stops_playback_if_playing(tmp_path):
     client.post("/new")
     # Player.stop() should have been called (is_playing cleared)
     assert server_module._state.is_playing is False
+
+
+def test_post_new_resets_mutes(tmp_path):
+    """Regression: /new must reset all track_muted to False and clear pending_mutes."""
+    client = _make_test_client(tmp_path)
+    for track in TRACK_NAMES:
+        server_module._state.track_muted[track] = True
+    server_module._state.pending_mutes["kick"] = True
+
+    resp = client.post("/new")
+    assert resp.status_code == 200
+    for track in TRACK_NAMES:
+        assert server_module._state.track_muted[track] is False
+    assert server_module._state.pending_mutes == {}
+
+
+def test_post_new_resets_cc_and_velocity(tmp_path):
+    """Regression: /new must reset track_cc and track_velocity to defaults."""
+    from core.state import _DEFAULT_CC_PARAMS
+    client = _make_test_client(tmp_path)
+    for track in TRACK_NAMES:
+        server_module._state.track_cc[track]["filter"] = 0
+        server_module._state.track_velocity[track] = 64
+
+    resp = client.post("/new")
+    assert resp.status_code == 200
+    for track in TRACK_NAMES:
+        assert server_module._state.track_cc[track] == dict(_DEFAULT_CC_PARAMS)
+        assert server_module._state.track_velocity[track] == 127

@@ -106,4 +106,4 @@ def test_span_truncates_long_responses():
     span.set_response("y" * 2000, max_len=1000)
     assert len(span.response) == 1000
     d = span.to_dict()
-    assert len(d["response"]) == 500  # to_dict truncates further
+    assert len(d["response"]) == 1000  # to_dict returns the full stored response

@@ -216,8 +216,13 @@ class Generator:
         return prompt
 
     def _parse_pattern(self, text: str, steps: int = 16) -> tuple[dict, int | None, dict] | None:
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("\n", 1)[-1]   # drop opening ```json line
+            stripped = stripped.rsplit("```", 1)[0]  # drop closing ```
+            stripped = stripped.strip()
         try:
-            data = json.loads(text.strip())
+            data = json.loads(stripped)
         except (json.JSONDecodeError, ValueError):
             return None
         if not isinstance(data, dict):
@@ -279,7 +284,7 @@ class Generator:
         with tracer.span("generate" if not retry else "generate_retry", prompt=content) as span:
             response = self._client.messages.create(
                 model="claude-opus-4-6",
-                max_tokens=1024,
+                max_tokens=2048,
                 system=[{
                     "type": "text",
                     "text": _build_system_prompt(self.state.pattern_length),

@@ -51,8 +51,8 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 
 Keyboard shortcuts (Pattern panel):
 - `m` — immediate mute toggle on selected track
-- `Shift+M` — stage selected track for queued mute (toggle; shows `[Q]` in yellow)
-- `Shift+Enter` — fire all staged mutes at next bar boundary via `/mute-queued`
+- `q` — stage selected track for queued mute (toggle; shows `[Q]` in yellow)
+- `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 

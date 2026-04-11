@@ -59,6 +59,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "fill_ended":           return "Fill ended — reverted";
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
+    case "state_reset":          return "state reset";
     default:                     return `${event}`;
   }
 }
@@ -272,6 +273,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "prob_changed":
             case "random_applied":
             case "randbeat_applied":
+              return { ...prev, log: newLog };
+            case "state_reset":
+              fetchState();
               return { ...prev, log: newLog };
             default:
               return { ...prev, log: newLog };
