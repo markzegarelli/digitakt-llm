@@ -204,8 +204,13 @@ class Player:
                         self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                     )
 
-            # End of loop: permanent swap, then fill logic
+            # End of loop: apply queued mutes at bar boundary
+            mute_changes = self.state.apply_pending_mutes()
+            if mute_changes:
+                for track, muted in mute_changes.items():
+                    self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
+            # Permanent pattern swap, then fill logic
             if self.state.pending_pattern is not None:
                 self.state.current_pattern = self.state.pending_pattern
                 self.state.pending_pattern = None

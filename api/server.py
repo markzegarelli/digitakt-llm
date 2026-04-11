@@ -157,7 +157,7 @@ def post_new():
     if _state.is_playing:
         _player.stop()
     _broadcast_event("bpm_changed", {"bpm": 120.0})
-    _broadcast_event("pattern_changed", {})
+    _broadcast_event("pattern_changed", {"pattern": _state.pending_pattern, "prompt": ""})
     return {"status": "ok"}
 
 
@@ -213,6 +213,15 @@ def set_mute(req: MuteRequest):
         raise HTTPException(422, f"Unknown track: {req.track}")
     _state.update_mute(req.track, req.muted)
     _bus.emit("mute_changed", {"track": req.track, "muted": req.muted})
+    return MuteResponse(track=req.track, muted=req.muted)
+
+
+@app.post("/mute-queued", response_model=MuteResponse)
+def set_mute_queued(req: MuteRequest):
+    """Queue a mute change to apply at the next bar boundary (beat-synced)."""
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _state.queue_mute(req.track, req.muted)
     return MuteResponse(track=req.track, muted=req.muted)
 
 

@@ -2,7 +2,7 @@
 import json
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from fastapi.testclient import TestClient
 
 from core.state import AppState, DEFAULT_PATTERN, TRACK_NAMES
@@ -421,3 +421,54 @@ def test_post_cond_clears_step_condition(tmp_path):
     resp = client.post("/cond", json={"track": "kick", "step": 1, "value": None})
     assert resp.status_code == 200
     assert resp.json()["value"] is None
+
+
+# ── /new regression tests ──────────────────────────────────────────────────
+
+def test_post_new_resets_to_empty_pattern(tmp_path):
+    """Regression: /new must set pending_pattern to all-zero tracks."""
+    client = _make_test_client(tmp_path)
+    server_module._state.current_pattern = {t: [100] * 16 for t in TRACK_NAMES}
+    server_module._state.bpm = 145.0
+    server_module._state.last_prompt = "heavy kick"
+
+    resp = client.post("/new")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+    assert server_module._state.bpm == 120.0
+    assert server_module._state.last_prompt is None
+    assert server_module._state.pending_pattern is not None
+    for track in TRACK_NAMES:
+        assert server_module._state.pending_pattern[track] == [0] * 16
+
+
+def test_post_new_broadcasts_pattern_data(tmp_path):
+    """Regression: pattern_changed event from /new must include the pattern payload
+    so the TUI doesn't crash on undefined current_pattern."""
+    client = _make_test_client(tmp_path)
+
+    with patch.object(server_module, "_broadcast_event") as mock_broadcast:
+        client.post("/new")
+
+        # Find the pattern_changed call
+        pattern_calls = [
+            c for c in mock_broadcast.call_args_list
+            if c[0][0] == "pattern_changed"
+        ]
+        assert len(pattern_calls) >= 1, "Must broadcast pattern_changed"
+        payload = pattern_calls[0][0][1]
+        assert "pattern" in payload, "pattern_changed event must include 'pattern' key"
+        pattern = payload["pattern"]
+        assert pattern is not None
+        for track in TRACK_NAMES:
+            assert track in pattern
+            assert pattern[track] == [0] * 16
+
+
+def test_post_new_stops_playback_if_playing(tmp_path):
+    client = _make_test_client(tmp_path)
+    server_module._state.is_playing = True
+    client.post("/new")
+    # Player.stop() should have been called (is_playing cleared)
+    assert server_module._state.is_playing is False

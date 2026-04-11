@@ -106,11 +106,15 @@ _HELP_SYSTEM_PROMPT = (
 )
 
 
+_CONVERSATION_HISTORY_MAX = 10
+
+
 class Generator:
     def __init__(self, state: AppState, bus: EventBus) -> None:
         self.state = state
         self.bus = bus
         self._client = anthropic.Anthropic()
+        self.conversation_history: list[dict[str, str]] = []
 
     def generate(self, prompt: str, variation: bool = False) -> None:
         thread = threading.Thread(
@@ -118,17 +122,66 @@ class Generator:
         )
         thread.start()
 
+    def _build_state_context(self) -> str:
+        """Build a summary of current playback state for the model."""
+        parts: list[str] = []
+
+        # Muted tracks
+        muted = [t for t in TRACK_NAMES if self.state.track_muted.get(t, False)]
+        if muted:
+            parts.append(f"Muted tracks: {', '.join(muted)}")
+
+        # Non-default CC values
+        cc_overrides: list[str] = []
+        defaults = {"tune": 64, "filter": 127, "resonance": 0, "attack": 0,
+                    "decay": 64, "volume": 100, "reverb": 0, "delay": 0}
+        for track in TRACK_NAMES:
+            cc = self.state.track_cc.get(track, {})
+            for param, default_val in defaults.items():
+                val = cc.get(param, default_val)
+                if val != default_val:
+                    cc_overrides.append(f"{track}.{param}={val}")
+        if cc_overrides:
+            parts.append(f"CC overrides: {', '.join(cc_overrides[:20])}")
+
+        # Non-default velocities
+        vel_overrides = [
+            f"{t}={v}" for t in TRACK_NAMES
+            for v in [self.state.track_velocity.get(t, 127)]
+            if v != 127
+        ]
+        if vel_overrides:
+            parts.append(f"Track velocities: {', '.join(vel_overrides)}")
+
+        # BPM and pattern length
+        parts.append(f"BPM: {self.state.bpm}")
+        if self.state.pattern_length != 16:
+            parts.append(f"Pattern length: {self.state.pattern_length} steps")
+
+        # Swing
+        swing = self.state.current_pattern.get("swing", 0)
+        if swing:
+            parts.append(f"Swing: {swing}")
+
+        return "\n".join(parts)
+
     def _build_user_prompt(self, prompt: str, variation: bool) -> str:
+        state_ctx = self._build_state_context()
+
         if variation and self.state.last_prompt and self.state.current_pattern:
             active = {
                 k: v for k, v in self.state.current_pattern.items()
                 if not isinstance(v, list) or any(s > 0 for s in v)
             }
             return (
+                f"Current state:\n{state_ctx}\n\n"
                 f"Previous prompt: {self.state.last_prompt}\n"
                 f"Previous pattern (active tracks): {json.dumps(active)}\n\n"
                 f"Apply this variation: {prompt}"
             )
+
+        if state_ctx:
+            return f"Current state:\n{state_ctx}\n\n{prompt}"
         return prompt
 
     def _parse_pattern(self, text: str, steps: int = 16) -> tuple[dict, int | None, dict] | None:
@@ -262,6 +315,10 @@ class Generator:
                         self.bus.emit("cc_changed", {"track": track, "param": param, "value": value})
 
             logger.info("Generation complete", extra={"prompt": prompt, "status": "ok"})
+            # Store in conversation history for cross-mode continuity
+            self._add_to_history("user", f"[beat generation] {prompt}")
+            self._add_to_history("assistant", f"[generated pattern at {bpm or self.state.bpm} BPM]")
+
             self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm, "cc_changes": cc_changes})
 
         except Exception as exc:
@@ -274,12 +331,29 @@ class Generator:
                 "generation_failed", {"prompt": prompt, "error": str(exc)}
             )
 
+    def _add_to_history(self, role: str, content: str) -> None:
+        """Add a message to the shared conversation history."""
+        self.conversation_history.append({"role": role, "content": content})
+        # Keep history bounded
+        if len(self.conversation_history) > _CONVERSATION_HISTORY_MAX * 2:
+            self.conversation_history = self.conversation_history[-_CONVERSATION_HISTORY_MAX * 2:]
+
     def answer_question(self, question: str) -> str:
-        """Answer a question about the tool. Returns plain text."""
+        """Answer a question about the tool. Returns plain text.
+        Maintains conversation history shared with beat generation."""
+        # Include recent conversation context
+        messages = list(self.conversation_history[-_CONVERSATION_HISTORY_MAX:])
+        messages.append({"role": "user", "content": question})
+
         response = self._client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=256,
             system=_HELP_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": question}],
+            messages=messages,
         )
-        return response.content[0].text.strip()
+        answer = response.content[0].text.strip()
+
+        self._add_to_history("user", question)
+        self._add_to_history("assistant", answer)
+
+        return answer
