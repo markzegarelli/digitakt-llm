@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 
 const HELP_LINES = [
@@ -55,7 +55,7 @@ interface PromptProps {
   onClearAnswer(): void;
   inputMode: "beat" | "chat";
   showHistory: boolean;
-  historyItems: Array<{ prompt: string; timestamp: number }>;
+  historyItems: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
   onClearHistory(): void;
 }
 
@@ -77,6 +77,21 @@ export function Prompt({
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const genStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (generationStatus === "generating" || askPending) {
+      if (genStartRef.current === null) genStartRef.current = Date.now();
+      const id = setInterval(() => {
+        setElapsedSecs(Math.floor((Date.now() - (genStartRef.current ?? Date.now())) / 1000));
+      }, 1000);
+      return () => clearInterval(id);
+    } else {
+      genStartRef.current = null;
+      setElapsedSecs(0);
+    }
+  }, [generationStatus, askPending]);
 
   useInput((input, key) => {
     if (!isFocused) return;
@@ -143,7 +158,12 @@ export function Prompt({
       : historyItems.map((entry, i) => {
           const d = new Date(entry.timestamp * 1000);
           const time = d.toLocaleTimeString();
-          return `${i + 1}. [${time}] ${entry.prompt}`;
+          const meta: string[] = [];
+          if (entry.bpm    !== undefined) meta.push(`BPM:${entry.bpm}`);
+          if (entry.length !== undefined) meta.push(`Len:${entry.length}`);
+          if (entry.swing  !== undefined) meta.push(`Swing:${entry.swing}`);
+          const metaStr = meta.length > 0 ? ` | ${meta.join(" ")}` : "";
+          return `${i + 1}. [${time}] ${entry.prompt}${metaStr}`;
         });
     return (
       <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
@@ -166,8 +186,8 @@ export function Prompt({
   }
 
   const statusLine =
-    askPending                           ? "⟳ asking…"
-    : generationStatus === "generating" ? "⟳ generating…"
+    askPending                           ? `⟳ asking… (${elapsedSecs}s)`
+    : generationStatus === "generating" ? `⟳ generating… (${elapsedSecs}s)`
     : generationStatus === "failed"     ? `✗ ${generationError ?? "generation failed"}`
     : "";
 

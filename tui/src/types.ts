@@ -16,7 +16,7 @@ export interface DigitaktState {
   swing: number;
   pattern_length: number;
   fill_active: boolean;
-  fill_queued: boolean;
+  fill_queued: string | false;
   is_playing: boolean;
   midi_port_name: string | null;
   track_cc: Record<TrackName, Record<CCParam, number>>;
@@ -29,7 +29,7 @@ export interface DigitaktState {
   connected: boolean;
   log: string[];
   current_step: number | null;
-  pattern_history: Array<{ prompt: string; timestamp: number }>;
+  pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
 }
 
 export type FocusPanel = "pattern" | "cc" | "log" | "prompt";

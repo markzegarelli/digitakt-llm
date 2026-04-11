@@ -9,10 +9,11 @@ interface HeaderProps {
   connected: boolean;
   generationStatus: "idle" | "generating" | "failed";
   fillActive: boolean;
-  fillQueued: boolean;
+  fillQueued: string | false;
+  muteCount: number;
 }
 
-export function Header({ bpm, swing, isPlaying, midiPort, connected, generationStatus, fillActive, fillQueued }: HeaderProps) {
+export function Header({ bpm, swing, isPlaying, midiPort, connected, generationStatus, fillActive, fillQueued, muteCount }: HeaderProps) {
   const statusColor = isPlaying ? "green" : "red";
   const statusLabel = isPlaying ? "▶ PLAYING" : "■ STOPPED";
   const connColor = connected ? "green" : "yellow";
@@ -28,13 +29,14 @@ export function Header({ bpm, swing, isPlaying, midiPort, connected, generationS
       {swing > 0 && <><Text>{"  "}</Text><Text color="gray">{`swing:${swing}`}</Text></>}
       <Text>{"  "}</Text>
       <Text bold color={statusColor}>{statusLabel}</Text>
+      {muteCount > 0 && <Text color="red">{`  [${muteCount}M]`}</Text>}
       {generationStatus === "generating" && (
         <><Text>{"  "}</Text><Spinner /><Text color="yellow">{" generating…"}</Text></>
       )}
       {generationStatus === "failed" && (
         <Text color="red">{"  ✗ GEN FAILED"}</Text>
       )}
-      {fillQueued && <Text color="yellow"> FILL QUEUED</Text>}
+      {fillQueued && <Text color="yellow">{` FILL: ${fillQueued}`}</Text>}
       {fillActive && <Text color="cyan"> FILLING</Text>}
     </Box>
   );

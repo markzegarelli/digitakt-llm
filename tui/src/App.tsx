@@ -89,6 +89,7 @@ export function App({ baseUrl }: AppProps) {
       case "bpm": {
         const v = parseFloat(parts[1] ?? "");
         if (!isNaN(v) && v >= 20 && v <= 400) actions.setBpm(v);
+        else actions.addLog("Usage: /bpm <20-400>");
         break;
       }
       case "save": {
@@ -164,6 +165,7 @@ export function App({ baseUrl }: AppProps) {
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setProb(track, step, value);
+        else actions.addLog("Usage: /prob <track> <step 1-16> <0-100>");
         break;
       }
       case "vel": {
@@ -171,6 +173,7 @@ export function App({ baseUrl }: AppProps) {
         const step = parseInt(parts[2] ?? "", 10);
         const value = parseInt(parts[3] ?? "", 10);
         if (track && !isNaN(step) && !isNaN(value)) actions.setVel(track, step, value);
+        else actions.addLog("Usage: /vel <track> <step 1-16> <0-127>");
         break;
       }
       case "gate": {
@@ -235,6 +238,7 @@ export function App({ baseUrl }: AppProps) {
         const param = parts[2] as CCParam;
         const value = parseInt(parts[3] ?? "", 10);
         if (track && param && !isNaN(value)) actions.setCC(track, param, value);
+        else actions.addLog("Usage: /cc <track> <param> <0-127>");
         break;
       }
       case "help":
@@ -281,10 +285,16 @@ export function App({ baseUrl }: AppProps) {
         const value = parseInt(parts[4] ?? "", 10);
         if (track && param && !isNaN(step) && !isNaN(value)) {
           actions.setCCStep(track, param, step, value === -1 ? null : value);
+        } else {
+          actions.addLog("Usage: /cc-step <track> <param> <step 1-16> <0-127|-1>");
         }
         break;
       }
       default:
+        if (cmd.startsWith("/")) {
+          actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);
+          return;
+        }
         if (stripped.trim()) {
           if (inputMode === "chat") {
             const question = stripped.trim();
@@ -462,6 +472,7 @@ export function App({ baseUrl }: AppProps) {
         generationStatus={state.generation_status}
         fillActive={state.fill_active}
         fillQueued={state.fill_queued}
+        muteCount={Object.values(state.track_muted).filter(Boolean).length}
       />
       <Box flexDirection="row">
         <Box flexDirection="column" flexGrow={1}>

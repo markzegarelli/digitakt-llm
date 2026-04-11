@@ -382,7 +382,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     }, []),
 
     queueFill: useCallback(async (name: string) => {
-      setState((s) => ({ ...s, fill_queued: true }));
+      setState((s) => ({ ...s, fill_queued: name }));
       const resp = await fetch(`${baseUrl}/fill/${encodeURIComponent(name)}`, { method: "POST" });
       if (!resp.ok) {
         setState((s) => ({ ...s, fill_queued: false }));

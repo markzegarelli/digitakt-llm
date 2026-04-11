@@ -84,6 +84,7 @@ export function CCPanel({
 
           return (
             <Box key={key}>
+              <Text color="gray">{`[${i}]`}</Text>
               {/* Single ASCII char selector — same pattern as PatternGrid */}
               <Text bold color={col}>{">"}</Text>
               <Text>{" "}</Text>
@@ -123,13 +124,16 @@ export function CCPanel({
 
         return (
           <Box key={key}>
+            <Text color="gray">{`[${i}]`}</Text>
             {/* Single ASCII char selector — same pattern as PatternGrid */}
             <Text bold color={isSelected && isFocused ? "cyan" : undefined}>
               {isSelected && isFocused ? ">" : " "}
             </Text>
             <Text>{" "}</Text>
             <Text bold={isSelected} color={col}>{label.padEnd(10)}</Text>
+            <Text color="gray">{"["}</Text>
             <Text color={isSelected && isFocused ? "cyan" : "blue"}>{barGraph(value)}</Text>
+            <Text color="gray">{"]"}</Text>
             <Text>{"  "}</Text>
             <Text bold={isSelected} color={col}>{String(value).padStart(3)}</Text>
             {/* Fixed-width tail: space + ASCII char — matches the > prefix width */}

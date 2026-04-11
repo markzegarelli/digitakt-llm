@@ -18,17 +18,18 @@ const LABELS: Record<TrackName, string> = {
   bell:    "BELL ", hihat:   "HIHAT", openhat: "OPHAT", cymbal: "CYMBL",
 };
 
-function StepDot({ velocity, isMuted, isActive, hasCond }: { velocity: number; isMuted: boolean; isActive: boolean; hasCond: boolean }) {
+function StepDot({ velocity, isMuted, isActive, cond }: { velocity: number; isMuted: boolean; isActive: boolean; cond: string | null }) {
+  const hasCond = cond !== null;
   const marker = velocity > 0 ? (hasCond ? "◆" : "●") : (hasCond ? "◇" : "·");
+  const suffix = cond === "1:2" ? "₁" : cond === "not:2" ? "ⁿ" : cond === "fill" ? "f" : "";
   if (isActive) {
-    if (velocity === 0) return <Text color="white">{marker}</Text>;
-    if (isMuted)        return <Text color="yellow">{marker}</Text>;
-    return <Text color="yellow">{marker}</Text>;
+    if (velocity === 0) return <><Text color="white">{marker}</Text><Text color="gray">{suffix}</Text></>;
+    return <><Text color="yellow">{marker}</Text><Text color="yellow" bold>{suffix}</Text></>;
   }
-  if (velocity === 0) return <Text color="gray">{marker}</Text>;
-  if (isMuted)        return <Text color="gray">{marker}</Text>;
+  if (velocity === 0) return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
+  if (isMuted)        return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
   const color = velocity >= 101 ? "white" : velocity >= 64 ? "cyan" : "blue";
-  return <Text color={color}>{marker}</Text>;
+  return <><Text color={color}>{marker}</Text><Text color="magenta">{suffix}</Text></>;
 }
 
 // Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
@@ -72,13 +73,13 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
               const cond = condMap?.[track]?.[step];
               return (
                 <Box key={step} width={colWidth}>
-                  <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} hasCond={cond != null} />
+                  <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} cond={cond ?? null} />
                 </Box>
               );
             })}
             <Text>{"  "}</Text>
             <Text bold color={muted ? "red" : "green"}>
-              {muted ? "[MUTED]" : "[  ON  ]"}
+              {muted ? "[M]" : "[ ]"}
             </Text>
           </Box>
         );
