@@ -69,6 +69,15 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/vel`, `/swing`, `/
 
 New patterns are never applied mid-loop. At the end of each 16-step cycle, the player checks `state.pending_pattern` and swaps it into `state.current_pattern` in one assignment. This prevents glitchy half-pattern playback.
 
+## Prompt Tracing (Observability)
+
+`core/tracing.py` provides structured LLM call tracing via a module-level `tracer` singleton.
+
+- Each `Generator._call_api()` invocation is wrapped in a `tracer.span()` context manager that records operation name, prompt (truncated), response (truncated), status, error, and latency.
+- Traces are stored in-memory (bounded to 200 entries, FIFO).
+- Set `DIGITAKT_TRACE_FILE=<path>` to also append traces as JSON-lines to a file.
+- `GET /traces` returns the in-memory trace list for debugging.
+
 ## Retry Logic
 
 Generator calls the API once. If JSON parse fails, it retries once with an appended strict suffix instructing Claude to output only raw JSON. After two failures it emits `generation_failed`.

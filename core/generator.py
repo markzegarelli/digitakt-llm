@@ -4,12 +4,12 @@ from __future__ import annotations
 import functools
 import json
 import threading
-import time
 import anthropic
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.logging_config import get_logger
 from core.midi_utils import CC_MAP
+from core.tracing import tracer
 
 logger = get_logger("generator")
 
@@ -19,14 +19,29 @@ def _build_system_prompt(steps: int = 16) -> str:
         "You are an expert drum pattern generator specializing in techno and electronic music production. "
         "You understand groove, hypnotic repetition, tension, and the specific conventions of techno subgenres.\n\n"
         "SUBGENRE BPM RANGES — choose a BPM from the matching range based on the user's request:\n"
-        "  detroit techno:          130–138\n"
-        "  minimal techno:          130–136\n"
-        "  acid techno:             138–145\n"
+        "  detroit techno:           130–138\n"
+        "  minimal techno:           130–136\n"
+        "  dub techno:               120–130\n"
+        "  acid techno:              138–145\n"
         "  hypnotic / trance techno: 140–148\n"
-        "  industrial techno:       140–150\n"
+        "  industrial techno:        140–150\n"
         "  dark techno / hard techno: 142–155\n"
-        "  schranz:                 150–162\n"
-        "  generic / unspecified:   133–140\n\n"
+        "  schranz:                  150–162\n"
+        "  breakbeat / breaks:       125–140\n"
+        "  electro:                  125–135\n"
+        "  house / deep house:       120–128\n"
+        "  tech house:               124–130\n"
+        "  jungle / drum & bass:     160–180\n"
+        "  ambient / downtempo:      70–110\n"
+        "  EBM / darkwave:           110–130\n"
+        "  generic / unspecified:    133–140\n\n"
+        "GENRE-SPECIFIC PATTERN CONVENTIONS:\n"
+        "  - Dub techno: sparse, delayed elements, heavy reverb feel, minimal kick patterns\n"
+        "  - Breakbeat: broken kick patterns (NOT four-on-the-floor), syncopated snare\n"
+        "  - DnB/jungle: double-time feel, rapid hi-hats, breakbeat-style kick/snare\n"
+        "  - House: four-on-the-floor kick, off-beat hi-hat (steps 3,7,11,15), clap on 5,13\n"
+        "  - EBM: driving 8th-note kick patterns, heavy snare, minimal hi-hat\n"
+        "  - Electro: TR-808 style, booming kicks, crisp claps, cowbell-heavy\n\n"
         "GROOVE RULES:\n"
         "  - Kick: four-on-the-floor (steps 1,5,9,13) is the techno foundation; vary velocity 90–127 for feel\n"
         "  - Snare/clap: anchor on beats 2 and 4 (steps 5 and 13); ghost notes on steps 3,7,11,15 add groove\n"
@@ -36,6 +51,22 @@ def _build_system_prompt(steps: int = 16) -> str:
         "  - Techno thrives on space and repetition; not every track needs hits every bar\n"
         "  - Use the full velocity range 0–127, not just 0 and 100\n\n"
         f"Generate {steps}-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
+        "DIGITAKT SOUND DESIGN GUIDANCE:\n"
+        "Each track maps to a Digitakt audio track with one-shot sample playback. The CC parameters\n"
+        "shape the sound in real time:\n"
+        "  - tune (CC 16): sample pitch. 64=default. Lower values = pitched down (deeper, darker).\n"
+        "    For kicks: 50–60 = deep sub kick. For hihats: 70–80 = brighter/shorter.\n"
+        "  - filter (CC 74): lowpass cutoff. 0=fully closed (muffled), 127=wide open (bright).\n"
+        "    Kicks usually 80–127. Hihats/cymbals 60–127 for character. Snare 70–110.\n"
+        "  - resonance (CC 75): filter resonance. 0=none, high values add ringing/acid character.\n"
+        "    Keep low (0–30) for clean sounds. 50+ for acid or resonant stabs.\n"
+        "  - attack (CC 78): amp envelope attack. 0=instant hit. Higher = slower fade-in.\n"
+        "    Kicks/snares should be 0–10. Pads/swells 40–80.\n"
+        "  - decay (CC 80): amp envelope decay. Controls how long the sound rings.\n"
+        "    Short kicks: 30–50. Long tails: 80–110. Hihats: 20–50.\n"
+        "  - reverb (CC 83): send amount. 0=dry, 127=full reverb. Use 10–40 for space, 60+ for wash.\n"
+        "  - delay (CC 82): send amount. Creates rhythmic echoes. 10–30 subtle, 50+ pronounced.\n"
+        "  - volume (CC 7): track level. Usually 90–110. Use to balance the mix.\n\n"
         "OPTIONAL CC ADJUSTMENTS:\n"
         "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
         "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
@@ -245,22 +276,23 @@ class Generator:
         content = user_prompt
         if retry:
             content += "\n\nRemember: output ONLY the JSON object, no other text."
-        t0 = time.monotonic()
-        response = self._client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1024,
-            system=[{
-                "type": "text",
-                "text": _build_system_prompt(self.state.pattern_length),
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{"role": "user", "content": content}],
-        )
-        latency_ms = int((time.monotonic() - t0) * 1000)
-        text = response.content[0].text
+        with tracer.span("generate" if not retry else "generate_retry", prompt=content) as span:
+            response = self._client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=1024,
+                system=[{
+                    "type": "text",
+                    "text": _build_system_prompt(self.state.pattern_length),
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                messages=[{"role": "user", "content": content}],
+            )
+            text = response.content[0].text
+            span.set_response(text)
+            span.set_status("ok")
         logger.info(
             "API call completed",
-            extra={"latency_ms": latency_ms, "status": "ok", "prompt": content[:200]},
+            extra={"latency_ms": span.latency_ms, "status": "ok", "prompt": content[:200]},
         )
         return text
 
