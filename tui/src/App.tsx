@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { useDigitakt } from "./hooks/useDigitakt.js";
 import { Header } from "./components/Header.js";
@@ -65,6 +65,7 @@ export function App({ baseUrl }: AppProps) {
   const [showHelp, setShowHelp]         = useState(false);
   const [showLog, setShowLog]           = useState(false);
   const [answerText, setAnswerText]     = useState<string | null>(null);
+  const lastAnswerRef                   = useRef<string | null>(null);
   const [askPending, setAskPending]     = useState(false);
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
@@ -264,8 +265,8 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       case "gen": {
-        if (answerText) {
-          actions.generate(answerText);
+        if (lastAnswerRef.current) {
+          actions.generate(lastAnswerRef.current);
         } else {
           actions.addLog("✗ No ask response to generate from. Use /ask first.");
         }
@@ -278,6 +279,7 @@ export function App({ baseUrl }: AppProps) {
           setFocus("prompt");
           actions.ask(question).then((answer) => {
             setAskPending(false);
+            lastAnswerRef.current = answer;
             setAnswerText(answer);
           }).catch(() => {
             setAskPending(false);
@@ -310,6 +312,7 @@ export function App({ baseUrl }: AppProps) {
             setFocus("prompt");
             actions.ask(question).then((answer) => {
               setAskPending(false);
+              lastAnswerRef.current = answer;
               setAnswerText(answer);
             }).catch(() => {
               setAskPending(false);
