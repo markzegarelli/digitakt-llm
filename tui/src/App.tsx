@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef } from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useDigitakt } from "./hooks/useDigitakt.js";
 import { Header } from "./components/Header.js";
 import { PatternGrid } from "./components/PatternGrid.js";
@@ -53,6 +53,7 @@ function parseRange(rangeStr: string | undefined, param: string): [number, numbe
 
 export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
   const [state, actions] = useDigitakt(baseUrl);
 
   const [focus, setFocus]               = useState<FocusPanel>("pattern");
@@ -70,6 +71,22 @@ export function App({ baseUrl }: AppProps) {
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
+
+  // Clear the full screen when generation completes so Ink redraws into a
+  // clean buffer, preventing ghost rows from the previous "generating" frame.
+  const prevGenStatus = useRef(state.generation_status);
+  useEffect(() => {
+    if (prevGenStatus.current === "generating" && state.generation_status !== "generating") {
+      stdout?.write('\x1b[2J\x1b[H');
+    }
+    prevGenStatus.current = state.generation_status;
+  }, [state.generation_status, stdout]);
+
+  // Clear when Prompt panel switches between compact and tall modes (answer
+  // text, help, history) to avoid ghost rows from the height difference.
+  useEffect(() => {
+    stdout?.write('\x1b[2J\x1b[H');
+  }, [answerText, showHelp, showHistory, showLog, stdout]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
