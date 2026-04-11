@@ -65,6 +65,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
 
 export interface DigitaktActions {
   setMute(track: TrackName, muted: boolean): Promise<void>;
+  setMuteQueued(track: TrackName, muted: boolean): Promise<void>;
   setCC(track: TrackName, param: CCParam, value: number): Promise<void>;
   setCCStep(track: TrackName, param: CCParam, step: number, value: number | null): Promise<void>;
   setVelocity(track: TrackName, value: number): Promise<void>;
@@ -304,6 +305,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_muted: { ...prev.track_muted, [track]: muted },
       }));
       await api("POST", "/mute", { track, muted });
+    }, [api]),
+
+    setMuteQueued: useCallback(async (track: TrackName, muted: boolean) => {
+      await api("POST", "/mute-queued", { track, muted });
     }, [api]),
 
     setCC: useCallback(async (track: TrackName, param: CCParam, value: number) => {

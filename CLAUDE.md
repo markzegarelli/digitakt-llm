@@ -49,6 +49,11 @@ digitakt          # requires .env with ANTHROPIC_API_KEY
 - `/ask <question>` — ask Claude (works in any mode)
 - `/gen` — generate a beat from the last `/ask` response
 
+Keyboard shortcuts (Pattern panel):
+- `m` — immediate mute toggle on selected track
+- `Shift+M` — stage selected track for queued mute (toggle; shows `[Q]` in yellow)
+- `Shift+Enter` — fire all staged mutes at next bar boundary via `/mute-queued`
+
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 
 ## Key Documents
@@ -112,7 +117,7 @@ Key endpoints:
 - `POST /randbeat` — generate a random techno beat (BPM 128-160, CC randomized)
 - `POST /bpm`, `POST /swing`, `POST /prob`, `POST /vel`
 - `POST /random` — randomize velocity or prob for a track
-- `POST /cc`, `POST /mute`, `POST /velocity`
+- `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
 - `GET/POST /patterns/{name}` — save/load patterns
 - `POST /length` — set pattern step count (8, 16, 32)
