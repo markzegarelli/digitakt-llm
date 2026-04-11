@@ -13,6 +13,9 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
 import datetime
+from core.logging_config import get_logger
+
+logger = get_logger("server")
 
 from api.schemas import (
     BpmRequest, CCRequest, CCResponse, CCStepRequest, GenerateRequest,
@@ -92,6 +95,7 @@ async def _broadcast_to_clients(message: dict) -> None:
         try:
             await ws.send_json(message)
         except Exception:
+            logger.debug("WebSocket client disconnected during broadcast")
             dead.add(ws)
     _ws_clients.difference_update(dead)
 

@@ -5,8 +5,11 @@ import time
 import threading
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
+from core.logging_config import get_logger
 from core import midi_utils
 from core.midi_utils import TRACK_CHANNELS, send_note_off
+
+logger = get_logger("player")
 
 
 class Player:
@@ -102,6 +105,11 @@ class Player:
                 try:
                     midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
                 except Exception:
+                    logger.error(
+                        "MIDI send failed during note playback",
+                        extra={"error_type": "midi_disconnect"},
+                        exc_info=True,
+                    )
                     self.state.is_playing = False
                     self.bus.emit("playback_stopped", {})
                     self.bus.emit(
@@ -135,6 +143,11 @@ class Player:
                     try:
                         midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], override)
                     except Exception:
+                        logger.error(
+                            "MIDI send failed during CC override",
+                            extra={"error_type": "midi_disconnect"},
+                            exc_info=True,
+                        )
                         self.state.is_playing = False
                         self.bus.emit("playback_stopped", {})
                         self.bus.emit(
@@ -165,6 +178,11 @@ class Player:
                     try:
                         midi_utils.send_clock(self.port)
                     except Exception:
+                        logger.error(
+                            "MIDI clock send failed",
+                            extra={"error_type": "midi_disconnect"},
+                            exc_info=True,
+                        )
                         self.state.is_playing = False
                         self.bus.emit("playback_stopped", {})
                         self.bus.emit(
