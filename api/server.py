@@ -18,6 +18,7 @@ from api.schemas import (
     VelocityRequest, VelocityResponse,
     ProbRequest, SwingRequest, VelRequest, RandomRequest,
     AskRequest, AskResponse,
+    LengthRequest, LengthResponse,
 )
 from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat, apply_cc_step
 from core.events import EventBus
@@ -52,7 +53,7 @@ _ALL_EVENTS = [
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
-    "step_changed",
+    "step_changed", "length_changed", "fill_started", "fill_ended",
 ]
 
 
@@ -100,6 +101,7 @@ def get_state():
         track_muted=_state.track_muted,
         track_velocity=_state.track_velocity,
         swing=_state.current_pattern.get("swing", 0),
+        pattern_length=_state.pattern_length,
     )
 
 
@@ -224,6 +226,21 @@ def set_swing(req: SwingRequest):
     _player.queue_pattern(new_pattern)
     _bus.emit("swing_changed", {"amount": req.amount})
     return {"amount": req.amount}
+
+
+@app.post("/length", response_model=LengthResponse)
+def set_length(req: LengthRequest):
+    _state.pattern_length = req.steps
+    # Resize current_pattern to match new length (pad with 0 or truncate)
+    for track in TRACK_NAMES:
+        cur = _state.current_pattern.get(track, [])
+        if len(cur) < req.steps:
+            _state.current_pattern[track] = cur + [0] * (req.steps - len(cur))
+        elif len(cur) > req.steps:
+            _state.current_pattern[track] = cur[:req.steps]
+    _bus.emit("length_changed", {"steps": req.steps})
+    _bus.emit("pattern_changed", {"pattern": _state.current_pattern, "prompt": _state.last_prompt or ""})
+    return LengthResponse(steps=req.steps)
 
 
 @app.post("/vel")

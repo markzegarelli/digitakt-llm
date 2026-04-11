@@ -321,3 +321,18 @@ def test_ws_receives_pattern_changed_event(tmp_path):
     with client.websocket_connect("/ws") as ws:
         server_module._bus.emit("pattern_changed", {})
         import time; time.sleep(0.05)
+
+
+def test_post_length_sets_pattern_length(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/length", json={"steps": 8})
+    assert resp.status_code == 200
+    assert resp.json()["steps"] == 8
+    state_resp = client.get("/state")
+    assert state_resp.json()["pattern_length"] == 8
+
+
+def test_post_length_rejects_invalid_value(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/length", json={"steps": 7})
+    assert resp.status_code == 422

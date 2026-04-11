@@ -38,6 +38,21 @@ class CCResponse(BaseModel):
     value: int
 
 
+class LengthRequest(BaseModel):
+    steps: int
+
+    @field_validator("steps")
+    @classmethod
+    def steps_must_be_valid(cls, v: int) -> int:
+        if v not in (8, 16, 32):
+            raise ValueError("steps must be 8, 16, or 32")
+        return v
+
+
+class LengthResponse(BaseModel):
+    steps: int
+
+
 class StateResponse(BaseModel):
     current_pattern: dict
     pending_pattern: dict | None
@@ -50,6 +65,7 @@ class StateResponse(BaseModel):
     track_muted: dict
     track_velocity: dict
     swing: int = 0
+    pattern_length: int = 16
 
 
 class PatternListResponse(BaseModel):
