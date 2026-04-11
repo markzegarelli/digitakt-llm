@@ -51,9 +51,16 @@ class AppState:
         track: 127 for track in TRACK_NAMES
     })
     pattern_length: int = 16
+    fill_pattern: dict | None = None
+    _fill_active: bool = field(default=False, init=False, repr=False)
+    _pre_fill_pattern: dict | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+
+    def queue_fill(self, pattern: dict) -> None:
+        with self._lock:
+            self.fill_pattern = pattern
 
     def update_cc(self, track: str, param: str, value: int) -> None:
         with self._lock:
