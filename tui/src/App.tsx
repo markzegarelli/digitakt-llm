@@ -97,6 +97,15 @@ export function App({ baseUrl }: AppProps) {
       case "load":
         if (parts[1]) fetch(`${baseUrl}/patterns/${parts[1]}`);
         break;
+      case "fill": {
+        const name = parts[1];
+        if (!name) {
+          actions.addLog("Usage: /fill <pattern-name>");
+          return;
+        }
+        actions.queueFill(name).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
+        break;
+      }
       case "swing": {
         const amount = parseInt(parts[1] ?? "", 10);
         if (!isNaN(amount) && amount >= 0 && amount <= 100) actions.setSwing(amount);
@@ -374,6 +383,8 @@ export function App({ baseUrl }: AppProps) {
         midiPort={state.midi_port_name}
         connected={state.connected}
         generationStatus={state.generation_status}
+        fillActive={state.fill_active}
+        fillQueued={state.fill_queued}
       />
       <Box flexDirection="row">
         <Box flexDirection="column" flexGrow={1}>

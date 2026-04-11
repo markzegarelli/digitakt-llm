@@ -323,6 +323,20 @@ def test_ws_receives_pattern_changed_event(tmp_path):
         import time; time.sleep(0.05)
 
 
+def test_post_fill_queues_saved_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/patterns/myfill")        # save current as "myfill"
+    resp = client.post("/fill/myfill")
+    assert resp.status_code == 200
+    assert resp.json()["queued"] == "myfill"
+
+
+def test_post_fill_missing_pattern_returns_404(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/fill/doesnotexist")
+    assert resp.status_code == 404
+
+
 def test_post_length_sets_pattern_length(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/length", json={"steps": 8})

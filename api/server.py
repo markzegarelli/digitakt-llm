@@ -301,6 +301,19 @@ def save_pattern(name: str):
     return {"saved": name}
 
 
+@app.post("/fill/{name}")
+async def queue_fill_pattern(name: str):
+    path = os.path.join(_patterns_dir, f"{name}.json")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
+    with open(path) as f:
+        data = json.load(f)
+    # Support both old format (raw pattern dict) and new format ({"pattern": ...})
+    pattern = data.get("pattern", data)
+    _state.queue_fill(pattern)
+    return {"queued": name}
+
+
 @app.get("/patterns/{name}")
 def load_pattern(name: str):
     path = Path(_patterns_dir) / f"{name}.json"
