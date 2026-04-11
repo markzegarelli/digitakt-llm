@@ -148,3 +148,9 @@ def test_queue_fill_sets_fill_pattern():
     fill = {k: [50] * 16 for k in TRACK_NAMES}
     state.queue_fill(fill)
     assert state.fill_pattern == fill
+
+
+def test_track_pitch_defaults_to_60():
+    state = AppState()
+    for track in TRACK_NAMES:
+        assert state.track_pitch[track] == 60

@@ -64,6 +64,7 @@ class StateResponse(BaseModel):
     track_cc: dict
     track_muted: dict
     track_velocity: dict
+    track_pitch: dict
     swing: int = 0
     pattern_length: int = 16
 
@@ -129,6 +130,40 @@ class CCStepRequest(BaseModel):
     param: str
     step: int = Field(..., ge=1, le=16)   # 1-indexed
     value: int = Field(..., ge=-1, le=127)  # -1 = clear override
+
+
+class GateRequest(BaseModel):
+    track: str
+    step: int = Field(..., ge=1, le=32)
+    value: int = Field(..., ge=0, le=100)
+
+
+class GateResponse(BaseModel):
+    track: str
+    step: int
+    value: int
+
+
+class PitchRequest(BaseModel):
+    track: str
+    value: int = Field(..., ge=0, le=127)
+
+
+class PitchResponse(BaseModel):
+    track: str
+    value: int
+
+
+class CondRequest(BaseModel):
+    track: str
+    step: int = Field(..., ge=1, le=32)
+    value: str | None = None
+
+
+class CondResponse(BaseModel):
+    track: str
+    step: int
+    value: str | None
 
 
 class AskRequest(BaseModel):

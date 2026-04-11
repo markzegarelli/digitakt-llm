@@ -22,8 +22,15 @@ from api.schemas import (
     AskRequest, AskResponse,
     LengthRequest, LengthResponse,
     SavePatternRequest, PatternEntry,
+    GateRequest, GateResponse,
+    PitchRequest, PitchResponse,
+    CondRequest, CondResponse,
 )
-from cli.commands import apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity, apply_random_prob, generate_random_beat, apply_cc_step
+from cli.commands import (
+    apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
+    apply_random_prob, generate_random_beat, apply_cc_step,
+    apply_gate_step, apply_cond_step,
+)
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
 from core.state import AppState, TRACK_NAMES
@@ -57,6 +64,7 @@ _ALL_EVENTS = [
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
+    "gate_changed", "pitch_changed", "cond_changed",
 ]
 
 
@@ -103,6 +111,7 @@ def get_state():
         track_cc=_state.track_cc,
         track_muted=_state.track_muted,
         track_velocity=_state.track_velocity,
+        track_pitch=_state.track_pitch,
         swing=_state.current_pattern.get("swing", 0),
         pattern_length=_state.pattern_length,
     )
@@ -255,6 +264,37 @@ def set_vel(req: VelRequest):
     _player.queue_pattern(new_pattern)
     _bus.emit("vel_changed", {"track": req.track, "step": req.step, "value": req.value})
     return {"track": req.track, "step": req.step, "value": req.value}
+
+
+@app.post("/gate", response_model=GateResponse)
+async def set_gate(req: GateRequest):
+    step_0 = req.step - 1
+    pattern = apply_gate_step(_state.current_pattern, req.track, step_0, req.value)
+    _state.update_pattern(pattern)
+    _player.queue_pattern(pattern)
+    _bus.emit("gate_changed", {"track": req.track, "step": req.step, "value": req.value})
+    return GateResponse(track=req.track, step=req.step, value=req.value)
+
+
+@app.post("/pitch", response_model=PitchResponse)
+async def set_pitch(req: PitchRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(status_code=422, detail=f"Unknown track: {req.track}")
+    _state.track_pitch[req.track] = req.value
+    _bus.emit("pitch_changed", {"track": req.track, "value": req.value})
+    return PitchResponse(track=req.track, value=req.value)
+
+
+@app.post("/cond", response_model=CondResponse)
+async def set_cond(req: CondRequest):
+    if req.value is not None and req.value not in ("1:2", "not:2", "fill"):
+        raise HTTPException(status_code=422, detail=f"Invalid condition '{req.value}'")
+    step_0 = req.step - 1
+    pattern = apply_cond_step(_state.current_pattern, req.track, step_0, req.value)
+    _state.update_pattern(pattern)
+    _player.queue_pattern(pattern)
+    _bus.emit("cond_changed", {"track": req.track, "step": req.step, "value": req.value})
+    return CondResponse(track=req.track, step=req.step, value=req.value)
 
 
 @app.post("/random")

@@ -380,3 +380,44 @@ def test_post_length_rejects_invalid_value(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/length", json={"steps": 7})
     assert resp.status_code == 422
+
+
+# ── /gate ──────────────────────────────────────────────────────────────────
+
+def test_post_gate_sets_step_gate(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/gate", json={"track": "kick", "step": 1, "value": 50})
+    assert resp.status_code == 200
+    assert resp.json()["track"] == "kick"
+    assert resp.json()["step"] == 1
+    assert resp.json()["value"] == 50
+
+
+# ── /pitch ─────────────────────────────────────────────────────────────────
+
+def test_post_pitch_sets_track_pitch(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/pitch", json={"track": "kick", "value": 48})
+    assert resp.status_code == 200
+    assert resp.json()["track"] == "kick"
+    assert resp.json()["value"] == 48
+    state_resp = client.get("/state")
+    assert state_resp.json()["track_pitch"]["kick"] == 48
+
+
+# ── /cond ──────────────────────────────────────────────────────────────────
+
+def test_post_cond_sets_step_condition(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/cond", json={"track": "kick", "step": 1, "value": "1:2"})
+    assert resp.status_code == 200
+    assert resp.json()["track"] == "kick"
+    assert resp.json()["value"] == "1:2"
+
+
+def test_post_cond_clears_step_condition(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/cond", json={"track": "kick", "step": 1, "value": "1:2"})
+    resp = client.post("/cond", json={"track": "kick", "step": 1, "value": None})
+    assert resp.status_code == 200
+    assert resp.json()["value"] is None

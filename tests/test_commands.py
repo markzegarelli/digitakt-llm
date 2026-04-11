@@ -10,6 +10,8 @@ from cli.commands import (
     apply_vel_step,
     apply_swing,
     generate_random_beat,
+    apply_gate_step,
+    apply_cond_step,
 )
 from core.state import TRACK_NAMES
 
@@ -221,3 +223,47 @@ def test_randbeat_hihat_has_hits():
     for _ in range(10):
         pattern, *_ = generate_random_beat()
         assert any(v > 0 for v in pattern["hihat"]), "hihat has no hits"
+
+
+# ── apply_gate_step ───────────────────────────────────────────────────────────
+
+def test_apply_gate_step_sets_value():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = apply_gate_step(pattern, "kick", 0, 50)
+    assert result["gate"]["kick"][0] == 50
+
+
+def test_apply_gate_step_creates_gate_key_if_missing():
+    pattern = {k: [64] * 16 for k in TRACK_NAMES}
+    result = apply_gate_step(pattern, "hihat", 3, 75)
+    assert "gate" in result
+    assert result["gate"]["hihat"][3] == 75
+    # Other steps default to 100
+    assert result["gate"]["hihat"][0] == 100
+
+
+def test_apply_gate_step_rejects_out_of_range():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    with pytest.raises(ValueError):
+        apply_gate_step(pattern, "kick", 0, 101)
+
+
+# ── apply_cond_step ───────────────────────────────────────────────────────────
+
+def test_apply_cond_step_sets_condition():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = apply_cond_step(pattern, "kick", 0, "1:2")
+    assert result["cond"]["kick"][0] == "1:2"
+
+
+def test_apply_cond_step_clears_condition():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["cond"] = {"kick": ["1:2"] + [None] * 15}
+    result = apply_cond_step(pattern, "kick", 0, None)
+    assert result["cond"]["kick"][0] is None
+
+
+def test_apply_cond_step_rejects_unknown_condition():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    with pytest.raises(ValueError):
+        apply_cond_step(pattern, "kick", 0, "bogus")

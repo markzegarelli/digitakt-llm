@@ -204,6 +204,37 @@ def apply_cc_step(pattern: dict, track: str, param: str, step: int, value: int |
     return result
 
 
+def apply_gate_step(pattern: dict, track: str, step: int, value: int) -> dict:
+    """Set gate (0–100) for a single step. 100 = full step duration, 0 = immediate note_off."""
+    if not (0 <= value <= 100):
+        raise ValueError(f"Gate value must be 0–100, got {value}")
+    pattern = dict(pattern)
+    if "gate" not in pattern:
+        length = len(pattern.get("kick", [None] * 16))
+        pattern["gate"] = {t: [100] * length for t in TRACK_NAMES}
+    pattern["gate"] = dict(pattern["gate"])
+    pattern["gate"][track] = list(pattern["gate"][track])
+    pattern["gate"][track][step] = value
+    return pattern
+
+
+_VALID_CONDITIONS = frozenset({"1:2", "not:2", "fill"})
+
+
+def apply_cond_step(pattern: dict, track: str, step: int, value: "str | None") -> dict:
+    """Set or clear a conditional trig on a step. value must be '1:2', 'not:2', 'fill', or None."""
+    if value is not None and value not in _VALID_CONDITIONS:
+        raise ValueError(f"Unknown condition '{value}'. Valid: {sorted(_VALID_CONDITIONS)}")
+    pattern = dict(pattern)
+    length = len(pattern.get("kick", [None] * 16))
+    if "cond" not in pattern:
+        pattern["cond"] = {t: [None] * length for t in TRACK_NAMES}
+    pattern["cond"] = dict(pattern["cond"])
+    pattern["cond"][track] = list(pattern["cond"][track])
+    pattern["cond"][track][step] = value
+    return pattern
+
+
 def apply_swing(pattern: dict, amount: int) -> dict:
     """
     Set swing amount.
