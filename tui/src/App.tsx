@@ -362,8 +362,8 @@ export function App({ baseUrl }: AppProps) {
         const track = TRACK_NAMES[patternTrack];
         if (track) actions.setMute(track, !state.track_muted[track]);
       }
-      // Shift+M: stage selected track for queued mute (toggle)
-      if (input === "M") {
+      // q: stage selected track for queued mute (toggle)
+      if (input === "q") {
         const track = TRACK_NAMES[patternTrack];
         if (track) {
           setPendingMuteTracks((prev) => {
@@ -373,8 +373,8 @@ export function App({ baseUrl }: AppProps) {
           });
         }
       }
-      // Shift+Enter: fire all staged mutes via /mute-queued
-      if (key.return && key.shift && pendingMuteTracks.size > 0) {
+      // Q (Shift+Q): fire all staged mutes via /mute-queued
+      if (input === "Q" && pendingMuteTracks.size > 0) {
         const tracksToQueue = Array.from(pendingMuteTracks) as TrackName[];
         setPendingMuteTracks(new Set());
         for (const track of tracksToQueue) {
@@ -422,8 +422,8 @@ export function App({ baseUrl }: AppProps) {
           if (track && param) {
             const stepOverrides = state.step_cc?.[track]?.[param];
             const current = stepOverrides?.[ccSelectedStep] ?? state.track_cc[track][param];
-            const sign = key.upArrow ? 1 : -1;
-            actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + sign, 0, 127));
+            const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
+            actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + delta, 0, 127));
           }
           return;
         }
@@ -472,7 +472,7 @@ export function App({ baseUrl }: AppProps) {
       }
 
       if (key.leftArrow || key.rightArrow) {
-        const sign = key.rightArrow ? 1 : -1;
+        const sign = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
         const track = TRACK_NAMES[ccTrack];
         if (ccParam === 0) {
           // velocity row
@@ -545,7 +545,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color="gray">
-              {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+              {"Tab/'/': panel · ↑↓: navigate · m: mute · q/Q: queue/fire · ←→: adjust · [ ]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
             </Text>
           </Box>
         </Box>

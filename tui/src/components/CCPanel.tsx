@@ -53,8 +53,8 @@ export function CCPanel({
   ];
 
   const hintText = stepMode
-    ? "←→: step  ↑↓: ±1  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
-    : "[/]: track  ↑↓: param  ←→: ±1  Enter: step mode";
+    ? "←→: step  ↑↓: ±1  Shift+↑↓: ±10  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
+    : "[ ]: track  ↑↓: param  ←→: ±1  Shift+←→: ±10  Enter: step mode";
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
