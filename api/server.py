@@ -212,6 +212,15 @@ def set_mute(req: MuteRequest):
     return MuteResponse(track=req.track, muted=req.muted)
 
 
+@app.post("/mute-queued", response_model=MuteResponse)
+def set_mute_queued(req: MuteRequest):
+    """Queue a mute change to apply at the next bar boundary (beat-synced)."""
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _state.queue_mute(req.track, req.muted)
+    return MuteResponse(track=req.track, muted=req.muted)
+
+
 @app.post("/velocity", response_model=VelocityResponse)
 def set_velocity(req: VelocityRequest):
     if req.track not in TRACK_NAMES:

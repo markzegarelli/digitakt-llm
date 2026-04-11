@@ -55,6 +55,7 @@ class AppState:
     })
     pattern_length: int = 16
     fill_pattern: dict | None = None
+    pending_mutes: dict[str, bool] = field(default_factory=dict)
     _fill_active: bool = field(default=False, init=False, repr=False)
     _pre_fill_pattern: dict | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(
@@ -76,6 +77,22 @@ class AppState:
     def update_mute(self, track: str, muted: bool) -> None:
         with self._lock:
             self.track_muted[track] = muted
+
+    def queue_mute(self, track: str, muted: bool) -> None:
+        """Queue a mute change to be applied at the next bar boundary."""
+        with self._lock:
+            self.pending_mutes[track] = muted
+
+    def apply_pending_mutes(self) -> dict[str, bool] | None:
+        """Apply queued mute changes. Returns the changes dict or None."""
+        with self._lock:
+            if not self.pending_mutes:
+                return None
+            changes = dict(self.pending_mutes)
+            for track, muted in changes.items():
+                self.track_muted[track] = muted
+            self.pending_mutes.clear()
+            return changes
 
     def undo_pattern(self) -> dict | None:
         """Pop the most recent history entry and queue it as pending. Returns the pattern or None."""
