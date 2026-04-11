@@ -9,6 +9,7 @@ interface PatternGridProps {
   selectedTrack: number;  // 0–7
   isFocused: boolean;
   currentStep: number | null;
+  patternLength: number;
 }
 
 const LABELS: Record<TrackName, string> = {
@@ -31,18 +32,18 @@ function StepDot({ velocity, isMuted, isActive }: { velocity: number; isMuted: b
 // Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
 const OVERHEAD = 24;
 
-export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep }: PatternGridProps) {
+export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength }: PatternGridProps) {
   const { stdout } = useStdout();
   const termCols = stdout?.columns ?? 80;
   // Each step column: fit available space evenly, minimum 2, maximum 3
-  const colWidth = Math.min(3, Math.max(2, Math.floor((termCols - OVERHEAD) / 16)));
+  const colWidth = Math.min(3, Math.max(2, Math.floor((termCols - OVERHEAD) / patternLength)));
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
       {/* Header: each step in a fixed-width Box — same colWidth as the dot rows */}
       <Box>
         <Text bold color="cyan">{" PATTERN  "}</Text>
-        {Array.from({ length: 16 }, (_, i) => {
+        {Array.from({ length: patternLength }, (_, i) => {
           const isActive = currentStep === i;
           const label = isActive ? "▼" : String(i + 1);
           return (
@@ -53,7 +54,7 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
         })}
       </Box>
       {TRACK_NAMES.map((track, i) => {
-        const steps = pattern[track] ?? new Array(16).fill(0);
+        const steps = pattern[track] ?? new Array(patternLength).fill(0);
         const muted = trackMuted[track];
         const isSelected = i === selectedTrack;
         const labelColor = isSelected && isFocused ? "cyan" : muted ? "gray" : "white";

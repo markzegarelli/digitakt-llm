@@ -8,58 +8,59 @@ from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.midi_utils import CC_MAP
 
-_SYSTEM_PROMPT = (
-    "You are an expert drum pattern generator specializing in techno and electronic music production. "
-    "You understand groove, hypnotic repetition, tension, and the specific conventions of techno subgenres.\n\n"
-    "SUBGENRE BPM RANGES — choose a BPM from the matching range based on the user's request:\n"
-    "  detroit techno:          130–138\n"
-    "  minimal techno:          130–136\n"
-    "  acid techno:             138–145\n"
-    "  hypnotic / trance techno: 140–148\n"
-    "  industrial techno:       140–150\n"
-    "  dark techno / hard techno: 142–155\n"
-    "  schranz:                 150–162\n"
-    "  generic / unspecified:   133–140\n\n"
-    "GROOVE RULES:\n"
-    "  - Kick: four-on-the-floor (steps 1,5,9,13) is the techno foundation; vary velocity 90–127 for feel\n"
-    "  - Snare/clap: anchor on beats 2 and 4 (steps 5 and 13); ghost notes on steps 3,7,11,15 add groove\n"
-    "  - Hihat: vary velocity across steps (range 40–100) — never use uniform flat values\n"
-    "  - Open hat: off-beat placements (step 9 is classic) or syncopated 3-against-4 patterns\n"
-    "  - Tom/cymbal/bell: use sparingly for fills, accents, or hypnotic motifs — silence is valid\n"
-    "  - Techno thrives on space and repetition; not every track needs hits every bar\n"
-    "  - Use the full velocity range 0–127, not just 0 and 100\n\n"
-    "Generate 16-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
-    "OPTIONAL CC ADJUSTMENTS:\n"
-    "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
-    "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
-    "reverb, delay, velocity. All values 0–127. velocity scales the track's overall strike intensity.\n\n"
-    "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
-    '{\n'
-    '  "bpm":     <integer from subgenre range>,\n'
-    '  "kick":    [16 integers 0-127],\n'
-    '  "snare":   [16 integers 0-127],\n'
-    '  "tom":     [16 integers 0-127],\n'
-    '  "clap":    [16 integers 0-127],\n'
-    '  "bell":    [16 integers 0-127],\n'
-    '  "hihat":   [16 integers 0-127],\n'
-    '  "openhat": [16 integers 0-127],\n'
-    '  "cymbal":  [16 integers 0-127],\n'
-    '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
-    "}"
-    "\n\nOPTIONAL: Per-step probability (prob):\n"
-    "- Add a \"prob\" key containing a dict of track → 16-element list of integers (0–100).\n"
-    "- 100 = always trigger. 75 = fires 75% of the time. 0 = never fires.\n"
-    "- Omit tracks that should always fire. Omit \"prob\" entirely for fully deterministic patterns.\n"
-    "- Use prob to: add ghost note uncertainty (snare ghost notes at 50–75%), randomize hi-hat repetitions, make fills feel organic. Do NOT apply prob to kick on downbeats.\n"
-    "- Example: \"prob\": {\"snare\": [100,100,50,100,100,100,75,100,100,100,50,100,100,100,75,100]}\n"
-    "\n"
-    "OPTIONAL: Swing (swing):\n"
-    "- Add a \"swing\" key with a single integer 0–100.\n"
-    "- 0 = perfectly quantized (no swing). 25 = light shuffle. 50 = strong triplet shuffle.\n"
-    "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
-    "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
-    "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno)."
-)
+def _build_system_prompt(steps: int = 16) -> str:
+    return (
+        "You are an expert drum pattern generator specializing in techno and electronic music production. "
+        "You understand groove, hypnotic repetition, tension, and the specific conventions of techno subgenres.\n\n"
+        "SUBGENRE BPM RANGES — choose a BPM from the matching range based on the user's request:\n"
+        "  detroit techno:          130–138\n"
+        "  minimal techno:          130–136\n"
+        "  acid techno:             138–145\n"
+        "  hypnotic / trance techno: 140–148\n"
+        "  industrial techno:       140–150\n"
+        "  dark techno / hard techno: 142–155\n"
+        "  schranz:                 150–162\n"
+        "  generic / unspecified:   133–140\n\n"
+        "GROOVE RULES:\n"
+        "  - Kick: four-on-the-floor (steps 1,5,9,13) is the techno foundation; vary velocity 90–127 for feel\n"
+        "  - Snare/clap: anchor on beats 2 and 4 (steps 5 and 13); ghost notes on steps 3,7,11,15 add groove\n"
+        "  - Hihat: vary velocity across steps (range 40–100) — never use uniform flat values\n"
+        "  - Open hat: off-beat placements (step 9 is classic) or syncopated 3-against-4 patterns\n"
+        "  - Tom/cymbal/bell: use sparingly for fills, accents, or hypnotic motifs — silence is valid\n"
+        "  - Techno thrives on space and repetition; not every track needs hits every bar\n"
+        "  - Use the full velocity range 0–127, not just 0 and 100\n\n"
+        f"Generate {steps}-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
+        "OPTIONAL CC ADJUSTMENTS:\n"
+        "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
+        "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
+        "reverb, delay, velocity. All values 0–127. velocity scales the track's overall strike intensity.\n\n"
+        "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
+        "{\n"
+        '  "bpm":     <integer from subgenre range>,\n'
+        f'  "kick":    [{steps} integers 0-127],\n'
+        f'  "snare":   [{steps} integers 0-127],\n'
+        f'  "tom":     [{steps} integers 0-127],\n'
+        f'  "clap":    [{steps} integers 0-127],\n'
+        f'  "bell":    [{steps} integers 0-127],\n'
+        f'  "hihat":   [{steps} integers 0-127],\n'
+        f'  "openhat": [{steps} integers 0-127],\n'
+        f'  "cymbal":  [{steps} integers 0-127],\n'
+        '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
+        "}"
+        "\n\nOPTIONAL: Per-step probability (prob):\n"
+        f"- Add a \"prob\" key containing a dict of track → {steps}-element list of integers (0–100).\n"
+        "- 100 = always trigger. 75 = fires 75% of the time. 0 = never fires.\n"
+        "- Omit tracks that should always fire. Omit \"prob\" entirely for fully deterministic patterns.\n"
+        "- Use prob to: add ghost note uncertainty (snare ghost notes at 50–75%), randomize hi-hat repetitions, make fills feel organic. Do NOT apply prob to kick on downbeats.\n"
+        f"- Example: \"prob\": {{\"snare\": [100,100,50,100,100,100,75,100,100,100,50,100,100,100,75,100]}}\n"
+        "\n"
+        "OPTIONAL: Swing (swing):\n"
+        "- Add a \"swing\" key with a single integer 0–100.\n"
+        "- 0 = perfectly quantized (no swing). 25 = light shuffle. 50 = strong triplet shuffle.\n"
+        "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
+        "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
+        "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno)."
+    )
 
 _STRICT_SUFFIX = (
     "\n\nIMPORTANT: Output ONLY the JSON object. "
@@ -124,7 +125,7 @@ class Generator:
             )
         return prompt
 
-    def _parse_pattern(self, text: str) -> tuple[dict, int | None, dict] | None:
+    def _parse_pattern(self, text: str, steps: int = 16) -> tuple[dict, int | None, dict] | None:
         try:
             data = json.loads(text.strip())
         except (json.JSONDecodeError, ValueError):
@@ -133,7 +134,7 @@ class Generator:
             return None
         if not all(k in data for k in TRACK_NAMES):
             return None
-        if not all(len(data[k]) == 16 for k in TRACK_NAMES):
+        if not all(len(data[k]) == steps for k in TRACK_NAMES):
             return None
         if not all(
             isinstance(v, int) and 0 <= v <= 127
@@ -148,7 +149,7 @@ class Generator:
             for track, values in prob.items():
                 if track not in TRACK_NAMES:
                     return None
-                if not isinstance(values, list) or len(values) != 16:
+                if not isinstance(values, list) or len(values) != steps:
                     return None
                 if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
                     return None
@@ -186,7 +187,7 @@ class Generator:
         response = self._client.messages.create(
             model="claude-opus-4-6",
             max_tokens=1024,
-            system=_SYSTEM_PROMPT,
+            system=_build_system_prompt(self.state.pattern_length),
             messages=[{"role": "user", "content": content}],
         )
         return response.content[0].text
@@ -197,11 +198,11 @@ class Generator:
 
         try:
             text = self._call_api(user_prompt)
-            result = self._parse_pattern(text)
+            result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
                 text = self._call_api(user_prompt, strict=True)
-                result = self._parse_pattern(text)
+                result = self._parse_pattern(text, steps=self.state.pattern_length)
 
             if result is None:
                 self.bus.emit(

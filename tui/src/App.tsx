@@ -102,6 +102,19 @@ export function App({ baseUrl }: AppProps) {
         if (!isNaN(amount) && amount >= 0 && amount <= 100) actions.setSwing(amount);
         break;
       }
+      case "length": {
+        const steps = parseInt(parts[1] ?? "", 10);
+        if (![8, 16, 32].includes(steps)) {
+          actions.addLog("Usage: /length [8|16|32]");
+          return;
+        }
+        fetch(`${baseUrl}/length`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ steps }),
+        });
+        break;
+      }
       case "prob": {
         const track = normalizeTrack(parts[1] ?? "") as TrackName;
         const step = parseInt(parts[2] ?? "", 10);
@@ -370,6 +383,7 @@ export function App({ baseUrl }: AppProps) {
             selectedTrack={patternTrack}
             isFocused={focus === "pattern"}
             currentStep={state.current_step}
+            patternLength={state.pattern_length}
           />
           <CCPanel
             trackCC={state.track_cc}

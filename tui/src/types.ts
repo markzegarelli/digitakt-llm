@@ -14,6 +14,9 @@ export interface DigitaktState {
   current_pattern: Record<TrackName, number[]>;
   bpm: number;
   swing: number;
+  pattern_length: number;
+  fill_active: boolean;
+  fill_queued: boolean;
   is_playing: boolean;
   midi_port_name: string | null;
   track_cc: Record<TrackName, Record<CCParam, number>>;
