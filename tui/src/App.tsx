@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef } from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useDigitakt } from "./hooks/useDigitakt.js";
 import { Header } from "./components/Header.js";
 import { PatternGrid } from "./components/PatternGrid.js";
@@ -53,6 +53,7 @@ function parseRange(rangeStr: string | undefined, param: string): [number, numbe
 
 export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
   const [state, actions] = useDigitakt(baseUrl);
 
   const [focus, setFocus]               = useState<FocusPanel>("pattern");
@@ -69,6 +70,23 @@ export function App({ baseUrl }: AppProps) {
   const [askPending, setAskPending]     = useState(false);
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
+  const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
+
+  // Clear the full screen when generation completes so Ink redraws into a
+  // clean buffer, preventing ghost rows from the previous "generating" frame.
+  const prevGenStatus = useRef(state.generation_status);
+  useEffect(() => {
+    if (prevGenStatus.current === "generating" && state.generation_status !== "generating") {
+      stdout?.write('\x1b[2J\x1b[H');
+    }
+    prevGenStatus.current = state.generation_status;
+  }, [state.generation_status, stdout]);
+
+  // Clear when Prompt panel switches between compact and tall modes (answer
+  // text, help, history) to avoid ghost rows from the height difference.
+  useEffect(() => {
+    stdout?.write('\x1b[2J\x1b[H');
+  }, [answerText, showHelp, showHistory, showLog, stdout]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -381,6 +399,25 @@ export function App({ baseUrl }: AppProps) {
         const track = TRACK_NAMES[patternTrack];
         if (track) actions.setMute(track, !state.track_muted[track]);
       }
+      // q: stage selected track for queued mute (toggle)
+      if (input === "q") {
+        const track = TRACK_NAMES[patternTrack];
+        if (track) {
+          setPendingMuteTracks((prev) => {
+            const next = new Set(prev);
+            if (next.has(track)) { next.delete(track); } else { next.add(track); }
+            return next;
+          });
+        }
+      }
+      // Q (Shift+Q): fire all staged mutes via /mute-queued
+      if (input === "Q" && pendingMuteTracks.size > 0) {
+        const tracksToQueue = Array.from(pendingMuteTracks) as TrackName[];
+        setPendingMuteTracks(new Set());
+        for (const track of tracksToQueue) {
+          actions.setMuteQueued(track, !state.track_muted[track]);
+        }
+      }
       return;
     }
 
@@ -422,8 +459,8 @@ export function App({ baseUrl }: AppProps) {
           if (track && param) {
             const stepOverrides = state.step_cc?.[track]?.[param];
             const current = stepOverrides?.[ccSelectedStep] ?? state.track_cc[track][param];
-            const sign = key.upArrow ? 1 : -1;
-            actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + sign, 0, 127));
+            const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
+            actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + delta, 0, 127));
           }
           return;
         }
@@ -472,7 +509,7 @@ export function App({ baseUrl }: AppProps) {
       }
 
       if (key.leftArrow || key.rightArrow) {
-        const sign = key.rightArrow ? 1 : -1;
+        const sign = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
         const track = TRACK_NAMES[ccTrack];
         if (ccParam === 0) {
           // velocity row
@@ -515,6 +552,7 @@ export function App({ baseUrl }: AppProps) {
             currentStep={state.current_step}
             patternLength={state.pattern_length}
             condMap={(state.current_pattern as Record<string, unknown>)["cond"] as Record<string, (string | null)[]> | undefined}
+            pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
             trackCC={state.track_cc}
@@ -544,7 +582,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color="gray">
-              {"Tab/'/': panel · ↑↓: navigate · m: mute · ←→: adjust · [/]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+              {"Tab/'/': panel · ↑↓: navigate · m: mute · q/Q: queue/fire · ←→: adjust · [ ]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
             </Text>
           </Box>
         </Box>

@@ -37,6 +37,8 @@ const HELP_LINES = [
   "  quit / q                             exit",
   "  Shift+Tab                            toggle Chat/Beat mode",
   "  m (Pattern panel)                    toggle mute on selected track",
+  "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
+  "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
   "",
   "CC panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "",

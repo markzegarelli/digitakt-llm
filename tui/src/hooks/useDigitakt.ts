@@ -59,6 +59,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "fill_ended":           return "Fill ended — reverted";
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
+    case "state_reset":          return "state reset";
     default:                     return `${event}`;
   }
 }
@@ -273,6 +274,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "random_applied":
             case "randbeat_applied":
               return { ...prev, log: newLog };
+            case "state_reset":
+              fetchState();
+              return { ...prev, log: newLog };
             default:
               return { ...prev, log: newLog };
           }
@@ -305,15 +309,6 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_muted: { ...prev.track_muted, [track]: muted },
       }));
       await api("POST", "/mute", { track, muted });
-    }, [api]),
-
-    setMuteQueued: useCallback(async (track: TrackName, muted: boolean) => {
-      // Optimistic UI update — server applies the change at the next bar boundary
-      setState((prev) => ({
-        ...prev,
-        track_muted: { ...prev.track_muted, [track]: muted },
-      }));
-      await api("POST", "/mute-queued", { track, muted });
     }, [api]),
 
     setCC: useCallback(async (track: TrackName, param: CCParam, value: number) => {
