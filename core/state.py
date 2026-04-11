@@ -50,6 +50,7 @@ class AppState:
     track_velocity: dict = field(default_factory=lambda: {
         track: 127 for track in TRACK_NAMES
     })
+    pattern_length: int = 16
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )

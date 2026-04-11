@@ -230,3 +230,31 @@ def test_swing_delay_scales_with_bpm():
     delay_240 = player._swing_delay()
     # At double BPM, delay should halve
     assert abs(delay_120 - delay_240 * 2) < 1e-9
+
+
+def test_loop_respects_pattern_length_8():
+    player, state, bus, _ = _make_player()
+    state.bpm = 9000.0
+    state.pattern_length = 8
+    state.current_pattern = {k: [64] * 8 for k in TRACK_NAMES}
+    steps_seen = []
+    bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
+    player.start()
+    time.sleep(0.05)
+    player.stop()
+    assert steps_seen, "No steps emitted"
+    assert all(s < 8 for s in steps_seen)
+
+
+def test_loop_respects_pattern_length_32():
+    player, state, bus, _ = _make_player()
+    state.bpm = 9000.0
+    state.pattern_length = 32
+    state.current_pattern = {k: [64] * 32 for k in TRACK_NAMES}
+    steps_seen = []
+    bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
+    player.start()
+    time.sleep(0.05)
+    player.stop()
+    assert any(s >= 16 for s in steps_seen), "No steps > 15 seen for 32-step pattern"
+    assert all(s < 32 for s in steps_seen)

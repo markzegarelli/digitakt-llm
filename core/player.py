@@ -118,7 +118,7 @@ class Player:
         while not self._stop_event.is_set():
             dirty_cc: set[tuple[str, str]] = set()
             next_tick = time.perf_counter()
-            for step in range(16):
+            for step in range(self.state.pattern_length):
                 if self._stop_event.is_set():
                     break
                 for tick in range(6):
