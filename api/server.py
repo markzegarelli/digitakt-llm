@@ -153,7 +153,7 @@ def post_new():
     if _state.is_playing:
         _player.stop()
     _broadcast_event("bpm_changed", {"bpm": 120.0})
-    _broadcast_event("pattern_changed", {})
+    _broadcast_event("pattern_changed", {"pattern": _state.pending_pattern, "prompt": ""})
     return {"status": "ok"}
 
 

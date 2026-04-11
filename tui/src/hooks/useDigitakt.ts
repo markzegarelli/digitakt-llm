@@ -156,8 +156,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         setState((prev) => {
           const newLog = [...prev.log, logEntry].slice(-50);
           switch (msg.event) {
-            case "pattern_changed":
-              return { ...prev, current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"], log: newLog };
+            case "pattern_changed": {
+              const newPattern = msg.data["pattern"] as DigitaktState["current_pattern"] | undefined;
+              return { ...prev, ...(newPattern ? { current_pattern: newPattern } : {}), log: newLog };
+            }
             case "bpm_changed":
               return { ...prev, bpm: msg.data["bpm"] as number, log: newLog };
             case "playback_started":
