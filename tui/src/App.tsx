@@ -91,12 +91,47 @@ export function App({ baseUrl }: AppProps) {
         if (!isNaN(v) && v >= 20 && v <= 400) actions.setBpm(v);
         break;
       }
-      case "save":
-        if (parts[1]) fetch(`${baseUrl}/patterns/${parts[1]}`, { method: "POST" });
+      case "save": {
+        const name = parts[1];
+        if (!name) {
+          actions.addLog("Usage: /save <name> [#tag1 #tag2]");
+          return;
+        }
+        const tags = parts.slice(2)
+          .filter(p => p.startsWith("#"))
+          .map(p => p.slice(1));
+        fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags }),
+        }).then(() => actions.addLog(`Saved "${name}"${tags.length ? `  [${tags.join(", ")}]` : ""}`));
         break;
-      case "load":
-        if (parts[1]) fetch(`${baseUrl}/patterns/${parts[1]}`);
+      }
+      case "load": {
+        if (parts[1]) {
+          fetch(`${baseUrl}/patterns/${encodeURIComponent(parts[1])}`)
+            .then(r => { if (!r.ok) actions.addLog(`Pattern "${parts[1]}" not found`); });
+        }
         break;
+      }
+      case "patterns": {
+        const filterTag = parts[1]?.startsWith("#") ? parts[1].slice(1) : null;
+        fetch(`${baseUrl}/patterns`)
+          .then(r => r.json())
+          .then((d: { patterns: Array<{ name: string; tags: string[] }> }) => {
+            const list = filterTag
+              ? d.patterns.filter(p => p.tags.includes(filterTag))
+              : d.patterns;
+            if (list.length === 0) {
+              actions.addLog(filterTag ? `No patterns tagged #${filterTag}.` : "No saved patterns.");
+            } else {
+              list.forEach(p =>
+                actions.addLog(`  ${p.name}${p.tags.length ? `  [${p.tags.join(", ")}]` : ""}`)
+              );
+            }
+          });
+        break;
+      }
       case "fill": {
         const name = parts[1];
         if (!name) {

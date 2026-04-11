@@ -66,7 +66,7 @@ def test_get_patterns_empty(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.get("/patterns")
     assert resp.status_code == 200
-    assert resp.json() == {"names": []}
+    assert resp.json() == {"patterns": []}
 
 
 def test_save_and_load_pattern(tmp_path):
@@ -76,7 +76,8 @@ def test_save_and_load_pattern(tmp_path):
     assert (tmp_path / "test-beat.json").exists()
 
     list_resp = client.get("/patterns")
-    assert "test-beat" in list_resp.json()["names"]
+    names = [p["name"] for p in list_resp.json()["patterns"]]
+    assert "test-beat" in names
 
     load_resp = client.get("/patterns/test-beat")
     assert load_resp.status_code == 200
@@ -321,6 +322,35 @@ def test_ws_receives_pattern_changed_event(tmp_path):
     with client.websocket_connect("/ws") as ws:
         server_module._bus.emit("pattern_changed", {})
         import time; time.sleep(0.05)
+
+
+def test_save_pattern_with_tags(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/patterns/groove", json={"tags": ["dark", "kick-heavy"]})
+    assert resp.status_code == 200
+    data = json.loads((tmp_path / "groove.json").read_text())
+    assert data["tags"] == ["dark", "kick-heavy"]
+    assert "pattern" in data
+    assert "saved_at" in data
+
+
+def test_list_patterns_includes_tags(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/patterns/groove", json={"tags": ["dark"]})
+    client.post("/patterns/simple", json={})
+    resp = client.get("/patterns")
+    assert resp.status_code == 200
+    names = {item["name"]: item for item in resp.json()["patterns"]}
+    assert names["groove"]["tags"] == ["dark"]
+    assert names["simple"]["tags"] == []
+
+
+def test_load_old_format_pattern_backwards_compat(tmp_path):
+    old = {k: [0] * 16 for k in ["kick","snare","tom","clap","bell","hihat","openhat","cymbal"]}
+    (tmp_path / "legacy.json").write_text(json.dumps(old))
+    client = _make_test_client(tmp_path)
+    resp = client.get("/patterns/legacy")
+    assert resp.status_code == 200
 
 
 def test_post_fill_queues_saved_pattern(tmp_path):

@@ -68,8 +68,17 @@ class StateResponse(BaseModel):
     pattern_length: int = 16
 
 
+class SavePatternRequest(BaseModel):
+    tags: list[str] = []
+
+
+class PatternEntry(BaseModel):
+    name: str
+    tags: list[str]
+
+
 class PatternListResponse(BaseModel):
-    names: list[str]
+    patterns: list[PatternEntry]
 
 
 class MuteRequest(BaseModel):
