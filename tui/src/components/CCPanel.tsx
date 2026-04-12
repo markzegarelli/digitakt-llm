@@ -1,14 +1,15 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { DigitaktState, TrackName, CCParam } from "../types.js";
-import { TRACK_NAMES, CC_PARAMS } from "../types.js";
+import type { DigitaktState, TrackName, CCParamDef } from "../types.js";
+import { TRACK_NAMES } from "../types.js";
 
 interface CCPanelProps {
+  ccParams: CCParamDef[];
   trackCC: DigitaktState["track_cc"];
   trackVelocity: DigitaktState["track_velocity"];
   stepCC: DigitaktState["step_cc"];
   selectedTrack: number;  // 0–7
-  selectedParam: number;  // 0=velocity, 1–8=CC params
+  selectedParam: number;  // 0=velocity, 1–N=CC params
   isFocused: boolean;
   stepMode: boolean;
   selectedStep: number;        // 0–15 (only relevant when stepMode=true)
@@ -29,6 +30,7 @@ function stepCell(value: number | null | undefined): string {
 }
 
 export function CCPanel({
+  ccParams,
   trackCC,
   trackVelocity,
   stepCC,
@@ -42,13 +44,13 @@ export function CCPanel({
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
   const cc = trackCC[trackName];
 
-  // Row 0 = velocity; rows 1–8 = CC_PARAMS
+  // Row 0 = velocity; rows 1–N = ccParams
   const rows: Array<{ key: string; label: string; value: number }> = [
     { key: "velocity", label: "velocity", value: trackVelocity[trackName] ?? 127 },
-    ...CC_PARAMS.map((param) => ({
-      key: param,
-      label: param,
-      value: cc?.[param as CCParam] ?? 64,
+    ...ccParams.map((def) => ({
+      key: def.name,
+      label: def.name,
+      value: cc?.[def.name] ?? def.default,
     })),
   ];
 
@@ -73,7 +75,7 @@ export function CCPanel({
         const isStepEditing = isSelected && isFocused && stepMode && i > 0; // velocity has no step CC
 
         if (isStepEditing) {
-          const param = CC_PARAMS[i - 1] as CCParam;
+          const param = ccParams[i - 1]?.name ?? "";
           const stepOverrides = stepCC?.[trackName]?.[param] ?? null;
           // What value is the current step actually set to (stored, not preview)
           const storedValue = stepOverrides?.[selectedStep] ?? null;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DigitaktState, TrackName, CCParam } from "../types.js";
-import { TRACK_NAMES, CC_PARAMS } from "../types.js";
+import type { DigitaktState, TrackName, CCParam, CCParamDef } from "../types.js";
+import { TRACK_NAMES } from "../types.js";
 
 const DEFAULT_STATE: DigitaktState = {
   current_pattern: Object.fromEntries(
@@ -13,11 +13,9 @@ const DEFAULT_STATE: DigitaktState = {
   fill_queued: false,
   is_playing: false,
   midi_port_name: null,
+  ccParams: [] as CCParamDef[],
   track_cc: Object.fromEntries(
-    TRACK_NAMES.map((t) => [
-      t,
-      Object.fromEntries(CC_PARAMS.map((p) => [p, 64])),
-    ])
+    TRACK_NAMES.map((t) => [t, {} as Record<string, number>])
   ) as DigitaktState["track_cc"],
   track_muted: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, false])
@@ -109,11 +107,26 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({})) as { detail?: unknown };
+        const detail = Array.isArray(errBody.detail)
+          ? (errBody.detail as Array<{ msg: string }>).map((e) => e.msg).join("; ")
+          : ((errBody.detail as string | undefined) ?? `${method} ${path} → ${res.status}`);
+        throw new Error(detail);
+      }
       return res.json() as Promise<unknown>;
     },
     [baseUrl]
   );
+
+  const fetchCCParams = useCallback(async () => {
+    try {
+      const data = await api("GET", "/cc-params") as { params: CCParamDef[] };
+      setState((prev) => ({ ...prev, ccParams: data.params }));
+    } catch {
+      // Server not ready yet — will retry on reconnect
+    }
+  }, [api]);
 
   const fetchState = useCallback(async () => {
     try {
@@ -146,7 +159,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
-    ws.onopen = () => { fetchState(); };
+    ws.onopen = () => { fetchState(); fetchCCParams(); };
 
     ws.onmessage = (evt) => {
       try {
@@ -302,7 +315,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     };
 
     ws.onerror = () => { ws.close(); };
-  }, [baseUrl, fetchState]);
+  }, [baseUrl, fetchState, fetchCCParams]);
 
   useEffect(() => {
     connect();

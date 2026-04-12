@@ -26,17 +26,20 @@ TRACK_CHANNELS: dict[str, int] = {
     "cymbal":  7,  # ch 8 — Cymbal
 }
 
-CC_MAP: dict[str, int] = {
-    "tune":      16,   # Source tune
-    "filter":    74,   # Filter frequency
-    "resonance": 75,   # Filter resonance
-    "attack":    78,   # Amp attack time
-    "hold":      79,   # Amp hold time
-    "decay":     80,   # Amp decay time
-    "volume":     7,   # Amp volume
-    "reverb":    83,   # Amp reverb send
-    "delay":     82,   # Amp delay send
+_CC_PARAM_DEFS: dict[str, dict] = {
+    "tune":      {"cc": 16, "default": 64},   # Source tune
+    "filter":    {"cc": 74, "default": 127},  # Filter frequency
+    "resonance": {"cc": 75, "default": 0},    # Filter resonance
+    "attack":    {"cc": 78, "default": 0},    # Amp attack time
+    "hold":      {"cc": 79, "default": 0},    # Amp hold time
+    "decay":     {"cc": 80, "default": 64},   # Amp decay time
+    "volume":    {"cc":  7, "default": 100},  # Amp volume
+    "reverb":    {"cc": 83, "default": 0},    # Amp reverb send
+    "delay":     {"cc": 82, "default": 0},    # Amp delay send
 }
+
+CC_MAP: dict[str, int] = {k: v["cc"] for k, v in _CC_PARAM_DEFS.items()}
+CC_DEFAULTS: dict[str, int] = {k: v["default"] for k, v in _CC_PARAM_DEFS.items()}
 
 
 def list_ports() -> list[str]:

@@ -4,11 +4,13 @@ export const TRACK_NAMES = [
 
 export type TrackName = typeof TRACK_NAMES[number];
 
-export const CC_PARAMS = [
-  "tune", "filter", "resonance", "attack", "decay", "volume", "reverb", "delay",
-] as const;
+export interface CCParamDef {
+  name: string;
+  cc: number;
+  default: number;
+}
 
-export type CCParam = typeof CC_PARAMS[number];
+export type CCParam = string;
 
 export interface DigitaktState {
   current_pattern: Record<TrackName, number[]>;
@@ -19,11 +21,12 @@ export interface DigitaktState {
   fill_queued: string | false;
   is_playing: boolean;
   midi_port_name: string | null;
-  track_cc: Record<TrackName, Record<CCParam, number>>;
+  ccParams: CCParamDef[];
+  track_cc: Record<TrackName, Record<string, number>>;
   track_muted: Record<TrackName, boolean>;
   track_velocity: Record<TrackName, number>;
   track_pitch: Record<string, number>;
-  step_cc: Record<TrackName, Partial<Record<CCParam, (number | null)[]>>> | null;
+  step_cc: Record<TrackName, Partial<Record<string, (number | null)[]>>> | null;
   generation_status: "idle" | "generating" | "failed";
   generation_error: string | null;
   connected: boolean;

@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import threading
 import time
 from dataclasses import dataclass, field
+
+from core.midi_utils import CC_DEFAULTS as _DEFAULT_CC_PARAMS
+from core.fill_fsm import FillFSM
 
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
@@ -23,12 +27,6 @@ EMPTY_PATTERN: dict = {track: [0] * 16 for track in ["kick", "snare", "tom", "cl
 
 _HISTORY_MAX = 20
 
-
-_DEFAULT_CC_PARAMS: dict[str, int] = {
-    "tune": 64, "filter": 127, "resonance": 0,
-    "attack": 0, "hold": 0, "decay": 64, "volume": 100,
-    "reverb": 0, "delay": 0,
-}
 
 
 @dataclass
@@ -61,10 +59,14 @@ class AppState:
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+    _fill_fsm: FillFSM = field(
+        default_factory=FillFSM, init=False, repr=False
+    )
 
     def queue_fill(self, pattern: dict) -> None:
         with self._lock:
-            self.fill_pattern = pattern
+            self.fill_pattern = pattern  # legacy field kept for compat
+            self._fill_fsm.queue(pattern)
 
     def update_cc(self, track: str, param: str, value: int) -> None:
         with self._lock:
@@ -117,3 +119,80 @@ class AppState:
                 })
                 if len(self.pattern_history) > _HISTORY_MAX:
                     self.pattern_history.pop(0)
+
+    # ── Named write methods (thread-safe setters) ─────────────────────────
+
+    def set_bpm(self, bpm: float) -> None:
+        with self._lock:
+            self.bpm = bpm
+
+    def set_playing(self, playing: bool) -> None:
+        with self._lock:
+            self.is_playing = playing
+
+    def set_pattern_length(self, steps: int) -> None:
+        with self._lock:
+            self.pattern_length = steps
+
+    def update_pitch(self, track: str, value: int) -> None:
+        with self._lock:
+            self.track_pitch[track] = value
+
+    def queue_pattern(self, pattern: dict) -> None:
+        with self._lock:
+            self.pending_pattern = pattern
+
+    def reset(self, pattern: dict, bpm: float, prompt: str | None) -> None:
+        """Atomic bulk reset (used by /new)."""
+        with self._lock:
+            self.pending_pattern = copy.deepcopy(pattern)
+            self.bpm = bpm
+            self.last_prompt = prompt
+            for track in TRACK_NAMES:
+                self.track_muted[track] = False
+                self.track_cc[track] = dict(_DEFAULT_CC_PARAMS)
+                self.track_velocity[track] = 127
+            self.pending_mutes.clear()
+            self._fill_fsm = FillFSM()
+
+    # ── Bar-boundary logic (called only by the player loop) ───────────────
+
+    def apply_bar_boundary(self) -> dict:
+        """Apply all bar-boundary effects and return a side-effects dict.
+
+        Returns:
+            {
+                "mute_changes":    dict | None,
+                "pattern_changed": bool,
+                "fill_event":      "fill_started" | "fill_ended" | None,
+                "current_pattern": dict,
+            }
+        """
+        mute_changes = self.apply_pending_mutes()
+
+        # Pattern swap
+        pattern_changed = False
+        if self.pending_pattern is not None:
+            with self._lock:
+                self.current_pattern = self.pending_pattern
+                self.pending_pattern = None
+            pattern_changed = True
+
+        # Fill FSM advance (fill_fsm holds its own lock-free state;
+        # only the player calls apply_bar_boundary so no race here)
+        next_pattern, fill_event = self._fill_fsm.advance(self.current_pattern)
+        if fill_event == "fill_started":
+            self.current_pattern = next_pattern
+            # Keep legacy fields in sync for any code that still reads them
+            self._fill_active = True
+        elif fill_event == "fill_ended":
+            self.current_pattern = next_pattern
+            self._fill_active = False
+            self._pre_fill_pattern = None
+
+        return {
+            "mute_changes": mute_changes,
+            "pattern_changed": pattern_changed,
+            "fill_event": fill_event,
+            "current_pattern": self.current_pattern,
+        }
