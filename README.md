@@ -2,18 +2,34 @@
 
 Generate drum patterns on an Elektron Digitakt in real time using Claude Opus 4.6. Describe a vibe in plain English — the pattern plays immediately and loops until you change it.
 
+## Hardware Requirements
+
+- **Elektron Digitakt** (any firmware) connected via USB
+- USB MIDI cable or USB-B to USB-A cable (the Digitakt appears as a class-compliant MIDI device — no driver needed on macOS or Linux)
+
 ## Requirements
 
 - Python 3.11+
-- An Elektron Digitakt connected via USB
+- [Bun](https://bun.sh) ≥1.1
+- macOS or Linux (Windows untested)
 - An Anthropic API key
 
 ## Setup
 
 ```bash
+# Python backend
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+
+# Bun/Ink frontend
+cd tui && bun install && cd ..
+
+# Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
-digitakt-llm
+# or add it to a .env file: ANTHROPIC_API_KEY=sk-ant-...
+
+# Launch
+digitakt
 ```
 
 ## Usage
@@ -141,6 +157,10 @@ The FastAPI server starts automatically on `http://localhost:8000`.
 | `GET` | `/cc` | Current CC state for all tracks |
 | `WS` | `/ws` | Event stream (see below) |
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, test instructions, and PR conventions.
+
 ## Attaching a Frontend
 
 The WebSocket at `ws://localhost:8000/ws` pushes every internal event as JSON:
@@ -158,3 +178,7 @@ The WebSocket at `ws://localhost:8000/ws` pushes every internal event as JSON:
 ```
 
 `GET /state` returns the full `AppState` shape. Control playback with the REST endpoints above.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
