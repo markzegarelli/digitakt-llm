@@ -1,4 +1,0 @@
-{"type":"server-started","port":55619,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:55619","screen_dir":"/Users/markzegarelli/projects/digitakt_llm/.superpowers/brainstorm/3734-1775798106/content","state_dir":"/Users/markzegarelli/projects/digitakt_llm/.superpowers/brainstorm/3734-1775798106/state"}
-{"type":"screen-added","file":"/Users/markzegarelli/projects/digitakt_llm/.superpowers/brainstorm/3734-1775798106/content/activity-panel-layout.html"}
-{"type":"screen-added","file":"/Users/markzegarelli/projects/digitakt_llm/.superpowers/brainstorm/3734-1775798106/content/waiting.html"}
-{"type":"server-stopped","reason":"idle timeout"}
