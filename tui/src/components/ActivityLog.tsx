@@ -51,18 +51,21 @@ export function ActivityLog({ log, isFocused, maxVisible }: ActivityLogProps) {
   const canScrollUp   = clampedOffset < maxOffset;
   const canScrollDown = clampedOffset > 0;
 
+  // Pad to always render exactly maxVisible rows so the panel has a fixed height.
+  const padded: string[] = [
+    ...visible,
+    ...Array(Math.max(0, maxVisible - visible.length)).fill(""),
+  ];
+
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1} flexGrow={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
       <Text bold color={isFocused ? "cyan" : "gray"}>ACTIVITY</Text>
       {canScrollUp && (
         <Text color="gray">{`↑ ${maxOffset - clampedOffset} more`}</Text>
       )}
-      {visible.length === 0
-        ? <Text color="gray">no events yet</Text>
-        : visible.map((entry, i) => (
-            <Text key={i} color={getLogColor(entry)}>{entry}</Text>
-          ))
-      }
+      {padded.map((entry, i) => (
+        <Text key={i} color={entry ? getLogColor(entry) : undefined}>{entry || " "}</Text>
+      ))}
       {canScrollDown && (
         <Text color="gray">↓ scroll down</Text>
       )}

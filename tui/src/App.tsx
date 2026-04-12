@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useDigitakt } from "./hooks/useDigitakt.js";
 import { Header } from "./components/Header.js";
@@ -55,6 +55,7 @@ export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [state, actions] = useDigitakt(baseUrl);
+  const [, forceRedraw] = useReducer((x: number) => x + 1, 0);
 
   const [focus, setFocus]               = useState<FocusPanel>("pattern");
   const [patternTrack, setPatternTrack] = useState(0);
@@ -75,29 +76,29 @@ export function App({ baseUrl }: AppProps) {
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
-  // Deferred to next tick so Ink finishes the current render before we clear.
+  // After clearing, forceRedraw() ensures Ink repaints immediately.
   const prevGenStatus = useRef(state.generation_status);
   useEffect(() => {
     if (prevGenStatus.current === "generating" && state.generation_status !== "generating") {
-      const id = setTimeout(() => stdout?.write('\x1b[2J\x1b[3J\x1b[H'), 0);
+      const id = setTimeout(() => { stdout?.write('\x1b[2J\x1b[3J\x1b[H'); forceRedraw(); }, 0);
       prevGenStatus.current = state.generation_status;
       return () => clearTimeout(id);
     }
     prevGenStatus.current = state.generation_status;
-  }, [state.generation_status, stdout]);
+  }, [state.generation_status, stdout, forceRedraw]);
 
   // Clear when Prompt panel switches between compact and tall modes (answer
   // text, help, history, hint) to avoid ghost rows from the height difference.
-  // Only fires on actual transitions, not on initial mount.
+  // forceRedraw() after the clear ensures Ink repaints and the screen isn't left blank.
   const prevPanelKey = useRef<string>("");
   useEffect(() => {
     const key = `${answerText !== null}:${showHelp}:${showHistory}:${showLog}:${implementableHint}`;
     if (key !== prevPanelKey.current) {
       prevPanelKey.current = key;
-      const id = setTimeout(() => stdout?.write('\x1b[2J\x1b[3J\x1b[H'), 0);
+      const id = setTimeout(() => { stdout?.write('\x1b[2J\x1b[3J\x1b[H'); forceRedraw(); }, 0);
       return () => clearTimeout(id);
     }
-  }, [answerText, showHelp, showHistory, showLog, implementableHint, stdout]);
+  }, [answerText, showHelp, showHistory, showLog, implementableHint, stdout, forceRedraw]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -619,7 +620,7 @@ export function App({ baseUrl }: AppProps) {
             <ActivityLog
               log={state.log}
               isFocused={focus === "log"}
-              maxVisible={Math.max(8, (stdout?.rows ?? 24) - 10)}
+              maxVisible={Math.max(8, (stdout?.rows ?? 24) - 15)}
             />
           </Box>
         )}
