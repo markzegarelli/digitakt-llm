@@ -69,6 +69,7 @@ _ALL_EVENTS = [
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "cond_changed", "state_reset",
+    "ask_complete",
 ]
 
 
@@ -211,8 +212,9 @@ def set_cc_step(req: CCStepRequest):
 
 @app.post("/ask", response_model=AskResponse)
 def post_ask(req: AskRequest):
-    answer = _generator.answer_question(req.question)
-    return AskResponse(answer=answer)
+    answer, is_implementable = _generator.answer_question_with_classify(req.question)
+    _bus.emit("ask_complete", {"question": req.question, "answer": answer})
+    return AskResponse(answer=answer, is_implementable=is_implementable)
 
 
 @app.post("/mute", response_model=MuteResponse)

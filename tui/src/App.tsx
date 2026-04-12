@@ -71,22 +71,33 @@ export function App({ baseUrl }: AppProps) {
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
+  const [implementableHint, setImplementableHint] = useState(false);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
+  // Deferred to next tick so Ink finishes the current render before we clear.
   const prevGenStatus = useRef(state.generation_status);
   useEffect(() => {
     if (prevGenStatus.current === "generating" && state.generation_status !== "generating") {
-      stdout?.write('\x1b[2J\x1b[H');
+      const id = setTimeout(() => stdout?.write('\x1b[2J\x1b[3J\x1b[H'), 0);
+      prevGenStatus.current = state.generation_status;
+      return () => clearTimeout(id);
     }
     prevGenStatus.current = state.generation_status;
   }, [state.generation_status, stdout]);
 
   // Clear when Prompt panel switches between compact and tall modes (answer
-  // text, help, history) to avoid ghost rows from the height difference.
+  // text, help, history, hint) to avoid ghost rows from the height difference.
+  // Only fires on actual transitions, not on initial mount.
+  const prevPanelKey = useRef<string>("");
   useEffect(() => {
-    stdout?.write('\x1b[2J\x1b[H');
-  }, [answerText, showHelp, showHistory, showLog, stdout]);
+    const key = `${answerText !== null}:${showHelp}:${showHistory}:${showLog}:${implementableHint}`;
+    if (key !== prevPanelKey.current) {
+      prevPanelKey.current = key;
+      const id = setTimeout(() => stdout?.write('\x1b[2J\x1b[3J\x1b[H'), 0);
+      return () => clearTimeout(id);
+    }
+  }, [answerText, showHelp, showHistory, showLog, implementableHint, stdout]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -266,9 +277,11 @@ export function App({ baseUrl }: AppProps) {
         break;
       case "new":
         actions.callNew();
+        setImplementableHint(false);
         break;
       case "undo":
         actions.callUndo();
+        setImplementableHint(false);
         break;
       case "clear":
         actions.clearLog();
@@ -284,6 +297,7 @@ export function App({ baseUrl }: AppProps) {
       }
       case "gen": {
         if (lastAnswerRef.current) {
+          setImplementableHint(false);
           actions.generate(lastAnswerRef.current);
         } else {
           actions.addLog("✗ No ask response to generate from. Use /ask first.");
@@ -295,10 +309,11 @@ export function App({ baseUrl }: AppProps) {
         if (question) {
           setAskPending(true);
           setFocus("prompt");
-          actions.ask(question).then((answer) => {
+          actions.ask(question).then(({ answer, is_implementable }) => {
             setAskPending(false);
             lastAnswerRef.current = answer;
             setAnswerText(answer);
+            setImplementableHint(is_implementable);
           }).catch(() => {
             setAskPending(false);
             setAnswerText("Error: could not get answer. Check your API key and connection.");
@@ -348,15 +363,17 @@ export function App({ baseUrl }: AppProps) {
             const question = stripped.trim();
             setAskPending(true);
             setFocus("prompt");
-            actions.ask(question).then((answer) => {
+            actions.ask(question).then(({ answer, is_implementable }) => {
               setAskPending(false);
               lastAnswerRef.current = answer;
               setAnswerText(answer);
+              setImplementableHint(is_implementable);
             }).catch(() => {
               setAskPending(false);
               setAnswerText("Error: could not get answer. Check your API key and connection.");
             });
           } else {
+            setImplementableHint(false);
             actions.generate(stripped.trim());
           }
         }
@@ -552,6 +569,7 @@ export function App({ baseUrl }: AppProps) {
             currentStep={state.current_step}
             patternLength={state.pattern_length}
             condMap={(state.current_pattern as Record<string, unknown>)["cond"] as Record<string, (string | null)[]> | undefined}
+            probMap={(state.current_pattern as Record<string, unknown>)["prob"] as Record<string, number[]> | undefined}
             pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
@@ -579,6 +597,8 @@ export function App({ baseUrl }: AppProps) {
             showHistory={showHistory}
             historyItems={state.pattern_history ?? []}
             onClearHistory={() => setShowHistory(false)}
+            implementableHint={implementableHint}
+            onDismissHint={() => setImplementableHint(false)}
           />
           <Box paddingX={1}>
             <Text color="gray">

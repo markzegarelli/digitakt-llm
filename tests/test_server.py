@@ -501,3 +501,40 @@ def test_post_new_resets_cc_and_velocity(tmp_path):
     for track in TRACK_NAMES:
         assert server_module._state.track_cc[track] == dict(_DEFAULT_CC_PARAMS)
         assert server_module._state.track_velocity[track] == 127
+
+
+# ── /ask — ask_complete event and is_implementable ─────────────────────────
+
+def test_post_ask_emits_ask_complete_event(tmp_path):
+    client = _make_test_client(tmp_path)
+    received = []
+    server_module._bus.subscribe("ask_complete", lambda p: received.append(p))
+
+    # Mock both answer_question (returns str) and classify (returns bool)
+    server_module._generator.answer_question = MagicMock(return_value="Use /bpm to set tempo")
+    server_module._generator.classify_as_implementable = MagicMock(return_value=False)
+    # answer_question_with_classify delegates to the two above
+    server_module._generator.answer_question_with_classify = MagicMock(
+        return_value=("Use /bpm to set tempo", False)
+    )
+
+    resp = client.post("/ask", json={"question": "How do I set BPM?"})
+    assert resp.status_code == 200
+    assert resp.json()["answer"] == "Use /bpm to set tempo"
+    assert resp.json()["is_implementable"] is False
+    assert len(received) == 1
+    assert received[0]["answer"] == "Use /bpm to set tempo"
+    assert received[0]["question"] == "How do I set BPM?"
+
+
+def test_post_ask_returns_is_implementable_true(tmp_path):
+    client = _make_test_client(tmp_path)
+    server_module._generator.answer_question_with_classify = MagicMock(
+        return_value=("Four-on-the-floor at 130 BPM with snare on 5 and 13", True)
+    )
+
+    resp = client.post("/ask", json={"question": "give me a basic techno beat"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_implementable"] is True
+    assert "130 BPM" in data["answer"]

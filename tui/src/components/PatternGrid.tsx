@@ -11,6 +11,7 @@ interface PatternGridProps {
   currentStep: number | null;
   patternLength: number;
   condMap?: Record<string, (string | null)[]>;
+  probMap?: Record<string, number[]>;
   pendingMuteTracks: Set<TrackName>;
 }
 
@@ -19,7 +20,7 @@ const LABELS: Record<TrackName, string> = {
   bell:    "BELL ", hihat:   "HIHAT", openhat: "OPHAT", cymbal: "CYMBL",
 };
 
-function StepDot({ velocity, isMuted, isActive, cond }: { velocity: number; isMuted: boolean; isActive: boolean; cond: string | null }) {
+function StepDot({ velocity, isMuted, isActive, cond, prob = 100 }: { velocity: number; isMuted: boolean; isActive: boolean; cond: string | null; prob?: number }) {
   const hasCond = cond !== null;
   const marker = velocity > 0 ? (hasCond ? "◆" : "●") : (hasCond ? "◇" : "·");
   const suffix = cond === "1:2" ? "₁" : cond === "not:2" ? "ⁿ" : cond === "fill" ? "f" : "";
@@ -29,14 +30,19 @@ function StepDot({ velocity, isMuted, isActive, cond }: { velocity: number; isMu
   }
   if (velocity === 0) return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
   if (isMuted)        return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
-  const color = velocity >= 101 ? "white" : velocity >= 64 ? "cyan" : "blue";
+  // Color-code by probability when step is active (velocity > 0)
+  let color: string;
+  if (prob < 50)       color = "red";
+  else if (prob < 75)  color = "magenta";
+  else if (prob < 100) color = "yellow";
+  else                 color = velocity >= 101 ? "white" : velocity >= 64 ? "cyan" : "blue";
   return <><Text color={color}>{marker}</Text><Text color="magenta">{suffix}</Text></>;
 }
 
 // Non-step chars in each row: border(2) + paddingX(2) + prefix(10) + suffix(10)
 const OVERHEAD = 24;
 
-export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength, condMap, pendingMuteTracks }: PatternGridProps) {
+export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, currentStep, patternLength, condMap, probMap, pendingMuteTracks }: PatternGridProps) {
   const { stdout } = useStdout();
   const termCols = stdout?.columns ?? 80;
   // Each step column: fit available space evenly, minimum 2, maximum 3
@@ -73,9 +79,10 @@ export function PatternGrid({ pattern, trackMuted, selectedTrack, isFocused, cur
             <Text>{"   "}</Text>
             {steps.map((vel, step) => {
               const cond = condMap?.[track]?.[step];
+              const prob = probMap?.[track]?.[step] ?? 100;
               return (
                 <Box key={step} width={colWidth}>
-                  <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} cond={cond ?? null} />
+                  <StepDot velocity={vel} isMuted={muted} isActive={currentStep === step} cond={cond ?? null} prob={prob} />
                 </Box>
               );
             })}

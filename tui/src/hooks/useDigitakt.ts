@@ -60,6 +60,11 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
     case "state_reset":          return "state reset";
+    case "ask_complete": {
+      const ans = (data["answer"] as string) ?? "";
+      const preview = ans.length > 80 ? ans.slice(0, 80) + "…" : ans;
+      return `ask: ${preview}`;
+    }
     default:                     return `${event}`;
   }
 }
@@ -79,7 +84,7 @@ export interface DigitaktActions {
   setVel(track: TrackName, step: number, value: number): Promise<void>;
   randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
   randbeat(): Promise<void>;
-  ask(question: string): Promise<string>;
+  ask(question: string): Promise<{ answer: string; is_implementable: boolean }>;
   callNew(): Promise<void>;
   callUndo(): Promise<void>;
   clearLog(): void;
@@ -277,6 +282,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "state_reset":
               fetchState();
               return { ...prev, log: newLog };
+            case "ask_complete":
+              return { ...prev, log: newLog };
             default:
               return { ...prev, log: newLog };
           }
@@ -375,8 +382,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     }, [api]),
 
     ask: useCallback(async (question: string) => {
-      const data = await api("POST", "/ask", { question }) as { answer: string };
-      return data.answer;
+      const data = await api("POST", "/ask", { question }) as { answer: string; is_implementable: boolean };
+      return { answer: data.answer, is_implementable: data.is_implementable ?? false };
     }, [api]),
 
     callNew: useCallback(async () => {

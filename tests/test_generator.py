@@ -275,6 +275,121 @@ def test_conversation_history_populated_after_ask():
     assert gen.conversation_history[1]["role"] == "assistant"
 
 
+# ── Feature 5: _strip_markdown ──────────────────────────────────────────────
+
+from core.generator import _strip_markdown
+
+
+def test_strip_markdown_removes_bold_stars():
+    assert _strip_markdown("Use **bold text** here") == "Use bold text here"
+
+
+def test_strip_markdown_removes_bold_underscores():
+    assert _strip_markdown("Use __bold text__ here") == "Use bold text here"
+
+
+def test_strip_markdown_removes_italic_star():
+    assert _strip_markdown("this is *italic*") == "this is italic"
+
+
+def test_strip_markdown_removes_italic_underscore():
+    assert _strip_markdown("this is _italic_") == "this is italic"
+
+
+def test_strip_markdown_removes_inline_code():
+    assert _strip_markdown("Run `bpm 140` to set tempo") == "Run bpm 140 to set tempo"
+
+
+def test_strip_markdown_converts_heading():
+    assert _strip_markdown("## Commands") == "COMMANDS:"
+
+
+def test_strip_markdown_converts_h1():
+    assert _strip_markdown("# Overview") == "OVERVIEW:"
+
+
+def test_strip_markdown_removes_horizontal_rule():
+    result = _strip_markdown("above\n---\nbelow")
+    assert "---" not in result
+    assert "above" in result
+    assert "below" in result
+
+
+def test_strip_markdown_leaves_plain_text_unchanged():
+    result = _strip_markdown("Use /bpm 140 to set tempo")
+    assert result == "Use /bpm 140 to set tempo"
+
+
+def test_strip_markdown_applied_in_answer_question():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client("Use **bpm** command to set tempo")
+    answer = gen.answer_question("How do I set BPM?")
+    assert "**" not in answer
+    assert "bpm" in answer
+
+
+# ── Feature 4: classify_as_implementable / answer_question_with_classify ────
+
+def test_classify_as_implementable_returns_true():
+    gen = Generator(AppState(), EventBus())
+    gen._client = _make_mock_client("YES")
+    assert gen.classify_as_implementable("Four-on-the-floor kick with snare on 2 and 4") is True
+
+
+def test_classify_as_implementable_returns_false():
+    gen = Generator(AppState(), EventBus())
+    gen._client = _make_mock_client("NO")
+    assert gen.classify_as_implementable("Use /bpm to set tempo") is False
+
+
+def test_classify_as_implementable_returns_false_on_exception():
+    gen = Generator(AppState(), EventBus())
+    gen._client = MagicMock()
+    gen._client.messages.create.side_effect = Exception("network error")
+    assert gen.classify_as_implementable("anything") is False
+
+
+def test_answer_question_with_classify_returns_tuple():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+    responses = ["Use /bpm 140 for techno", "YES"]
+    call_count = [0]
+
+    def mock_create(**kwargs):
+        msg = MagicMock()
+        msg.content = [MagicMock(text=responses[call_count[0]])]
+        call_count[0] += 1
+        return msg
+
+    gen._client = MagicMock()
+    gen._client.messages.create.side_effect = mock_create
+    answer, is_impl = gen.answer_question_with_classify("give me a techno beat")
+    assert "bpm" in answer.lower() or "140" in answer
+    assert is_impl is True
+
+
+def test_answer_question_with_classify_false_for_info():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+    responses = ["Use /bpm to set tempo", "NO"]
+    call_count = [0]
+
+    def mock_create(**kwargs):
+        msg = MagicMock()
+        msg.content = [MagicMock(text=responses[call_count[0]])]
+        call_count[0] += 1
+        return msg
+
+    gen._client = MagicMock()
+    gen._client.messages.create.side_effect = mock_create
+    answer, is_impl = gen.answer_question_with_classify("how do I set BPM?")
+    assert is_impl is False
+
+
 def test_conversation_history_populated_after_generation():
     state = AppState()
     bus = EventBus()
