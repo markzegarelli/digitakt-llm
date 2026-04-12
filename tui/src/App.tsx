@@ -7,49 +7,22 @@ import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
-import { TRACK_NAMES, CC_PARAMS } from "./types.js";
-
-// CC panel row indices: 0 = velocity, 1–8 = CC_PARAMS
-const CC_PANEL_MAX = CC_PARAMS.length; // 8, so valid range is 0–8
+import { TRACK_NAMES } from "./types.js";
 
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-// Map UI display labels → canonical API track names
-const TRACK_ALIASES: Record<string, TrackName> = {
-  ophat:  "openhat",
-  cymbl:  "cymbal",
-};
-
-function normalizeTrack(raw: string): string {
-  const lower = raw.toLowerCase();
-  return TRACK_ALIASES[lower] ?? lower;
-}
+// Track alias map: normalize shorthand display names to canonical API names
+const TRACK_ALIASES: Record<string, string> = { ophat: "openhat", cymbl: "cymbal" };
+const normalizeTrack = (raw: string) => TRACK_ALIASES[raw.toLowerCase()] ?? raw.toLowerCase();
 
 // Accept common shorthand for the two /random param values
-function normalizeRandomParam(raw: string): string {
+const normalizeRandomParam = (raw: string): string => {
   if (raw === "vel" || raw === "v" || raw === "velocity") return "velocity";
-  if (raw === "p")                                         return "prob";
+  if (raw === "p") return "prob";
   return raw;
-}
-
-function parseRange(rangeStr: string | undefined, param: string): [number, number] {
-  if (!rangeStr) {
-    return param === "prob" ? [0, 100] : [0, 127];
-  }
-  // Strip optional brackets and parse "lo-hi" format
-  const cleaned = rangeStr.replace(/^\[|\]$/g, "");
-  const dashIdx = cleaned.indexOf("-");
-  if (dashIdx > 0) {
-    const lo = parseInt(cleaned.slice(0, dashIdx), 10);
-    const hi = parseInt(cleaned.slice(dashIdx + 1), 10);
-    if (!isNaN(lo) && !isNaN(hi)) return [lo, hi];
-  }
-  const single = parseInt(cleaned, 10);
-  if (!isNaN(single)) return [single, param === "prob" ? 100 : 127];
-  return param === "prob" ? [0, 100] : [0, 127];
-}
+};
 
 export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
@@ -105,281 +78,133 @@ export function App({ baseUrl }: AppProps) {
     const parts = stripped.trim().split(/\s+/);
     const verb = parts[0]?.toLowerCase();
 
+    // Local-only commands (no API call)
     switch (verb) {
-      case "play":
-        actions.play();
+      case "quit": case "q":
+        exit(); setTimeout(() => process.exit(0), 50); return;
+      case "help": setShowHelp(true); setFocus("prompt"); return;
+      case "log":  setShowLog((v) => !v); return;
+      case "clear": actions.clearLog(); return;
+      case "history": setShowHistory(true); setFocus("prompt"); return;
+      case "mode": {
+        const m = parts[1]?.toLowerCase();
+        if (m === "chat" || m === "beat") setInputMode(m);
+        return;
+      }
+      case "gen":
+        if (lastAnswerRef.current) { setImplementableHint(false); actions.generate(lastAnswerRef.current); }
+        else actions.addLog("✗ No ask response to generate from. Use /ask first.");
+        return;
+      case "ask": {
+        const question = parts.slice(1).join(" ");
+        if (question) {
+          setAskPending(true); setFocus("prompt");
+          actions.ask(question)
+            .then(({ answer, is_implementable }) => {
+              setAskPending(false); lastAnswerRef.current = answer;
+              setAnswerText(answer); setImplementableHint(is_implementable);
+            })
+            .catch(() => { setAskPending(false); setAnswerText("Error: could not get answer."); });
+        }
+        return;
+      }
+    }
+
+    // Commands with API dispatch — Python validates, errors surface from response
+    const dispatchError = (err: Error) => actions.addLog(`✗ ${err.message}`);
+
+    switch (verb) {
+      case "play":  actions.play(); break;
+      case "stop":  actions.stop(); break;
+      case "new":   actions.callNew(); setImplementableHint(false); break;
+      case "undo":  actions.callUndo(); setImplementableHint(false); break;
+      case "randbeat": actions.randbeat(); break;
+      case "bpm":   actions.setBpm(parseFloat(parts[1] ?? "")).catch(dispatchError); break;
+      case "swing": actions.setSwing(parseInt(parts[1] ?? "", 10)).catch(dispatchError); break;
+      case "length":
+        fetch(`${baseUrl}/length`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ steps: parseInt(parts[1] ?? "", 10) }),
+        }).then(async r => { if (!r.ok) { const b = await r.json().catch(() => ({})) as { detail?: unknown }; actions.addLog(`✗ ${b.detail ?? r.status}`); } });
         break;
-      case "stop":
-        actions.stop();
+      case "prob":
+        actions.setProb(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
+          .catch(dispatchError); break;
+      case "vel":
+        actions.setVel(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
+          .catch(dispatchError); break;
+      case "gate":
+        actions.setGate(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
+          .catch(dispatchError); break;
+      case "pitch":
+        actions.setPitch(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
+          .catch(dispatchError); break;
+      case "cc":
+        actions.setCC(normalizeTrack(parts[1] ?? "") as TrackName, parts[2] as CCParam, parseInt(parts[3] ?? "", 10))
+          .catch(dispatchError); break;
+      case "cc-step":
+        actions.setCCStep(normalizeTrack(parts[1] ?? "") as TrackName, parts[2] as CCParam, parseInt(parts[3] ?? "", 10), parseInt(parts[4] ?? "", 10) === -1 ? null : parseInt(parts[4] ?? "", 10))
+          .catch(dispatchError); break;
+      case "cond":
+        actions.setCond(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10), parts[3] === "clear" ? null : (parts[3] ?? null))
+          .catch(dispatchError); break;
+      case "random": {
+        const param = normalizeRandomParam(parts[2] ?? "velocity");
+        const lo = parseInt(parts[3]?.replace(/^\[|\]$/g, "").split("-")[0] ?? "", 10) || (param === "prob" ? 0 : 0);
+        const hi = parseInt(parts[3]?.replace(/^\[|\]$/g, "").split("-")[1] ?? "", 10) || (param === "prob" ? 100 : 127);
+        actions.randomize(normalizeTrack(parts[1] ?? "all"), param, lo, hi).catch(dispatchError);
         break;
-      case "quit":
-      case "q":
-        exit();
-        setTimeout(() => process.exit(0), 50);
-        break;
-      case "bpm": {
-        const v = parseFloat(parts[1] ?? "");
-        if (!isNaN(v) && v >= 20 && v <= 400) actions.setBpm(v);
-        else actions.addLog("Usage: /bpm <20-400>");
+      }
+      case "mute": {
+        const trackArg = normalizeTrack(parts[1] ?? "") as TrackName;
+        const flag = parts[2]?.toLowerCase() ?? "toggle";
+        const muted = flag === "on" ? true : flag === "off" ? false : !state.track_muted[trackArg];
+        actions.setMuteQueued(trackArg, muted).catch(dispatchError);
         break;
       }
       case "save": {
         const name = parts[1];
-        if (!name) {
-          actions.addLog("Usage: /save <name> [#tag1 #tag2]");
-          return;
-        }
-        const tags = parts.slice(2)
-          .filter(p => p.startsWith("#"))
-          .map(p => p.slice(1));
-        fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tags }),
-        }).then(() => actions.addLog(`Saved "${name}"${tags.length ? `  [${tags.join(", ")}]` : ""}`));
-        break;
-      }
-      case "load": {
-        if (parts[1]) {
-          fetch(`${baseUrl}/patterns/${encodeURIComponent(parts[1])}`)
-            .then(r => { if (!r.ok) actions.addLog(`Pattern "${parts[1]}" not found`); });
+        if (name) {
+          const tags = parts.slice(2).filter(p => p.startsWith("#")).map(p => p.slice(1));
+          fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags }),
+          }).then(() => actions.addLog(`Saved "${name}"${tags.length ? `  [${tags.join(", ")}]` : ""}`));
         }
         break;
       }
+      case "load":
+        if (parts[1]) fetch(`${baseUrl}/patterns/${encodeURIComponent(parts[1])}`)
+          .then(r => { if (!r.ok) actions.addLog(`Pattern "${parts[1]}" not found`); });
+        break;
+      case "fill":
+        if (parts[1]) actions.queueFill(parts[1]).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
+        break;
       case "patterns": {
         const filterTag = parts[1]?.startsWith("#") ? parts[1].slice(1) : null;
-        fetch(`${baseUrl}/patterns`)
-          .then(r => r.json())
+        fetch(`${baseUrl}/patterns`).then(r => r.json())
           .then((d: { patterns: Array<{ name: string; tags: string[] }> }) => {
-            const list = filterTag
-              ? d.patterns.filter(p => p.tags.includes(filterTag))
-              : d.patterns;
-            if (list.length === 0) {
-              actions.addLog(filterTag ? `No patterns tagged #${filterTag}.` : "No saved patterns.");
-            } else {
-              list.forEach(p =>
-                actions.addLog(`  ${p.name}${p.tags.length ? `  [${p.tags.join(", ")}]` : ""}`)
-              );
-            }
+            const list = filterTag ? d.patterns.filter(p => p.tags.includes(filterTag)) : d.patterns;
+            if (list.length === 0) actions.addLog(filterTag ? `No patterns tagged #${filterTag}.` : "No saved patterns.");
+            else list.forEach(p => actions.addLog(`  ${p.name}${p.tags.length ? `  [${p.tags.join(", ")}]` : ""}`));
           });
-        break;
-      }
-      case "fill": {
-        const name = parts[1];
-        if (!name) {
-          actions.addLog("Usage: /fill <pattern-name>");
-          return;
-        }
-        actions.queueFill(name).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
-        break;
-      }
-      case "swing": {
-        const amount = parseInt(parts[1] ?? "", 10);
-        if (!isNaN(amount) && amount >= 0 && amount <= 100) actions.setSwing(amount);
-        break;
-      }
-      case "length": {
-        const steps = parseInt(parts[1] ?? "", 10);
-        if (![8, 16, 32].includes(steps)) {
-          actions.addLog("Usage: /length [8|16|32]");
-          return;
-        }
-        fetch(`${baseUrl}/length`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ steps }),
-        });
-        break;
-      }
-      case "prob": {
-        const track = normalizeTrack(parts[1] ?? "") as TrackName;
-        const step = parseInt(parts[2] ?? "", 10);
-        const value = parseInt(parts[3] ?? "", 10);
-        if (track && !isNaN(step) && !isNaN(value)) actions.setProb(track, step, value);
-        else actions.addLog("Usage: /prob <track> <step 1-16> <0-100>");
-        break;
-      }
-      case "vel": {
-        const track = normalizeTrack(parts[1] ?? "") as TrackName;
-        const step = parseInt(parts[2] ?? "", 10);
-        const value = parseInt(parts[3] ?? "", 10);
-        if (track && !isNaN(step) && !isNaN(value)) actions.setVel(track, step, value);
-        else actions.addLog("Usage: /vel <track> <step 1-16> <0-127>");
-        break;
-      }
-      case "gate": {
-        // /gate <track> <step 1-32> <0-100>
-        const [, trackArg, stepArg, valArg] = parts;
-        const stepN = parseInt(stepArg ?? "", 10);
-        const valN = parseInt(valArg ?? "", 10);
-        if (!trackArg || isNaN(stepN) || isNaN(valN)) {
-          actions.addLog("Usage: /gate <track> <step> <0-100>");
-          return;
-        }
-        actions.setGate(normalizeTrack(trackArg), stepN, valN)
-          .catch(() => actions.addLog("Error setting gate"));
-        break;
-      }
-      case "pitch": {
-        // /pitch <track> <0-127>
-        const [, trackArg, valArg] = parts;
-        const valN = parseInt(valArg ?? "", 10);
-        if (!trackArg || isNaN(valN) || valN < 0 || valN > 127) {
-          actions.addLog("Usage: /pitch <track> <0-127>");
-          return;
-        }
-        actions.setPitch(normalizeTrack(trackArg), valN)
-          .catch(() => actions.addLog("Error setting pitch"));
-        break;
-      }
-      case "cond": {
-        // /cond <track> <step 1-32> <1:2|not:2|fill|clear>
-        const [, trackArg, stepArg, condArg] = parts;
-        const stepN = parseInt(stepArg ?? "", 10);
-        if (!trackArg || isNaN(stepN) || !condArg) {
-          actions.addLog("Usage: /cond <track> <step> <1:2|not:2|fill|clear>");
-          return;
-        }
-        const condValue = condArg === "clear" ? null : condArg;
-        if (condValue !== null && !["1:2", "not:2", "fill"].includes(condValue)) {
-          actions.addLog("Condition must be: 1:2, not:2, fill, or clear");
-          return;
-        }
-        actions.setCond(normalizeTrack(trackArg), stepN, condValue)
-          .catch(() => actions.addLog("Error setting condition"));
-        break;
-      }
-      case "random": {
-        const track = normalizeTrack(parts[1] ?? "all");
-        const param = normalizeRandomParam(parts[2] ?? "velocity");
-        const [lo, hi] = parseRange(parts[3], param);
-        if (param === "velocity" || param === "prob") {
-          actions.randomize(track, param, lo, hi);
-        }
-        break;
-      }
-      case "randbeat":
-        actions.randbeat();
-        break;
-      case "log":
-        setShowLog((v) => !v);
-        break;
-      case "cc": {
-        const track = normalizeTrack(parts[1] ?? "") as TrackName;
-        const param = parts[2] as CCParam;
-        const value = parseInt(parts[3] ?? "", 10);
-        if (track && param && !isNaN(value)) actions.setCC(track, param, value);
-        else actions.addLog("Usage: /cc <track> <param> <0-127>");
-        break;
-      }
-      case "help":
-        setShowHelp(true);
-        setFocus("prompt");
-        break;
-      case "new":
-        actions.callNew();
-        setImplementableHint(false);
-        break;
-      case "undo":
-        actions.callUndo();
-        setImplementableHint(false);
-        break;
-      case "clear":
-        actions.clearLog();
-        break;
-      case "history":
-        setShowHistory(true);
-        setFocus("prompt");
-        break;
-      case "mode": {
-        const m = parts[1]?.toLowerCase();
-        if (m === "chat" || m === "beat") setInputMode(m);
-        break;
-      }
-      case "gen": {
-        if (lastAnswerRef.current) {
-          setImplementableHint(false);
-          actions.generate(lastAnswerRef.current);
-        } else {
-          actions.addLog("✗ No ask response to generate from. Use /ask first.");
-        }
-        break;
-      }
-      case "ask": {
-        const question = parts.slice(1).join(" ");
-        if (question) {
-          setAskPending(true);
-          setFocus("prompt");
-          actions.ask(question).then(({ answer, is_implementable }) => {
-            setAskPending(false);
-            lastAnswerRef.current = answer;
-            setAnswerText(answer);
-            setImplementableHint(is_implementable);
-          }).catch(() => {
-            setAskPending(false);
-            setAnswerText("Error: could not get answer. Check your API key and connection.");
-          });
-        }
-        break;
-      }
-      case "cc-step": {
-        const track = normalizeTrack(parts[1] ?? "") as TrackName;
-        const param = parts[2] as CCParam;
-        const step = parseInt(parts[3] ?? "", 10);
-        const value = parseInt(parts[4] ?? "", 10);
-        if (track && param && !isNaN(step) && !isNaN(value)) {
-          actions.setCCStep(track, param, step, value === -1 ? null : value);
-        } else {
-          actions.addLog("Usage: /cc-step <track> <param> <step 1-16> <0-127|-1>");
-        }
-        break;
-      }
-      case "mute": {
-        // /mute <track> [on|off|toggle]  — bar-synced; applies at next loop boundary
-        const trackArg = normalizeTrack(parts[1] ?? "") as TrackName;
-        if (!trackArg) {
-          actions.addLog("Usage: /mute <track> [on|off|toggle]");
-          break;
-        }
-        const flag = parts[2]?.toLowerCase() ?? "toggle";
-        let muted: boolean;
-        if (flag === "on")          muted = true;
-        else if (flag === "off")    muted = false;
-        else if (flag === "toggle") muted = !state.track_muted[trackArg];
-        else {
-          actions.addLog("Usage: /mute <track> [on|off|toggle]");
-          break;
-        }
-        actions.setMuteQueued(trackArg, muted)
-          .catch(() => actions.addLog("Error setting mute"));
         break;
       }
       default:
-        if (cmd.startsWith("/")) {
-          actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);
-          return;
-        }
+        if (cmd.startsWith("/")) { actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`); return; }
         if (stripped.trim()) {
           if (inputMode === "chat") {
-            const question = stripped.trim();
-            setAskPending(true);
-            setFocus("prompt");
-            actions.ask(question).then(({ answer, is_implementable }) => {
-              setAskPending(false);
-              lastAnswerRef.current = answer;
-              setAnswerText(answer);
-              setImplementableHint(is_implementable);
-            }).catch(() => {
-              setAskPending(false);
-              setAnswerText("Error: could not get answer. Check your API key and connection.");
-            });
-          } else {
-            setImplementableHint(false);
-            actions.generate(stripped.trim());
-          }
+            setAskPending(true); setFocus("prompt");
+            actions.ask(stripped.trim())
+              .then(({ answer, is_implementable }) => {
+                setAskPending(false); lastAnswerRef.current = answer;
+                setAnswerText(answer); setImplementableHint(is_implementable);
+              })
+              .catch(() => { setAskPending(false); setAnswerText("Error: could not get answer."); });
+          } else { setImplementableHint(false); actions.generate(stripped.trim()); }
         }
     }
-  }, [actions, baseUrl, exit, inputMode]);
+  }, [actions, baseUrl, exit, inputMode, state.track_muted]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
@@ -450,7 +275,7 @@ export function App({ baseUrl }: AppProps) {
     if (focus === "cc") {
       if (ccStepMode) {
         const track = TRACK_NAMES[ccTrack] as TrackName;
-        const param = CC_PARAMS[ccParam - 1] as CCParam;
+        const param = state.ccParams[ccParam - 1]?.name ?? "";
 
         // Commit number buffer helper
         const commitBuffer = (buf: string) => {
@@ -520,8 +345,8 @@ export function App({ baseUrl }: AppProps) {
       }
 
       // Normal CC panel navigation
-      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, CC_PANEL_MAX));
-      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, CC_PANEL_MAX));
+      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, state.ccParams.length));
+      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, state.ccParams.length));
 
       if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
       if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
@@ -544,9 +369,9 @@ export function App({ baseUrl }: AppProps) {
             actions.setVelocity(track, clamp(current + sign, 0, 127));
           }
         } else {
-          const param = CC_PARAMS[ccParam - 1];
+          const param = state.ccParams[ccParam - 1]?.name;
           if (track && param) {
-            const current = state.track_cc[track][param as CCParam];
+            const current = state.track_cc[track][param] ?? 64;
             actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
           }
         }
@@ -582,6 +407,7 @@ export function App({ baseUrl }: AppProps) {
             pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
+            ccParams={state.ccParams}
             trackCC={state.track_cc}
             trackVelocity={state.track_velocity}
             stepCC={state.step_cc}

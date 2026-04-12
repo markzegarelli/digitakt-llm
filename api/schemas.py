@@ -166,6 +166,16 @@ class CondResponse(BaseModel):
     value: str | None
 
 
+class CCParamEntry(BaseModel):
+    name: str
+    cc: int
+    default: int
+
+
+class CCParamsResponse(BaseModel):
+    params: list[CCParamEntry]
+
+
 class AskRequest(BaseModel):
     question: str
 

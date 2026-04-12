@@ -28,6 +28,7 @@ from api.schemas import (
     GateRequest, GateResponse,
     PitchRequest, PitchResponse,
     CondRequest, CondResponse,
+    CCParamEntry, CCParamsResponse,
 )
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
@@ -35,7 +36,8 @@ from cli.commands import (
     apply_gate_step, apply_cond_step,
 )
 from core.events import EventBus
-from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc
+from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
+from core.mutator import PatternMutator
 from core.state import AppState, TRACK_NAMES, _DEFAULT_CC_PARAMS
 from core.tracing import tracer
 
@@ -59,6 +61,7 @@ _state: AppState | None = None
 _bus: EventBus | None = None
 _player = None
 _generator = None
+_mutator: PatternMutator | None = None
 _patterns_dir: str = "patterns"
 _ws_clients: Set[WebSocket] = set()
 
@@ -74,11 +77,12 @@ _ALL_EVENTS = [
 
 
 def init(state: AppState, bus: EventBus, player, generator, patterns_dir: str = "patterns") -> None:
-    global _state, _bus, _player, _generator, _patterns_dir
+    global _state, _bus, _player, _generator, _mutator, _patterns_dir
     _state = state
     _bus = bus
     _player = player
     _generator = generator
+    _mutator = PatternMutator(state, player, bus)
     _patterns_dir = patterns_dir
     os.makedirs(_patterns_dir, exist_ok=True)
 
@@ -192,6 +196,14 @@ def set_cc(req: CCRequest):
     return CCResponse(track=req.track, param=req.param, value=req.value)
 
 
+@app.get("/cc-params", response_model=CCParamsResponse)
+def get_cc_params():
+    return CCParamsResponse(params=[
+        CCParamEntry(name=k, cc=v["cc"], default=v["default"])
+        for k, v in _CC_PARAM_DEFS.items()
+    ])
+
+
 @app.get("/cc")
 def get_cc():
     return _state.track_cc
@@ -204,9 +216,11 @@ def set_cc_step(req: CCStepRequest):
     if req.param not in CC_MAP:
         raise HTTPException(422, f"Unknown param: {req.param}")
     value = None if req.value == -1 else req.value
-    new_pattern = apply_cc_step(_state.current_pattern, req.track, req.param, req.step - 1, value)
-    _state.current_pattern = new_pattern
-    _bus.emit("cc_step_changed", {"track": req.track, "param": req.param, "step": req.step, "value": req.value})
+    _mutator.apply(
+        lambda p: apply_cc_step(p, req.track, req.param, req.step - 1, value),
+        event="cc_step_changed",
+        payload={"track": req.track, "param": req.param, "step": req.step, "value": req.value},
+    )
     return {"track": req.track, "param": req.param, "step": req.step, "value": req.value}
 
 
@@ -248,34 +262,41 @@ def set_velocity(req: VelocityRequest):
 def set_prob(req: ProbRequest):
     if req.track not in TRACK_NAMES:
         raise HTTPException(422, f"Unknown track: {req.track}")
-    new_pattern = apply_prob_step(_state.current_pattern, req.track, req.step - 1, req.value)
-    _state.current_pattern = new_pattern
-    _player.queue_pattern(new_pattern)
-    _bus.emit("prob_changed", {"track": req.track, "step": req.step, "value": req.value})
+    _mutator.apply(
+        lambda p: apply_prob_step(p, req.track, req.step - 1, req.value),
+        event="prob_changed",
+        payload={"track": req.track, "step": req.step, "value": req.value},
+    )
     return {"track": req.track, "step": req.step, "value": req.value}
 
 
 @app.post("/swing")
 def set_swing(req: SwingRequest):
-    new_pattern = apply_swing(_state.current_pattern, req.amount)
-    _state.current_pattern = new_pattern
-    _player.queue_pattern(new_pattern)
-    _bus.emit("swing_changed", {"amount": req.amount})
+    _mutator.apply(
+        lambda p: apply_swing(p, req.amount),
+        event="swing_changed",
+        payload={"amount": req.amount},
+    )
     return {"amount": req.amount}
 
 
 @app.post("/length", response_model=LengthResponse)
 def set_length(req: LengthRequest):
-    _state.pattern_length = req.steps
-    # Resize current_pattern to match new length (pad with 0 or truncate)
-    for track in TRACK_NAMES:
-        cur = _state.current_pattern.get(track, [])
-        if len(cur) < req.steps:
-            _state.current_pattern[track] = cur + [0] * (req.steps - len(cur))
-        elif len(cur) > req.steps:
-            _state.current_pattern[track] = cur[:req.steps]
+    _state.set_pattern_length(req.steps)
+
+    def _resize(p: dict) -> dict:
+        result = dict(p)
+        for track in TRACK_NAMES:
+            cur = result.get(track, [])
+            if len(cur) < req.steps:
+                result[track] = cur + [0] * (req.steps - len(cur))
+            elif len(cur) > req.steps:
+                result[track] = cur[:req.steps]
+        return result
+
+    new_pattern = _mutator.apply(_resize, mode="none")
     _bus.emit("length_changed", {"steps": req.steps})
-    _bus.emit("pattern_changed", {"pattern": _state.current_pattern, "prompt": _state.last_prompt or ""})
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
     return LengthResponse(steps=req.steps)
 
 
@@ -283,20 +304,22 @@ def set_length(req: LengthRequest):
 def set_vel(req: VelRequest):
     if req.track not in TRACK_NAMES:
         raise HTTPException(422, f"Unknown track: {req.track}")
-    new_pattern = apply_vel_step(_state.current_pattern, req.track, req.step - 1, req.value)
-    _state.current_pattern = new_pattern
-    _player.queue_pattern(new_pattern)
-    _bus.emit("vel_changed", {"track": req.track, "step": req.step, "value": req.value})
+    _mutator.apply(
+        lambda p: apply_vel_step(p, req.track, req.step - 1, req.value),
+        event="vel_changed",
+        payload={"track": req.track, "step": req.step, "value": req.value},
+    )
     return {"track": req.track, "step": req.step, "value": req.value}
 
 
 @app.post("/gate", response_model=GateResponse)
 async def set_gate(req: GateRequest):
     step_0 = req.step - 1
-    pattern = apply_gate_step(_state.current_pattern, req.track, step_0, req.value)
-    _state.update_pattern(pattern)
-    _player.queue_pattern(pattern)
-    _bus.emit("gate_changed", {"track": req.track, "step": req.step, "value": req.value})
+    _mutator.apply(
+        lambda p: apply_gate_step(p, req.track, step_0, req.value),
+        event="gate_changed",
+        payload={"track": req.track, "step": req.step, "value": req.value},
+    )
     return GateResponse(track=req.track, step=req.step, value=req.value)
 
 
@@ -314,10 +337,11 @@ async def set_cond(req: CondRequest):
     if req.value is not None and req.value not in ("1:2", "not:2", "fill"):
         raise HTTPException(status_code=422, detail=f"Invalid condition '{req.value}'")
     step_0 = req.step - 1
-    pattern = apply_cond_step(_state.current_pattern, req.track, step_0, req.value)
-    _state.update_pattern(pattern)
-    _player.queue_pattern(pattern)
-    _bus.emit("cond_changed", {"track": req.track, "step": req.step, "value": req.value})
+    _mutator.apply(
+        lambda p: apply_cond_step(p, req.track, step_0, req.value),
+        event="cond_changed",
+        payload={"track": req.track, "step": req.step, "value": req.value},
+    )
     return CondResponse(track=req.track, step=req.step, value=req.value)
 
 
@@ -328,13 +352,16 @@ def set_random(req: RandomRequest):
     if req.param not in ("velocity", "prob"):
         raise HTTPException(422, "param must be 'velocity' or 'prob'")
     tracks = list(TRACK_NAMES) if req.track == "all" else [req.track]
-    if req.param == "velocity":
-        new_pattern = apply_random_velocity(_state.current_pattern, tracks, req.lo, req.hi)
-    else:
-        new_pattern = apply_random_prob(_state.current_pattern, tracks, req.lo, req.hi)
-    _state.current_pattern = new_pattern
-    _player.queue_pattern(new_pattern)
-    _bus.emit("random_applied", {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi})
+    fn = (
+        (lambda p: apply_random_velocity(p, tracks, req.lo, req.hi))
+        if req.param == "velocity"
+        else (lambda p: apply_random_prob(p, tracks, req.lo, req.hi))
+    )
+    _mutator.apply(
+        fn,
+        event="random_applied",
+        payload={"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi},
+    )
     return {"track": req.track, "param": req.param, "lo": req.lo, "hi": req.hi}
 
 
