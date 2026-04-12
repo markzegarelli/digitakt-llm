@@ -179,3 +179,4 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
+    is_implementable: bool = False

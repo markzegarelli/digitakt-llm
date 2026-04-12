@@ -59,6 +59,8 @@ interface PromptProps {
   showHistory: boolean;
   historyItems: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
   onClearHistory(): void;
+  implementableHint: boolean;
+  onDismissHint(): void;
 }
 
 export function Prompt({
@@ -75,6 +77,8 @@ export function Prompt({
   showHistory,
   historyItems,
   onClearHistory,
+  implementableHint,
+  onDismissHint,
 }: PromptProps) {
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -207,6 +211,9 @@ export function Prompt({
         ? <Text color={askPending ? "yellow" : generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
         : <Text color="gray">{"type a prompt · /help for commands · Shift+Tab: toggle mode"}</Text>
       }
+      {implementableHint && (
+        <Text color="gray">{"→ Type /gen to generate this pattern"}</Text>
+      )}
     </Box>
   );
 }

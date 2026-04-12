@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 import threading
 import anthropic
 from core.state import AppState, TRACK_NAMES
@@ -135,6 +136,31 @@ _HELP_SYSTEM_PROMPT = (
     "PER-STEP CC: use cc-step to set CC values that apply only on a specific step. "
     "At the end of each 16-step loop, global CC values are restored automatically."
 )
+
+_CLASSIFY_SYSTEM_PROMPT = (
+    "You classify whether a response describes something implementable as a drum pattern. "
+    "Respond with ONLY 'YES' or 'NO'. "
+    "Say YES if the response describes a specific beat, rhythm, groove, pattern, or sequence "
+    "that could be programmed into a drum machine. "
+    "Say NO for general information, explanations, or tool usage instructions."
+)
+
+
+def _strip_markdown(text: str) -> str:
+    """Strip common markdown formatting for plain-terminal display."""
+    # Bold: **text** or __text__
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    # Italic: *text* or _text_ (apply after bold to avoid partial matches)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = re.sub(r'_(.+?)_', r'\1', text)
+    # Inline code: `text`
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    # Headings: ## text → TEXT:
+    text = re.sub(r'^#{1,6}\s+(.+)$', lambda m: m.group(1).upper() + ":", text, flags=re.MULTILINE)
+    # Horizontal rules
+    text = re.sub(r'^[-=]{3,}$', '', text, flags=re.MULTILINE)
+    return text.strip()
 
 
 _CONVERSATION_HISTORY_MAX = 10
@@ -388,9 +414,30 @@ class Generator:
             system=_HELP_SYSTEM_PROMPT,
             messages=messages,
         )
-        answer = response.content[0].text.strip()
+        answer = _strip_markdown(response.content[0].text)
 
         self._add_to_history("user", question)
         self._add_to_history("assistant", answer)
 
         return answer
+
+    def classify_as_implementable(self, answer: str) -> bool:
+        """Lightweight classifier: does this answer describe a programmable drum pattern?
+        Fails closed — returns False on any exception."""
+        try:
+            response = self._client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=5,
+                system=_CLASSIFY_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": answer}],
+            )
+            text = response.content[0].text.strip().upper()
+            return text.startswith("YES")
+        except Exception:
+            return False
+
+    def answer_question_with_classify(self, question: str) -> tuple[str, bool]:
+        """Answer a question and classify whether the response is an implementable pattern."""
+        answer = self.answer_question(question)
+        is_implementable = self.classify_as_implementable(answer)
+        return answer, is_implementable
