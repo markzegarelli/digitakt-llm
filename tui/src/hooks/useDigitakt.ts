@@ -32,6 +32,7 @@ const DEFAULT_STATE: DigitaktState = {
   generation_status: "idle",
   generation_error: null,
   connected: false,
+  midi_connected: false,
   log: [],
   current_step: null,
   pattern_history: [],
@@ -133,6 +134,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         step_cc: (pattern["step_cc"] as DigitaktState["step_cc"]) ?? null,
         pattern_history: (data["pattern_history"] as DigitaktState["pattern_history"]) ?? [],
         connected: true,
+        midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
     } catch {
       // Server not ready yet — reconnect loop will retry
@@ -246,6 +248,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 },
                 log: newLog,
               };
+            case "midi_disconnected":
+              return { ...prev, midi_connected: false, log: newLog };
             case "swing_changed":
               return { ...prev, swing: msg.data["amount"] as number, log: newLog };
             case "length_changed":

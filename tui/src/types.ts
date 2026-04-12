@@ -27,6 +27,7 @@ export interface DigitaktState {
   generation_status: "idle" | "generating" | "failed";
   generation_error: string | null;
   connected: boolean;
+  midi_connected: boolean;
   log: string[];
   current_step: number | null;
   pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;

@@ -18,28 +18,30 @@ interface HeaderProps {
   swing: number;
   isPlaying: boolean;
   midiPort: string | null;
-  connected: boolean;
+  midiConnected: boolean;
   generationStatus: "idle" | "generating" | "failed";
   fillActive: boolean;
   fillQueued: string | false;
   muteCount: number;
 }
 
-export function Header({ bpm, swing, isPlaying, midiPort, connected, generationStatus, fillActive, fillQueued, muteCount }: HeaderProps) {
+export function Header({ bpm, swing, isPlaying, midiPort, midiConnected, generationStatus, fillActive, fillQueued, muteCount }: HeaderProps) {
   const spinnerChar = useSpinner(generationStatus === "generating");
   const statusColor = isPlaying ? "green" : "red";
   const statusLabel = isPlaying ? "▶ PLAYING" : "■ STOPPED";
-  const connColor = connected ? "green" : "yellow";
 
   return (
     <Box borderStyle="single" borderColor="cyan" paddingX={1}>
       <Text bold color="cyan">DIGITAKT</Text>
       <Text>{"  "}</Text>
-      <Text color={connColor}>{connected ? "● CONNECTED" : "○ CONNECTING…"}</Text>
-      {midiPort && <><Text>{"  MIDI: "}</Text><Text color="magenta">{midiPort}</Text></>}
+      {midiConnected
+        ? <><Text color="green">{"● MIDI: "}</Text><Text color="magenta">{midiPort ?? ""}</Text></>
+        : <Text color="red">{"○ NO MIDI"}</Text>
+      }
       <Text>{"  BPM: "}</Text>
       <Text bold color="yellow">{bpm.toFixed(1)}</Text>
-      {swing > 0 && <><Text>{"  "}</Text><Text color="gray">{`swing:${swing}`}</Text></>}
+      <Text>{"  SWG: "}</Text>
+      <Text bold color="yellow">{swing}</Text>
       <Text>{"  "}</Text>
       <Text bold color={statusColor}>{statusLabel}</Text>
       {muteCount > 0 && <Text color="red">{`  [${muteCount}M]`}</Text>}
