@@ -5,6 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "digitakt-llm"
 version = "0.1.0"
+description = "Natural language drum pattern generation for the Elektron Digitakt via USB MIDI"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Mark Zegarelli" }]
 requires-python = ">=3.11"
 dependencies = [
     "mido>=1.3",
@@ -21,6 +25,10 @@ digitakt = "cli.tui_launcher:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.urls]
+Homepage = "https://github.com/markzegarelli/digitakt-llm"
+Issues = "https://github.com/markzegarelli/digitakt-llm/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

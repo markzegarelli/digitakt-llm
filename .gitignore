@@ -3,6 +3,19 @@
 .env.local
 .venv/
 __pycache__/
+*.pyc
+*.pyo
+*.so
 *.egg-info/
+dist/
+build/
 package-lock.json
 tui/node_modules/
+.DS_Store
+.vscode/
+.idea/
+
+# Internal planning / strategy docs
+VISION.md
+DIRECTION.md
+docs/superpowers/

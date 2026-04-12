@@ -1,7 +1,14 @@
 {
   "name": "digitakt-tui",
   "version": "0.1.0",
+  "description": "Bun/Ink terminal UI for digitakt-llm",
   "private": true,
+  "license": "MIT",
+  "author": "Mark Zegarelli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/markzegarelli/digitakt-llm"
+  },
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.tsx",
