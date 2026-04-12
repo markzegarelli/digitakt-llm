@@ -386,6 +386,14 @@ export function App({ baseUrl }: AppProps) {
       setTimeout(() => process.exit(0), 50);
       return;
     }
+    if (key.ctrl && input === "g") {
+      if (lastAnswerRef.current) {
+        setAnswerText(null);
+        setImplementableHint(false);
+        actions.generate(lastAnswerRef.current);
+      }
+      return;
+    }
     if (key.tab) {
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
@@ -553,7 +561,7 @@ export function App({ baseUrl }: AppProps) {
         swing={state.swing}
         isPlaying={state.is_playing}
         midiPort={state.midi_port_name}
-        connected={state.connected}
+        midiConnected={state.midi_connected}
         generationStatus={state.generation_status}
         fillActive={state.fill_active}
         fillQueued={state.fill_queued}
@@ -607,10 +615,11 @@ export function App({ baseUrl }: AppProps) {
           </Box>
         </Box>
         {showLog && (
-          <Box width={44}>
+          <Box width={Math.max(44, Math.round((stdout?.columns ?? 120) * 0.33))}>
             <ActivityLog
               log={state.log}
               isFocused={focus === "log"}
+              maxVisible={Math.max(8, (stdout?.rows ?? 24) - 10)}
             />
           </Box>
         )}

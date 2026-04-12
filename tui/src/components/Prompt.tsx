@@ -30,6 +30,8 @@ const HELP_LINES = [
   "  <bare text>                          generate beat (BEAT mode)",
   "                                       or ask Claude (CHAT mode)",
   "  ask <question>                       ask Claude (any mode)",
+  "  gen                                  generate from last /ask response",
+  "  Ctrl+G                               generate while viewing an /ask answer",
   "  mode [chat|beat]                     switch input mode",
   "",
   "── App ────────────────────────────────────────────────────────",
@@ -41,6 +43,8 @@ const HELP_LINES = [
   "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
   "",
   "CC panel: Tab to focus · Enter on param = step edit · Esc to exit",
+  "",
+  "── Trig Dot Colors ────────────────────────────────────────────",
   "",
   "Press any key to dismiss.",
 ];
@@ -150,7 +154,11 @@ export function Prompt({
     const lines = answerText.split("\n");
     return (
       <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-        <Text bold color="cyan">Answer  (press any key to dismiss)</Text>
+        <Text bold color="cyan">
+          {implementableHint
+            ? "Answer  (Ctrl+G to generate · any key to dismiss)"
+            : "Answer  (press any key to dismiss)"}
+        </Text>
         {lines.map((line, i) => (
           <Text key={i} color="white">{line || " "}</Text>
         ))}
@@ -187,6 +195,26 @@ export function Prompt({
         {HELP_LINES.map((line, i) => (
           <Text key={i} color={line.startsWith("──") ? "cyan" : line.startsWith("  ") ? "white" : "gray"}>{line || " "}</Text>
         ))}
+        <Box>
+          <Text>{"  "}</Text>
+          <Text color="blue">{"● "}</Text><Text color="white">{"vel<64 "}</Text>
+          <Text color="cyan">{"● "}</Text><Text color="white">{"vel 64-100 "}</Text>
+          <Text color="white">{"● "}</Text><Text color="white">{"vel>100"}</Text>
+          <Text color="gray">{"   (prob 100%)"}</Text>
+        </Box>
+        <Box>
+          <Text>{"  "}</Text>
+          <Text color="yellow">{"● "}</Text><Text color="white">{"prob 75-99%   "}</Text>
+          <Text color="magenta">{"● "}</Text><Text color="white">{"prob 50-74%   "}</Text>
+          <Text color="red">{"● "}</Text><Text color="white">{"prob <50%"}</Text>
+        </Box>
+        <Box>
+          <Text>{"  "}</Text>
+          <Text color="gray">{"· "}</Text><Text color="white">{"empty step   "}</Text>
+          <Text color="gray">{"● "}</Text><Text color="white">{"muted/off   "}</Text>
+          <Text color="yellow">{"● "}</Text><Text color="white">{"active (playhead)   "}</Text>
+          <Text color="magenta">{"◆ "}</Text><Text color="white">{"conditional trig"}</Text>
+        </Box>
       </Box>
     );
   }
@@ -212,7 +240,7 @@ export function Prompt({
         : <Text color="gray">{"type a prompt · /help for commands · Shift+Tab: toggle mode"}</Text>
       }
       {implementableHint && (
-        <Text color="gray">{"→ Type /gen to generate this pattern"}</Text>
+        <Text color="gray">{"→ Ctrl+G or /gen to generate this pattern"}</Text>
       )}
     </Box>
   );
