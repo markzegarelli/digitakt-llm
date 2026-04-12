@@ -226,14 +226,15 @@ class Generator:
         state_ctx = self._build_state_context()
 
         if variation and self.state.last_prompt and self.state.current_pattern:
-            active = {
+            steps = self.state.pattern_length
+            all_tracks = {
                 k: v for k, v in self.state.current_pattern.items()
-                if not isinstance(v, list) or any(s > 0 for s in v)
+                if isinstance(v, list) and len(v) == steps
             }
             return (
                 f"Current state:\n{state_ctx}\n\n"
                 f"Previous prompt: {self.state.last_prompt}\n"
-                f"Previous pattern (active tracks): {json.dumps(active)}\n\n"
+                f"Previous pattern: {json.dumps(all_tracks)}\n\n"
                 f"Apply this variation: {prompt}"
             )
 
@@ -306,7 +307,7 @@ class Generator:
     def _call_api(self, user_prompt: str, retry: bool = False) -> str:
         content = user_prompt
         if retry:
-            content += "\n\nRemember: output ONLY the JSON object, no other text."
+            content += "\n\nRemember: output ONLY the JSON object, no other text. All 8 tracks are required: kick, snare, tom, clap, bell, hihat, openhat, cymbal."
         with tracer.span("generate" if not retry else "generate_retry", prompt=content) as span:
             response = self._client.messages.create(
                 model="claude-opus-4-6",

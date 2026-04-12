@@ -318,6 +318,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       await api("POST", "/mute", { track, muted });
     }, [api]),
 
+    setMuteQueued: useCallback(async (track: TrackName, muted: boolean) => {
+      await api("POST", "/mute-queued", { track, muted });
+    }, [api]),
+
     setCC: useCallback(async (track: TrackName, param: CCParam, value: number) => {
       setState((prev) => ({
         ...prev,
