@@ -60,7 +60,6 @@ Keyboard shortcuts (Pattern panel):
 ## Key Documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, data flow, EventBus patterns
-- [TODO.md](TODO.md) — ideas for future exploration
 
 ## Project Layout
 
@@ -109,7 +108,6 @@ When closing a feature branch, invoke the `superpowers:finishing-a-development-b
 1. `CLAUDE.md` command reference is updated if any slash commands changed
 2. `ARCHITECTURE.md` is updated if data flow or module structure changed
 3. All new API endpoints are documented in `ARCHITECTURE.md`
-4. `VISION.md` milestone status is current
 
 ## API
 

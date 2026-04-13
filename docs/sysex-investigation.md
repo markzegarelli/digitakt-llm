@@ -45,14 +45,14 @@ Overbridge operates as a USB audio+MIDI class-compliant device. It exposes:
 
 Overbridge does **not** expose an additional SysEx channel for parameter read-back or pattern manipulation beyond what standard MIDI CC provides. Real-time parameter automation in DAWs goes through standard MIDI CC. Pattern data stays on the device.
 
-## Recommendation for CP4+
+## Recommendation
 
 **SysEx is not a viable path** for pattern generation or step-level control in this project. The Digitakt's SysEx format is proprietary, undocumented, and firmware-dependent.
 
-**Viable continuation paths:**
+**Practical approaches:**
 1. **MIDI CC (current approach)** — fully supported, stable, already implemented. Covers all real-time sound shaping.
 2. **MIDI Program Change** — can switch between the 128 patterns stored on the device. Could be used to switch between pre-programmed patterns.
 3. **MIDI note triggering** — already implemented. Each track is on its own channel; velocity and pitch (note number → different sample slot on some tracks) are supported.
-4. **Chromatic mode** — on tracks configured for chromatic mode, different MIDI note numbers play different pitches of the same sample. This is the mechanism behind `track_pitch` in CP3.
+4. **Chromatic mode** — on tracks configured for chromatic mode, different MIDI note numbers play different pitches of the same sample. This is the mechanism behind per-track chromatic pitch (`track_pitch` in the pattern model).
 
-If richer pattern transfer is needed in a future CP, the path would be to generate patterns inside the Digitakt via its hardware UI, then use MIDI CC to modulate them in real time from this tool. Full pattern replacement via SysEx is not feasible without Elektron cooperation.
+If richer pattern transfer is needed beyond what MIDI note and CC traffic can express, build patterns on the Digitakt in its hardware UI, then use MIDI CC to modulate them in real time from this tool. Full pattern replacement via SysEx is not feasible without Elektron cooperation.

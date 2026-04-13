@@ -18,5 +18,9 @@ tui/node_modules/
 # Internal planning / strategy docs
 VISION.md
 DIRECTION.md
+TODO.md
+todo.sh
+docs/plans/
+docs/specs/
 docs/superpowers/
 .superpowers/
