@@ -5,16 +5,17 @@ CLI tool that generates 16-step drum patterns via Claude Opus 4.6 and plays them
 ## Quick Start
 
 ```bash
-# Python backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+# Python backend + dev tools (see https://docs.astral.sh/uv/getting-started/installation/)
+uv sync --extra dev
 
 # Bun/Ink frontend
 cd tui && bun install
 
-# Launch everything
-digitakt          # requires .env with ANTHROPIC_API_KEY
+# Launch everything (requires .env with ANTHROPIC_API_KEY)
+uv run digitakt
 ```
+
+**Without uv:** `python3 -m venv .venv && source .venv/bin/activate`, `pip install -e ".[dev]"`, then `digitakt`.
 
 ## The UI
 
@@ -96,10 +97,10 @@ tests/       # one test file per module, TDD throughout
 ## Running Tests
 
 ```bash
-pytest -v
+uv run pytest -v
 ```
 
-~206 tests, ~3s. All mocked — no real MIDI or API calls needed.
+~288 tests, ~4s. All mocked — no real MIDI or API calls needed.
 
 ## Development Workflow
 

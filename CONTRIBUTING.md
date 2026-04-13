@@ -8,18 +8,19 @@ You do not need an Elektron Digitakt to develop or run tests. All MIDI calls are
 
 ## Dev Setup
 
-**Prerequisites:** Python 3.11+, [Bun](https://bun.sh) ≥1.1
+**Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/getting-started/installation/), [Bun](https://bun.sh) ≥1.1
 
 ```bash
 # Clone and install Python dependencies
 git clone https://github.com/markzegarelli/digitakt-llm
 cd digitakt-llm
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev
 
 # Install TUI dependencies
 cd tui && bun install && cd ..
 ```
+
+**Without uv:** `python3 -m venv .venv && source .venv/bin/activate` then `pip install -e ".[dev]"`.
 
 Create a `.env` file with your Anthropic API key (required only for live generation, not tests):
 
@@ -30,10 +31,10 @@ ANTHROPIC_API_KEY=sk-ant-...
 ## Running Tests
 
 ```bash
-pytest -v
+uv run pytest -v
 ```
 
-287 tests, ~4s. No real MIDI or Anthropic API calls — everything is mocked.
+288 tests, ~4s. No real MIDI or Anthropic API calls — everything is mocked.
 
 ## Making Changes
 

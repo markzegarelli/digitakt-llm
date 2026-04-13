@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Cloud setup script for Claude Code agentic environments.
-# Installs system deps, creates venv, installs Python deps, and runs tests.
+# Cloud setup for agentic environments: system deps (Linux), uv, sync, tests.
 # Safe to run multiple times (idempotent). No interactive prompts.
 #
 # Usage:
@@ -26,15 +25,16 @@ if [[ "$(uname)" == "Linux" ]]; then
         build-essential
 fi
 
-# ── Step 2: Python venv ──────────────────────────────────────────────────────
-if [ ! -d "$VENV_DIR" ]; then
-    echo "→ creating venv..."
-    python3 -m venv "$VENV_DIR"
+# ── Step 2: uv (bootstrap if missing) ─────────────────────────────────────────
+if ! command -v uv >/dev/null 2>&1; then
+    echo "→ installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:${PATH}"
 fi
 
-echo "→ installing Python dependencies..."
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet -e "$REPO_ROOT/.[dev]"
+cd "$REPO_ROOT"
+echo "→ uv sync --extra dev..."
+uv sync --extra dev
 
 # ── Step 3: ANTHROPIC_API_KEY ────────────────────────────────────────────────
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
@@ -51,8 +51,9 @@ fi
 
 # ── Step 4: Verify with tests ────────────────────────────────────────────────
 echo "→ running test suite..."
-"$VENV_DIR/bin/pytest" --tb=short -q
+uv run pytest --tb=short -q
 
 echo ""
 echo "✓ setup complete"
-echo "  activate venv: source $VENV_DIR/bin/activate"
+echo "  run tests: uv run pytest -v"
+echo "  activate venv (optional): source $VENV_DIR/bin/activate"

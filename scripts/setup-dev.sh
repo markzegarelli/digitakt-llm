@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
-# Setup venv and install dependencies for local development / worktree testing.
+# Sync Python dependencies with uv and optionally activate .venv.
 # Usage: bash scripts/setup-dev.sh
 #        source scripts/setup-dev.sh   ← also activates the venv in your shell
+#
+# Requires: https://docs.astral.sh/uv/getting-started/installation/
 
 set -e
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$REPO_ROOT/.venv"
 
-echo "→ repo: $REPO_ROOT"
-
-if [ ! -d "$VENV_DIR" ]; then
-    echo "→ creating venv..."
-    python3 -m venv "$VENV_DIR"
+if ! command -v uv >/dev/null 2>&1; then
+    echo "error: uv is not installed or not on PATH." >&2
+    echo "  Install: https://docs.astral.sh/uv/getting-started/installation/" >&2
+    exit 1
 fi
 
-echo "→ installing dependencies..."
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet -e "$REPO_ROOT/.[dev]"
+echo "→ repo: $REPO_ROOT"
+cd "$REPO_ROOT"
 
-echo "→ done. To activate:"
+echo "→ uv sync --extra dev..."
+uv sync --extra dev
+
+echo "→ done. Run without activating:"
+echo "   uv run digitakt"
+echo "   uv run pytest -v"
+echo "→ Or activate:"
 echo "   source $VENV_DIR/bin/activate"
 
 # If sourced (not executed), activate immediately.

@@ -20,6 +20,7 @@ Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Op
 ## Requirements
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended; manages `.venv` and locked deps)
 - [Bun](https://bun.sh) ≥1.1
 - macOS or Linux (Windows untested)
 - An Anthropic API key
@@ -27,9 +28,8 @@ Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Op
 ## Setup
 
 ```bash
-# Python backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+# Python backend + dev tools (uses uv.lock; creates .venv automatically)
+uv sync --extra dev
 
 # Bun/Ink frontend
 cd tui && bun install && cd ..
@@ -38,7 +38,22 @@ cd tui && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
 # or add it to a .env file: ANTHROPIC_API_KEY=sk-ant-...
 
-# Launch
+# Launch (adds .venv to PATH for this command)
+uv run digitakt
+```
+
+After `uv sync`, you can also run `digitakt` directly if the venv is activated (`source .venv/bin/activate`).
+
+**Global isolated install (optional):** from a checkout, `uv tool install .` installs the `digitakt` console script into uv’s tool environment (no manual venv).
+
+### Without uv
+
+If you prefer classic venv + pip:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cd tui && bun install && cd ..
 digitakt
 ```
 
