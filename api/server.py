@@ -29,6 +29,7 @@ from api.schemas import (
     PitchRequest, PitchResponse,
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
+    ChainRequest, ChainStatusResponse,
 )
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
                 event_name,
                 lambda p, name=event_name: _broadcast_event(name, p),
             )
+        _bus.subscribe("bar_boundary", _on_bar_boundary)
     yield
 
 
@@ -73,6 +75,7 @@ _ALL_EVENTS = [
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "cond_changed", "state_reset",
     "ask_complete",
+    "chain_updated", "chain_advanced",
 ]
 
 
@@ -104,6 +107,27 @@ async def _broadcast_to_clients(message: dict) -> None:
             logger.debug("WebSocket client disconnected during broadcast")
             dead.add(ws)
     _ws_clients.difference_update(dead)
+
+
+def _on_bar_boundary(payload: dict) -> None:
+    """Auto-advance chain when chain_auto is True, triggered at each bar end."""
+    if not _state or not _state.chain_auto or not _state.chain:
+        return
+    next_name = _state.chain_next()
+    if next_name is None:
+        return
+    pattern_file = Path(_patterns_dir) / f"{next_name}.json"
+    if not pattern_file.exists():
+        return
+    with open(pattern_file) as f:
+        data = json.load(f)
+    pattern = data.get("pattern", data)
+    _state.queue_pattern(pattern)
+    _broadcast_event("chain_advanced", {
+        "chain": list(_state.chain),
+        "chain_index": _state.chain_index,
+        "current": next_name,
+    })
 
 
 # REST endpoints
@@ -435,6 +459,62 @@ def load_pattern(name: str):
     _player.queue_pattern(pattern)
     _state.last_prompt = name
     return {"loaded": name}
+
+
+@app.post("/chain")
+def post_chain(req: ChainRequest):
+    patterns_path = Path(_patterns_dir)
+    for name in req.names:
+        if not (patterns_path / f"{name}.json").exists():
+            raise HTTPException(status_code=422, detail=f"Pattern not found: {name}")
+    _state.set_chain(req.names, auto=req.auto)
+    _bus.emit("chain_updated", {
+        "chain": list(_state.chain),
+        "chain_index": _state.chain_index,
+        "chain_auto": _state.chain_auto,
+        "current": _state.chain_current(),
+    })
+    return {"chain": list(_state.chain), "chain_index": _state.chain_index}
+
+
+@app.post("/chain/next")
+def post_chain_next():
+    next_name = _state.chain_next()
+    if next_name is None:
+        raise HTTPException(status_code=409, detail="No next pattern in chain")
+    pattern_file = Path(_patterns_dir) / f"{next_name}.json"
+    with open(pattern_file) as f:
+        data = json.load(f)
+    pattern = data.get("pattern", data)
+    _state.queue_pattern(pattern)
+    _bus.emit("chain_advanced", {
+        "chain": list(_state.chain),
+        "chain_index": _state.chain_index,
+        "current": next_name,
+    })
+    return {"current": next_name, "chain_index": _state.chain_index}
+
+
+@app.delete("/chain")
+def delete_chain():
+    _state.chain_clear()
+    _bus.emit("chain_updated", {
+        "chain": [],
+        "chain_index": -1,
+        "chain_auto": False,
+        "current": None,
+    })
+    return {"status": "cleared"}
+
+
+@app.get("/chain", response_model=ChainStatusResponse)
+def get_chain():
+    return ChainStatusResponse(
+        chain=list(_state.chain),
+        chain_index=_state.chain_index,
+        chain_auto=_state.chain_auto,
+        current=_state.chain_current(),
+    )
 
 
 @app.get("/traces")
