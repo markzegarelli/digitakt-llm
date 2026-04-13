@@ -61,21 +61,12 @@ export function App({ baseUrl }: AppProps) {
     prevGenStatus.current = state.generation_status;
   }, [state.generation_status, stdout, forceRedraw]);
 
-  // Clear only when Prompt shrinks from a tall state (help/history/answer) back
-  // to normal mode, to erase ghost rows from the taller previous frame.
-  // showLog and implementableHint are intentionally excluded: the log is a side
-  // column (no height impact on left column), and the hint line is always
-  // rendered (so no height change occurs when it toggles).
-  const prevTallRef = useRef(false);
-  useEffect(() => {
-    const isTall = answerText !== null || showHelp || showHistory;
-    const wasTall = prevTallRef.current;
-    prevTallRef.current = isTall;
-    if (wasTall && !isTall) {
-      const id = setTimeout(() => { stdout?.write('\x1b[2J\x1b[3J\x1b[H'); forceRedraw(); }, 0);
-      return () => clearTimeout(id);
-    }
-  }, [answerText, showHelp, showHistory, stdout, forceRedraw]);
+  // Ink 5.x uses eraseLines(n) on every re-render to wipe ghost rows from
+  // taller previous frames, so no manual screen clear is needed when the
+  // Prompt shrinks (help/history/answer → normal). A manual clear + forceRedraw
+  // causes the screen to stay blank because React produces the same output as
+  // the previous render (panel already dismissed), Ink sees no diff, and skips
+  // writing to stdout — leaving a blank screen until the next real state change.
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
