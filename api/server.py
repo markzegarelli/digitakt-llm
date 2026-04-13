@@ -466,7 +466,7 @@ def post_chain(req: ChainRequest):
     patterns_path = Path(_patterns_dir)
     for name in req.names:
         if not (patterns_path / f"{name}.json").exists():
-            raise HTTPException(status_code=422, detail=f"Pattern not found: {name}")
+            raise HTTPException(status_code=404, detail=f"Pattern not found: {name}")
     _state.set_chain(req.names, auto=req.auto)
     _bus.emit("chain_updated", {
         "chain": list(_state.chain),
@@ -479,10 +479,21 @@ def post_chain(req: ChainRequest):
 
 @app.post("/chain/next")
 def post_chain_next():
-    next_name = _state.chain_next()
-    if next_name is None:
-        raise HTTPException(status_code=409, detail="No next pattern in chain")
+    # Peek at next name without advancing
+    with _state._lock:
+        if not _state.chain:
+            raise HTTPException(status_code=409, detail="No next pattern in chain")
+        peek_index = _state.chain_index + 1
+        if peek_index >= len(_state.chain):
+            if not _state.chain_auto:
+                raise HTTPException(status_code=409, detail="No next pattern in chain")
+            peek_index = 0
+        next_name = _state.chain[peek_index]
     pattern_file = Path(_patterns_dir) / f"{next_name}.json"
+    if not pattern_file.exists():
+        raise HTTPException(status_code=404, detail=f"Pattern not found: {next_name}")
+    # File confirmed — now advance
+    _state.chain_next()
     with open(pattern_file) as f:
         data = json.load(f)
     pattern = data.get("pattern", data)

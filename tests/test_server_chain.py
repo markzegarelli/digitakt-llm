@@ -50,7 +50,7 @@ def test_post_chain_auto_flag(tmp_path):
 def test_post_chain_rejects_unknown_pattern(tmp_path):
     client = _make_client(tmp_path)
     resp = client.post("/chain", json={"names": ["does-not-exist"], "auto": False})
-    assert resp.status_code == 422
+    assert resp.status_code == 404
     assert "does-not-exist" in resp.json()["detail"]
 
 
@@ -106,3 +106,16 @@ def test_get_chain_returns_status(tmp_path):
     assert data["chain"] == ["intro", "drop"]
     assert data["chain_index"] == -1
     assert data["current"] is None
+
+
+def test_post_chain_next_loops_when_auto(tmp_path):
+    client = _make_client(tmp_path)
+    _save_pattern(tmp_path, "intro")
+    _save_pattern(tmp_path, "drop")
+    client.post("/chain", json={"names": ["intro", "drop"], "auto": True})
+    client.post("/chain/next")  # intro (index 0)
+    client.post("/chain/next")  # drop (index 1)
+    resp = client.post("/chain/next")  # should loop back to intro (index 0)
+    assert resp.status_code == 200
+    assert resp.json()["current"] == "intro"
+    assert resp.json()["chain_index"] == 0
