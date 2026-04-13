@@ -54,6 +54,9 @@ class AppState:
     pattern_length: int = 16
     fill_pattern: dict | None = None
     pending_mutes: dict[str, bool] = field(default_factory=dict)
+    chain: list[str] = field(default_factory=list)
+    chain_index: int = -1
+    chain_auto: bool = False
     _fill_active: bool = field(default=False, init=False, repr=False)
     _pre_fill_pattern: dict | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(
@@ -141,6 +144,41 @@ class AppState:
     def queue_pattern(self, pattern: dict) -> None:
         with self._lock:
             self.pending_pattern = pattern
+
+    def set_chain(self, names: list[str], auto: bool = False) -> None:
+        """Define an ordered setlist. chain_index=-1 means chain defined but not started."""
+        with self._lock:
+            self.chain = list(names)
+            self.chain_index = -1
+            self.chain_auto = auto
+
+    def chain_next(self) -> str | None:
+        """Advance chain and return the next pattern name, or None if at end (non-auto)."""
+        with self._lock:
+            if not self.chain:
+                return None
+            next_index = self.chain_index + 1
+            if next_index >= len(self.chain):
+                if self.chain_auto:
+                    next_index = 0
+                else:
+                    return None
+            self.chain_index = next_index
+            return self.chain[self.chain_index]
+
+    def chain_clear(self) -> None:
+        """Exit chain mode and reset all chain state."""
+        with self._lock:
+            self.chain = []
+            self.chain_index = -1
+            self.chain_auto = False
+
+    def chain_current(self) -> str | None:
+        """Return current pattern name in chain, or None if not started."""
+        with self._lock:
+            if not self.chain or self.chain_index < 0:
+                return None
+            return self.chain[self.chain_index]
 
     def reset(self, pattern: dict, bpm: float, prompt: str | None) -> None:
         """Atomic bulk reset (used by /new)."""
