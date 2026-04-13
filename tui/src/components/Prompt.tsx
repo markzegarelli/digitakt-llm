@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
+import { theme } from "../theme.js";
 
 const HELP_LINES = [
   "── Playback & Pattern ─────────────────────────────────────────",
@@ -20,6 +21,10 @@ const HELP_LINES = [
   "  load <name>                          queue saved pattern for next loop",
   "  patterns [#tag]                      list saved patterns (filter by tag)",
   "  fill <name>                          one-shot fill (plays once, reverts)",
+  "  chain <p1> <p2> ... [--auto]         define setlist",
+  "  chain-next                           queue next pattern in chain",
+  "  chain-status                         show chain position",
+  "  chain-clear                          clear chain state",
   "  log                                  toggle activity log",
   "  new                                  reset to empty pattern",
   "  undo                                 revert to previous pattern",
@@ -34,20 +39,25 @@ const HELP_LINES = [
   "  Ctrl+G                               generate while viewing an /ask answer",
   "                                       or any time after an /ask (hint shown)",
   "  mode [chat|beat]                     switch input mode",
+  "  next [section]                       context-aware next pattern",
+  "  vary [light|medium|heavy]            variation of current pattern",
+  "  read                                 Claude describes current pattern",
   "",
   "── App ────────────────────────────────────────────────────────",
   "  help                                 show this help",
   "  quit / q                             exit",
+  "  Tab                                  focus rail: SEQ → MIX → CMD (+ LOG if log is on)",
   "  Shift+Tab                            toggle Chat/Beat mode",
   "  m (Pattern panel)                    toggle mute on selected track",
   "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
   "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
   "",
-  "CC panel: Tab to focus · Enter on param = step edit · Esc to exit",
+  "CC / MIX panel: Tab to focus · Enter on param = step edit · Esc to exit",
+  "  Value bar: █ filled / ░ empty (0–127), width scales with terminal size",
   "",
-  "── Trig Dot Shapes & Colors ───────────────────────────────────",
+  "── SEQ step grid (dots) ───────────────────────────────────────",
   "",
-  "Press any key to dismiss.",
+  "  ↑↓ PgUp PgDn scroll   Esc or any other key closes",
 ];
 
 // All slash commands for autocomplete
@@ -56,7 +66,15 @@ const COMMANDS = [
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
+  "chain", "chain-next", "chain-status", "chain-clear", "next", "vary", "read",
 ];
+
+/** Legend blocks below HELP_LINES (each counts as one scroll row). */
+const HELP_LEGEND_ROW_COUNT = 3;
+
+function helpTotalRows(): number {
+  return HELP_LINES.length + HELP_LEGEND_ROW_COUNT;
+}
 
 function getSuggestions(text: string): string[] {
   if (!text.startsWith("/")) return [];
@@ -102,13 +120,33 @@ export function Prompt({
   onDismissHint,
   acActiveRef,
 }: PromptProps) {
+  const { stdout } = useStdout();
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [acSuggestions, setAcSuggestions] = useState<string[]>([]);
   const [acIdx, setAcIdx] = useState(-1);
+  const [helpScroll, setHelpScroll] = useState(0);
   const genStartRef = useRef<number | null>(null);
+
+  const termRows = stdout?.rows ?? 24;
+  const panelBudget = Math.max(8, termRows - 8);
+  const totalHelpRows = helpTotalRows();
+  const helpNeedsScroll = totalHelpRows > panelBudget;
+  const helpChromeLines = helpNeedsScroll ? 1 : 0;
+  const helpViewLines = helpNeedsScroll ? Math.max(1, panelBudget - helpChromeLines) : totalHelpRows;
+  const helpMaxScroll = Math.max(0, totalHelpRows - helpViewLines);
+
+  useEffect(() => {
+    if (!showHelp) return;
+    setHelpScroll(0);
+  }, [showHelp]);
+
+  useEffect(() => {
+    if (!showHelp) return;
+    setHelpScroll((s) => Math.min(s, helpMaxScroll));
+  }, [showHelp, helpMaxScroll]);
 
   // Update text + autocomplete state atomically
   function updateText(newText: string) {
@@ -146,6 +184,22 @@ export function Prompt({
     }
 
     if (showHelp) {
+      if (key.upArrow) {
+        setHelpScroll((s) => Math.max(0, s - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setHelpScroll((s) => Math.min(helpMaxScroll, s + 1));
+        return;
+      }
+      if (key.pageUp) {
+        setHelpScroll((s) => Math.max(0, s - helpViewLines));
+        return;
+      }
+      if (key.pageDown) {
+        setHelpScroll((s) => Math.min(helpMaxScroll, s + helpViewLines));
+        return;
+      }
       onClearHelp();
       return;
     }
@@ -226,10 +280,10 @@ export function Prompt({
   if (answerText !== null) {
     const lines = answerText.split("\n");
     return (
-      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-        <Text bold color="cyan">{"Answer — Ctrl+G to generate · any key to dismiss"}</Text>
+      <Box flexDirection="column" borderStyle="single" borderColor={theme.borderActive} paddingX={1}>
+        <Text bold color={theme.accent}>{"REPLY  Ctrl+G apply  any key close"}</Text>
         {lines.map((line, i) => (
-          <Text key={i} color="white">{line || " "}</Text>
+          <Text key={i} color={theme.text}>{line || " "}</Text>
         ))}
       </Box>
     );
@@ -249,80 +303,121 @@ export function Prompt({
           return `${i + 1}. [${time}] ${entry.prompt}${metaStr}`;
         });
     return (
-      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-        <Text bold color="cyan">Pattern History  (press any key to dismiss)</Text>
+      <Box flexDirection="column" borderStyle="single" borderColor={theme.borderActive} paddingX={1}>
+        <Text bold color={theme.accent}>HISTORY  any key close</Text>
         {lines.map((line, i) => (
-          <Text key={i} color="white">{line}</Text>
+          <Text key={i} color={theme.text}>{line}</Text>
         ))}
       </Box>
     );
   }
 
   if (showHelp) {
+    const rows: React.ReactNode[] = [];
+    if (helpNeedsScroll) {
+      rows.push(
+        <Text key="help-chrome" color={theme.textDim}>
+          {`  ${helpScroll + 1}–${helpScroll + helpViewLines} of ${totalHelpRows}  ·  ↑↓ PgUp/PgDn  ·  Esc closes`}
+        </Text>,
+      );
+    }
+    for (let i = 0; i < helpViewLines; i++) {
+      const ri = helpScroll + i;
+      if (ri < HELP_LINES.length) {
+        const line = HELP_LINES[ri] ?? "";
+        rows.push(
+          <Text
+            key={`h-${ri}`}
+            color={
+              line.startsWith("──") ? theme.accent
+                : line.startsWith("  ") ? theme.text
+                : theme.textDim
+            }
+          >{line || " "}</Text>,
+        );
+        continue;
+      }
+      const leg = ri - HELP_LINES.length;
+      if (leg === 0) {
+        rows.push(
+          <Box key={`h-${ri}`}>
+            <Text>{"  "}</Text>
+            <Text color={theme.accentSubtle}>{"\u00B7 "}</Text><Text color={theme.text}>{"vel 0 (empty)   "}</Text>
+            <Text color={theme.accentMuted}>{"\u25CB "}</Text><Text color={theme.text}>{"vel 1–63 (low)   "}</Text>
+            <Text color={theme.accent}>{"\u25CF "}</Text><Text color={theme.text}>{"vel 64–127 (high)"}</Text>
+            <Text color={theme.textFaint}>{"   (prob 100%)"}</Text>
+          </Box>,
+        );
+      } else if (leg === 1) {
+        rows.push(
+          <Box key={`h-${ri}`}>
+            <Text>{"  "}</Text>
+            <Text color={theme.accentMuted}>{"\u25CF "}</Text><Text color={theme.text}>{"prob 75-99%   "}</Text>
+            <Text color={theme.warn}>{"\u25CF "}</Text><Text color={theme.text}>{"prob 50-74%   "}</Text>
+            <Text color={theme.error}>{"\u25CF "}</Text><Text color={theme.text}>{"prob <50%"}</Text>
+            <Text color={theme.textFaint}>{"   (step grid)"}</Text>
+          </Box>,
+        );
+      } else {
+        rows.push(
+          <Box key={`h-${ri}`}>
+            <Text>{"  "}</Text>
+            <Text color={theme.textDim}>{"\u00B7\u25CB\u25CF "}</Text><Text color={theme.text}>{"muted: same dots, dimmer   "}</Text>
+            <Text color={theme.accent}>{"\u25BA\u25B9 "}</Text><Text color={theme.text}>{"playhead on/off step   "}</Text>
+            <Text color={theme.warn}>{"\u25C7\u25C6 "}</Text><Text color={theme.text}>{"conditional trigs (◇/◆)"}</Text>
+          </Box>,
+        );
+      }
+    }
     return (
-      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-        {HELP_LINES.map((line, i) => (
-          <Text key={i} color={line.startsWith("──") ? "cyan" : line.startsWith("  ") ? "white" : "gray"}>{line || " "}</Text>
-        ))}
-        <Box>
-          <Text>{"  "}</Text>
-          <Text color="blue">{"· "}</Text><Text color="white">{"vel 0 (empty)   "}</Text>
-          <Text color="blue">{"○ "}</Text><Text color="white">{"vel 1–63 (low)   "}</Text>
-          <Text color="cyan">{"● "}</Text><Text color="white">{"vel 64–127 (high)"}</Text>
-          <Text color="gray">{"   (shapes, prob 100%)"}</Text>
-        </Box>
-        <Box>
-          <Text>{"  "}</Text>
-          <Text color="yellow">{"● "}</Text><Text color="white">{"prob 75-99%   "}</Text>
-          <Text color="magenta">{"● "}</Text><Text color="white">{"prob 50-74%   "}</Text>
-          <Text color="red">{"● "}</Text><Text color="white">{"prob <50%"}</Text>
-          <Text color="gray">{"   (colors apply to ○ and ● alike)"}</Text>
-        </Box>
-        <Box>
-          <Text>{"  "}</Text>
-          <Text color="gray">{"● "}</Text><Text color="white">{"muted/off   "}</Text>
-          <Text color="yellow">{"● "}</Text><Text color="white">{"active (playhead)   "}</Text>
-          <Text color="magenta">{"◆ "}</Text><Text color="white">{"conditional trig (◇ for low vel)"}</Text>
-        </Box>
+      <Box flexDirection="column" borderStyle="single" borderColor={theme.borderActive} paddingX={1}>
+        {rows}
       </Box>
     );
   }
 
   const statusLine =
-    askPending                           ? `⟳ asking… (${elapsedSecs}s)`
-    : generationStatus === "generating" ? `⟳ generating… (${elapsedSecs}s)`
-    : generationStatus === "failed"     ? `✗ ${generationError ?? "generation failed"}`
+    askPending                           ? `WAIT ask ${elapsedSecs}s`
+    : generationStatus === "generating" ? `WAIT gen ${elapsedSecs}s`
+    : generationStatus === "failed"     ? `FAIL ${generationError ?? "generation failed"}`
     : "";
 
+  const borderCol = isFocused ? theme.borderActive : theme.border;
+
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={borderCol} paddingX={1}>
+      <Box>
+        <Text bold color={theme.textDim}>CMD </Text>
+        <Text color={theme.textFaint}>{"claude · slash commands · bare text"}</Text>
+      </Box>
       {/* Autocomplete suggestions — shown above the input line */}
       {acSuggestions.length > 0 && (
         <Box flexDirection="column">
           {acSuggestions.map((cmd, i) => (
             <Text
               key={cmd}
-              color={i === acIdx ? "black" : "gray"}
-              backgroundColor={i === acIdx ? "cyan" : undefined}
+              color={i === acIdx ? "#0A0A0A" : theme.textDim}
+              backgroundColor={i === acIdx ? theme.accent : undefined}
             >{`  /${cmd}`}</Text>
           ))}
         </Box>
       )}
       <Box>
-        <Text bold color={inputMode === "beat" ? "magenta" : "cyan"}>
-          [{inputMode.toUpperCase()}]{" "}
+        <Text bold color={inputMode === "beat" ? theme.accent : theme.accentMuted}>
+          [{inputMode.toUpperCase()}]
         </Text>
-        <Text bold color="cyan">› </Text>
-        <Text>{text}</Text>
-        {isFocused && <Text backgroundColor="white" color="black"> </Text>}
+        <Text>{" "}</Text>
+        <Text bold color={theme.accent}>{">"}</Text>
+        <Text> </Text>
+        <Text color={theme.text}>{text}</Text>
+        {isFocused && <Text backgroundColor={theme.accent} color="#0A0A0A"> </Text>}
       </Box>
       {statusLine
-        ? <Text color={askPending ? "yellow" : generationStatus === "failed" ? "red" : "yellow"}>{statusLine}</Text>
-        : <Text color="gray">{"type a prompt · /help for commands · Shift+Tab: toggle mode"}</Text>
+        ? <Text color={askPending ? theme.warn : generationStatus === "failed" ? theme.error : theme.accentMuted}>{statusLine}</Text>
+        : <Text color={theme.textFaint}>{"/help  Tab cycle panels  Shift+Tab mode  Space transport"}</Text>
       }
-      {/* Always rendered to keep prompt height stable — green when active */}
-      <Text color={implementableHint ? "green" : undefined}>
-        {implementableHint ? "→ Ctrl+G or /gen · generate from last answer" : " "}
+      <Text color={implementableHint ? theme.accent : theme.textFaint}>
+        {implementableHint ? "HINT Ctrl+G /gen from last reply" : " "}
       </Text>
     </Box>
   );

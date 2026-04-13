@@ -5,6 +5,7 @@ import functools
 import json
 import re
 import threading
+import time
 import anthropic
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
@@ -13,6 +14,31 @@ from core.midi_utils import CC_MAP
 from core.tracing import tracer
 
 logger = get_logger("generator")
+
+
+def _compute_generation_summary(prompt: str, pattern: dict, latency_ms: int) -> dict:
+    """Return compact generation telemetry for the TUI."""
+    abbreviations = {
+        "kick": "BD",
+        "snare": "SD",
+        "tom": "LT",
+        "clap": "CL",
+        "bell": "BL",
+        "hihat": "CH",
+        "openhat": "OH",
+        "cymbal": "CY",
+    }
+    parts: list[str] = []
+    for track in TRACK_NAMES:
+        steps = pattern.get(track, [])
+        active = sum(1 for v in steps if isinstance(v, int) and v > 0)
+        if active > 0:
+            parts.append(f"{abbreviations.get(track, track[:2].upper())}x{active}")
+    return {
+        "prompt": prompt,
+        "track_summary": "  ".join(parts) if parts else "empty",
+        "latency_ms": latency_ms,
+    }
 
 @functools.lru_cache(maxsize=3)
 def _build_system_prompt(steps: int = 16) -> str:
@@ -332,6 +358,7 @@ class Generator:
         self.bus.emit("generation_started", {"prompt": prompt})
         user_prompt = self._build_user_prompt(prompt, variation)
         logger.info("Generation started", extra={"prompt": prompt})
+        t0 = time.monotonic()
 
         try:
             text = self._call_api(user_prompt)
@@ -382,8 +409,18 @@ class Generator:
             # Store in conversation history for cross-mode continuity
             self._add_to_history("user", f"[beat generation] {prompt}")
             self._add_to_history("assistant", f"[generated pattern at {bpm or self.state.bpm} BPM]")
-
-            self.bus.emit("generation_complete", {"pattern": pattern, "prompt": prompt, "bpm": bpm, "cc_changes": cc_changes})
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            summary = _compute_generation_summary(prompt, pattern, latency_ms)
+            self.bus.emit(
+                "generation_complete",
+                {
+                    "pattern": pattern,
+                    "prompt": prompt,
+                    "bpm": bpm,
+                    "cc_changes": cc_changes,
+                    "summary": summary,
+                },
+            )
 
         except Exception as exc:
             logger.error(

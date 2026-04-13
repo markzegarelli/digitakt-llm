@@ -8,4 +8,4 @@ const BASE_URL = process.env["DIGITAKT_URL"] ?? "http://localhost:8000";
 // messages) doesn't bleed into the Ink render area.
 process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
 
-render(<App baseUrl={BASE_URL} />, { fullScreen: true });
+render(<App baseUrl={BASE_URL} />);
