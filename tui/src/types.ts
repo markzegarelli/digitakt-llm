@@ -34,6 +34,9 @@ export interface DigitaktState {
   log: string[];
   current_step: number | null;
   pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
+  chain: string[];
+  chain_index: number;
+  chain_auto: boolean;
 }
 
 export type FocusPanel = "pattern" | "cc" | "log" | "prompt";
