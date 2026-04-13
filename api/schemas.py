@@ -190,3 +190,15 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     is_implementable: bool = False
+
+
+class ChainRequest(BaseModel):
+    names: list[str]
+    auto: bool = False
+
+
+class ChainStatusResponse(BaseModel):
+    chain: list[str]
+    chain_index: int
+    chain_auto: bool
+    current: str | None
