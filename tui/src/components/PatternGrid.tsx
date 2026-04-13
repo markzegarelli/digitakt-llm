@@ -22,7 +22,13 @@ const LABELS: Record<TrackName, string> = {
 
 function StepDot({ velocity, isMuted, isActive, cond, prob = 100 }: { velocity: number; isMuted: boolean; isActive: boolean; cond: string | null; prob?: number }) {
   const hasCond = cond !== null;
-  const marker = velocity > 0 ? (hasCond ? "◆" : "●") : (hasCond ? "◇" : "·");
+  // Shape encodes velocity tier: · empty, ○ low (1–63), ● high (64–127)
+  // Conditional trigs use ◇ (low/empty) or ◆ (high)
+  const marker = velocity === 0
+    ? (hasCond ? "◇" : "·")
+    : velocity < 64
+      ? (hasCond ? "◇" : "○")
+      : (hasCond ? "◆" : "●");
   const suffix = cond === "1:2" ? "₁" : cond === "not:2" ? "ⁿ" : cond === "fill" ? "f" : "";
   if (isActive) {
     if (velocity === 0) return <><Text color="white">{marker}</Text><Text color="gray">{suffix}</Text></>;
@@ -30,7 +36,7 @@ function StepDot({ velocity, isMuted, isActive, cond, prob = 100 }: { velocity: 
   }
   if (velocity === 0) return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
   if (isMuted)        return <><Text color="gray">{marker}</Text><Text color="gray">{suffix}</Text></>;
-  // Color-code by probability when step is active (velocity > 0)
+  // Color encodes probability; at prob 100% blue/cyan/white give extra velocity info
   let color: string;
   if (prob < 50)       color = "red";
   else if (prob < 75)  color = "magenta";

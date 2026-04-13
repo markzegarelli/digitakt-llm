@@ -46,6 +46,7 @@ export function App({ baseUrl }: AppProps) {
   const [showHistory, setShowHistory]   = useState(false);
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
   const [implementableHint, setImplementableHint] = useState(false);
+  const acActiveRef = useRef(false);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
@@ -60,18 +61,21 @@ export function App({ baseUrl }: AppProps) {
     prevGenStatus.current = state.generation_status;
   }, [state.generation_status, stdout, forceRedraw]);
 
-  // Clear when Prompt panel switches between compact and tall modes (answer
-  // text, help, history, hint) to avoid ghost rows from the height difference.
-  // forceRedraw() after the clear ensures Ink repaints and the screen isn't left blank.
-  const prevPanelKey = useRef<string>("");
+  // Clear only when Prompt shrinks from a tall state (help/history/answer) back
+  // to normal mode, to erase ghost rows from the taller previous frame.
+  // showLog and implementableHint are intentionally excluded: the log is a side
+  // column (no height impact on left column), and the hint line is always
+  // rendered (so no height change occurs when it toggles).
+  const prevTallRef = useRef(false);
   useEffect(() => {
-    const key = `${answerText !== null}:${showHelp}:${showHistory}:${showLog}:${implementableHint}`;
-    if (key !== prevPanelKey.current) {
-      prevPanelKey.current = key;
+    const isTall = answerText !== null || showHelp || showHistory;
+    const wasTall = prevTallRef.current;
+    prevTallRef.current = isTall;
+    if (wasTall && !isTall) {
       const id = setTimeout(() => { stdout?.write('\x1b[2J\x1b[3J\x1b[H'); forceRedraw(); }, 0);
       return () => clearTimeout(id);
     }
-  }, [answerText, showHelp, showHistory, showLog, implementableHint, stdout, forceRedraw]);
+  }, [answerText, showHelp, showHistory, stdout, forceRedraw]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -102,7 +106,7 @@ export function App({ baseUrl }: AppProps) {
           actions.ask(question)
             .then(({ answer, is_implementable }) => {
               setAskPending(false); lastAnswerRef.current = answer;
-              setAnswerText(answer); setImplementableHint(is_implementable);
+              setAnswerText(answer); setImplementableHint(true);
             })
             .catch(() => { setAskPending(false); setAnswerText("Error: could not get answer."); });
         }
@@ -198,7 +202,7 @@ export function App({ baseUrl }: AppProps) {
             actions.ask(stripped.trim())
               .then(({ answer, is_implementable }) => {
                 setAskPending(false); lastAnswerRef.current = answer;
-                setAnswerText(answer); setImplementableHint(is_implementable);
+                setAnswerText(answer); setImplementableHint(true);
               })
               .catch(() => { setAskPending(false); setAnswerText("Error: could not get answer."); });
           } else { setImplementableHint(false); actions.generate(stripped.trim()); }
@@ -221,6 +225,7 @@ export function App({ baseUrl }: AppProps) {
       return;
     }
     if (key.tab) {
+      if (acActiveRef.current) return;  // let Prompt handle Tab for autocomplete
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
@@ -434,6 +439,7 @@ export function App({ baseUrl }: AppProps) {
             onClearHistory={() => setShowHistory(false)}
             implementableHint={implementableHint}
             onDismissHint={() => setImplementableHint(false)}
+            acActiveRef={acActiveRef}
           />
           <Box paddingX={1}>
             <Text color="gray">
@@ -446,7 +452,7 @@ export function App({ baseUrl }: AppProps) {
             <ActivityLog
               log={state.log}
               isFocused={focus === "log"}
-              maxVisible={Math.max(8, (stdout?.rows ?? 24) - 15)}
+              maxVisible={Math.max(8, 17 + state.ccParams.length)}
             />
           </Box>
         )}
