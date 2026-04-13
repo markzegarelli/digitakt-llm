@@ -233,4 +233,7 @@ class Player:
                 self.state._fill_active = False
                 self.bus.emit("fill_ended", {"pattern": self.state.current_pattern})
 
+            # Emit bar_boundary event for chain auto-advance
+            self.bus.emit("bar_boundary", {})
+
             self._loop_count += 1
