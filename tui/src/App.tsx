@@ -5,11 +5,13 @@ import { StatusBar } from "./components/StatusBar.js";
 import { StepGrid } from "./components/StepGrid.js";
 import { ChainPanel } from "./components/ChainPanel.js";
 import { GenerationSummary } from "./components/GenerationSummary.js";
+import { FocusRail } from "./components/FocusRail.js";
 import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { TRACK_NAMES } from "./types.js";
+import { theme } from "./theme.js";
 
 interface AppProps { baseUrl: string; }
 
@@ -237,7 +239,7 @@ export function App({ baseUrl }: AppProps) {
           } else { setImplementableHint(false); actions.generate(stripped.trim()); }
         }
     }
-  }, [actions, baseUrl, exit, inputMode, state.track_muted]);
+  }, [actions, baseUrl, exit, inputMode, state.track_muted, state.chain, state.chain_index, state.chain_auto]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
@@ -414,22 +416,29 @@ export function App({ baseUrl }: AppProps) {
     }
   });
 
+  const termCols = stdout?.columns ?? 120;
+  const logPanelW = showLog ? Math.max(44, Math.round(termCols * 0.33)) : 0;
+  /** Focus rail: width 12 + single border (2). */
+  const focusRailOuter = 14;
+  const mainContentWidth = Math.max(48, termCols - focusRailOuter - logPanelW);
+
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={termCols}>
       <StatusBar
         bpm={state.bpm}
         swing={state.swing}
         isPlaying={state.is_playing}
         midiConnected={state.midi_connected}
-        generationStatus={state.generation_status}
         patternName={state.last_prompt}
         patternLength={state.pattern_length}
         barCount={barCount}
       />
       <ChainPanel chain={state.chain} chainIndex={state.chain_index} chainAuto={state.chain_auto} />
-      <Box flexDirection="row">
-        <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="row" width={termCols}>
+        <FocusRail focus={focus} showLog={showLog} />
+        <Box flexDirection="column" width={mainContentWidth}>
           <StepGrid
+            contentWidth={mainContentWidth}
             pattern={state.current_pattern}
             patternLength={state.pattern_length}
             currentStep={state.current_step}
@@ -438,6 +447,7 @@ export function App({ baseUrl }: AppProps) {
             pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
+            contentWidth={mainContentWidth}
             ccParams={state.ccParams}
             trackCC={state.track_cc}
             trackVelocity={state.track_velocity}
@@ -449,13 +459,22 @@ export function App({ baseUrl }: AppProps) {
             selectedStep={ccSelectedStep}
             stepInputBuffer={ccStepInputBuffer}
           />
+          <GenerationSummary
+            summary={state.generation_summary}
+            generationStatus={state.generation_status}
+            lastPrompt={state.last_prompt}
+          />
           <Prompt
             isFocused={focus === "prompt"}
             generationStatus={state.generation_status}
             generationError={state.generation_error}
             onCommand={handleCommand}
             showHelp={showHelp}
-            onClearHelp={() => setShowHelp(false)}
+            onClearHelp={() => {
+              setShowHelp(false);
+              stdout?.write("\x1b[2J\x1b[3J\x1b[H");
+              setTimeout(() => forceRedraw(), 0);
+            }}
             answerText={answerText}
             askPending={askPending}
             onClearAnswer={() => setAnswerText(null)}
@@ -467,14 +486,9 @@ export function App({ baseUrl }: AppProps) {
             onDismissHint={() => setImplementableHint(false)}
             acActiveRef={acActiveRef}
           />
-          <GenerationSummary
-            summary={state.generation_summary}
-            generationStatus={state.generation_status}
-            lastPrompt={state.last_prompt}
-          />
           <Box paddingX={1}>
-            <Text color="gray">
-              {"Tab/'/': panel · ↑↓: navigate · m: mute · q/Q: queue/fire · ←→: adjust · [ ]: CC track · Space: play/stop · +/-: BPM · Ctrl+C: quit"}
+            <Text color={theme.textFaint}>
+              {"/ focus prompt  Tab panels  m mute  q queue  Q fire  +/- BPM  Space transport  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>

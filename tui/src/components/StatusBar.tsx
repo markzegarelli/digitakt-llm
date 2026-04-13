@@ -1,62 +1,70 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Box, Text } from "ink";
+import { theme } from "../theme.js";
 
 interface StatusBarProps {
   bpm: number;
   swing: number;
   isPlaying: boolean;
   midiConnected: boolean;
-  generationStatus: "idle" | "generating" | "failed";
   patternName: string | null;
   patternLength: number;
   barCount: number;
 }
 
-const SPINNER = ["o", "O", "0", "*"] as const;
+function truncateName(name: string, max: number): string {
+  const u = name.toUpperCase();
+  return u.length <= max ? u : `${u.slice(0, max - 1)}\u2026`;
+}
 
 export function StatusBar({
   bpm,
   swing,
   isPlaying,
   midiConnected,
-  generationStatus,
   patternName,
   patternLength,
   barCount,
 }: StatusBarProps) {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    if (generationStatus !== "generating") return;
-    const id = setInterval(() => setFrame((f) => (f + 1) % SPINNER.length), 200);
-    return () => clearInterval(id);
-  }, [generationStatus]);
-
-  const playIcon = isPlaying ? ">" : "||";
-  const playColor = isPlaying ? "#FF6B00" : "#444444";
-  const midiColor = midiConnected ? "#00FF88" : "#FF3366";
-  const claudeColor = generationStatus === "generating" ? "#FFD700" : generationStatus === "failed" ? "#FF3366" : "#555555";
-  const claudeIcon = generationStatus === "generating" ? SPINNER[frame] : generationStatus === "failed" ? "x" : "o";
-  const nameDisplay = patternName ? `[${patternName.toUpperCase()}]` : "[NEW]";
+  const transport = isPlaying ? "RUN" : "STP";
+  const transportColor = isPlaying ? theme.accent : theme.textDim;
+  const midiGlyph = midiConnected ? "ON" : "NO";
+  const midiColor = midiConnected ? theme.accentMuted : theme.error;
+  const pat = patternName ? truncateName(patternName, 22) : "UNTITLED";
 
   return (
-    <Box borderStyle="double" borderColor="#333333" paddingX={1} flexShrink={0}>
-      <Text color={playColor} bold>{playIcon} </Text>
-      <Text color="#E8E8E8" bold>{Math.round(bpm)} BPM</Text>
-      <Text color="#333333">  |  </Text>
-      <Text color="#555555">SW:</Text>
-      <Text color={swing > 0 ? "#E8E8E8" : "#444444"}>{swing}</Text>
-      <Text color="#333333">  |  </Text>
-      <Text color={midiColor}>*</Text>
-      <Text color="#555555">MIDI  </Text>
-      <Text color={claudeColor}>{claudeIcon}</Text>
-      <Text color="#555555">Claude</Text>
-      <Text color="#333333">  ===  </Text>
-      <Text color="#FF6B00" bold>{nameDisplay}</Text>
-      <Text color="#333333">  </Text>
-      <Text color="#444444">{patternLength}steps</Text>
-      <Text color="#333333">  .  </Text>
-      <Text color="#444444">bar:{barCount}</Text>
+    <Box
+      flexDirection="column"
+      borderStyle="double"
+      borderColor={theme.border}
+      paddingX={1}
+      flexShrink={0}
+    >
+      <Box justifyContent="space-between">
+        <Text color={theme.textDim}>8-TRK DIGITAL SEQ</Text>
+        <Text color={theme.textFaint}>DIGITAKT-LLM</Text>
+      </Box>
+      <Box flexWrap="nowrap">
+        <Text bold color={transportColor}>{transport}</Text>
+        <Text color={theme.textFaint}>{"  "}</Text>
+        <Text color={theme.textDim}>BPM</Text>
+        <Text color={theme.text}> {bpm.toFixed(1).padStart(5)}</Text>
+        <Text color={theme.textFaint}>{"  │  "}</Text>
+        <Text color={theme.textDim}>PAT</Text>
+        <Text bold color={theme.accent}> {pat}</Text>
+        <Text color={theme.textFaint}>{"  │  "}</Text>
+        <Text color={theme.textDim}>STP</Text>
+        <Text color={theme.text}> {patternLength}</Text>
+        <Text color={theme.textFaint}>{"  │  "}</Text>
+        <Text color={theme.textDim}>BAR</Text>
+        <Text color={theme.text}> {barCount}</Text>
+        <Text color={theme.textFaint}>{"  │  "}</Text>
+        <Text color={theme.textDim}>SWG</Text>
+        <Text color={swing > 0 ? theme.text : theme.textFaint}> {String(swing).padStart(3)}</Text>
+        <Text color={theme.textFaint}>{"  │  "}</Text>
+        <Text color={theme.textDim}>MIDI</Text>
+        <Text color={midiColor}> {midiGlyph}</Text>
+      </Box>
     </Box>
   );
 }

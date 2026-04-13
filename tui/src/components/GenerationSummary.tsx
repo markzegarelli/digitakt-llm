@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { theme } from "../theme.js";
 
 interface GenerationSummaryProps {
   summary: {
@@ -18,17 +19,19 @@ export function GenerationSummary({
 }: GenerationSummaryProps) {
   if (generationStatus === "generating") {
     return (
-      <Box borderStyle="single" borderColor="#333333" paddingX={1} flexShrink={0}>
-        <Text color="#FFD700">{"-> "} </Text>
-        <Text color="#555555">generating...</Text>
+      <Box borderStyle="single" borderColor={theme.border} paddingX={1} flexShrink={0}>
+        <Text bold color={theme.textDim}>RUN </Text>
+        <Text color={theme.accent}>GEN</Text>
+        <Text color={theme.textDim}> generating pattern...</Text>
       </Box>
     );
   }
 
   if (generationStatus === "failed") {
     return (
-      <Box borderStyle="single" borderColor="#333333" paddingX={1} flexShrink={0}>
-        <Text color="#FF3366">{"-> generation failed"}</Text>
+      <Box borderStyle="single" borderColor={theme.border} paddingX={1} flexShrink={0}>
+        <Text bold color={theme.error}>RUN FAIL</Text>
+        <Text color={theme.textDim}> generation error</Text>
       </Box>
     );
   }
@@ -36,19 +39,18 @@ export function GenerationSummary({
   if (!summary && !lastPrompt) return null;
 
   const displayPrompt = summary?.prompt ?? lastPrompt ?? "";
-  const truncated = displayPrompt.length > 50 ? `${displayPrompt.slice(0, 50)}...` : displayPrompt;
+  const truncated = displayPrompt.length > 56 ? `${displayPrompt.slice(0, 55)}\u2026` : displayPrompt;
 
   return (
-    <Box borderStyle="single" borderColor="#333333" paddingX={1} flexShrink={0}>
-      <Text color="#444444">{"-> \""}</Text>
-      <Text color="#CCCCCC">{truncated}</Text>
-      <Text color="#444444">"</Text>
+    <Box borderStyle="single" borderColor={theme.border} paddingX={1} flexShrink={0}>
+      <Text bold color={theme.textDim}>LAST </Text>
+      <Text color={theme.text}>&quot;{truncated}&quot;</Text>
       {summary && (
         <>
-          <Text color="#333333">{"  ->  "}</Text>
-          <Text color="#555555">{summary.track_summary}</Text>
-          <Text color="#333333">  .  </Text>
-          <Text color="#333333">{summary.latency_ms}ms</Text>
+          <Text color={theme.textFaint}>{"  \u2192  "}</Text>
+          <Text color={theme.accentMuted}>{summary.track_summary}</Text>
+          <Text color={theme.textFaint}>{"  \u00B7  "}</Text>
+          <Text color={theme.textDim}>{summary.latency_ms}ms</Text>
         </>
       )}
     </Box>

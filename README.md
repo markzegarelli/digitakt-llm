@@ -1,6 +1,16 @@
 # digitakt-llm
 
-Generate drum patterns on an Elektron Digitakt in real time using Claude Opus 4.6. Describe a vibe in plain English — the pattern plays immediately and loops until you change it.
+![digitakt-llm terminal UI: status bar, SEQ step grid, MIX parameter bars, generation summary, and CMD prompt](docs/images/tui-screenshot.png)
+
+Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Opus 4.6**. Describe a vibe in plain English — the pattern plays over **USB MIDI** and loops until you change it.
+
+## Key features
+
+- **Ink terminal UI** — Elektron-style layout: transport and tempo in the header, **SEQ** (8-track step grid with velocity dots), **MIX** (per-track CC bars and step overrides), and **CMD** (slash commands and natural-language prompts).
+- **Live pattern engine** — WebSocket-driven grid, playhead, mutes, swing, per-step probability, gates, conditional trigs, and chromatic pitch per track.
+- **Claude integration** — Beat mode for generation from text; chat mode and `/ask` for questions; `/gen` and **Ctrl+G** to turn answers into patterns; optional activity log.
+- **Digitakt-oriented MIDI** — Eight tracks map to channels 1–8; CCs for tune, filter, envelopes, sends, and more; save/load patterns, fills, chains, and pattern history.
+- **FastAPI backend** — REST + `/ws` event stream so the same server can power the TUI or other clients.
 
 ## Hardware Requirements
 
@@ -34,11 +44,11 @@ digitakt
 
 ## Usage
 
-`digitakt` launches a Bun/Ink terminal UI with three panels:
+`digitakt` launches the Bun/Ink TUI (shown above) with **Tab** cycling **SEQ → MIX → CMD** (plus **LOG** when the activity log is open):
 
-- **Pattern Grid** — 16-step ASCII view for all 8 tracks, live-updating
-- **CC Panel** — per-track parameter values (filter, decay, reverb, etc.)
-- **Prompt** — type commands or free-text generation prompts at the bottom
+- **SEQ** — Step grid for all eight tracks, live from the server, with keyboard mutes and queued mutes.
+- **MIX** — Per-track parameters (velocity + CCs), bar readouts, and step mode for per-step CC edits.
+- **CMD** — Slash commands, `/help` (scrollable), and bare-text prompts in beat or chat mode.
 
 ### Commands
 
@@ -111,25 +121,25 @@ snare     64      64   64   64   64  100    0    0
 
 | Panel | Description |
 |-------|-------------|
-| Pattern Grid | 16-step view for all 8 tracks with mute indicators |
-| CC Panel | Per-track parameter values (filter, decay, reverb, etc.) |
-| Prompt | Free-text input for generation prompts and commands |
+| SEQ | Step grid (8/16/32 steps) with mute indicators and focus rail |
+| MIX | Per-track parameters (velocity, filter, decay, reverb, etc.) |
+| CMD | Commands, generation, and `/help` |
 
-Use **Tab** to cycle between panels.
+Use **Tab** to cycle focus between panels (see **Usage**).
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Cycle panels (Pattern → CC → Prompt) |
-| `↑` / `↓` | Navigate tracks (Pattern) or CC params (CC) |
+| `Tab` | Cycle panels (SEQ → MIX → CMD, and LOG when open) |
+| `↑` / `↓` | Navigate tracks (SEQ) or parameters (MIX) |
 | `Space` | Play / stop |
 | `+` / `-` | BPM +1 / -1 |
-| `m` | Mute selected track (Pattern panel) |
-| `←` / `→` | Adjust CC value ±1 (CC panel) |
-| `Ctrl+←` / `Ctrl+→` | Adjust CC value ±10 (CC panel) |
-| `Meta+←` / `Meta+→` | Switch CC track (CC panel) |
-| `Enter` | Submit prompt or command (Prompt panel) |
+| `m` | Mute selected track (SEQ panel) |
+| `←` / `→` | Adjust velocity or CC ±1 (MIX panel) |
+| `Shift+←` / `Shift+→` | Adjust velocity or CC ±10 (MIX panel) |
+| `[` / `]` | Previous / next track (MIX panel) |
+| `Enter` | Submit prompt or command (CMD panel) |
 | `Ctrl+C` | Quit |
 
 ## Environment Variables

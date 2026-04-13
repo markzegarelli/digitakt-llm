@@ -2,8 +2,11 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { DigitaktState, TrackName, CCParamDef } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
+import { theme } from "../theme.js";
 
 interface CCPanelProps {
+  /** Inner width of the bordered panel — widens the value bar on large terminals. */
+  contentWidth: number;
   ccParams: CCParamDef[];
   trackCC: DigitaktState["track_cc"];
   trackVelocity: DigitaktState["track_velocity"];
@@ -16,11 +19,13 @@ interface CCPanelProps {
   stepInputBuffer: string;     // digits being typed in step-edit mode
 }
 
-const BAR_WIDTH = 20;
+/** Border+pad (4) + fixed row chrome before/after the `[` … `]` bar (~24). */
+const MIX_BAR_OVERHEAD = 28;
 
-function barGraph(value: number): string {
-  const filled = Math.round((value / 127) * BAR_WIDTH);
-  return "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
+function barGraph(value: number, barWidth: number): string {
+  const w = Math.max(12, barWidth);
+  const filled = Math.round((value / 127) * w);
+  return "█".repeat(filled) + "░".repeat(w - filled);
 }
 
 // Fixed-width 3-char display for a step cell: override value or "  ·"
@@ -30,6 +35,7 @@ function stepCell(value: number | null | undefined): string {
 }
 
 export function CCPanel({
+  contentWidth,
   ccParams,
   trackCC,
   trackVelocity,
@@ -41,6 +47,7 @@ export function CCPanel({
   selectedStep,
   stepInputBuffer,
 }: CCPanelProps) {
+  const barSlots = Math.max(16, Math.min(96, contentWidth - MIX_BAR_OVERHEAD));
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
   const cc = trackCC[trackName];
 
@@ -58,20 +65,24 @@ export function CCPanel({
     ? "←→: step  ↑↓: ±1  Shift+↑↓: ±10  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
     : "[ ]: track  ↑↓: param  ←→: ±1  Shift+←→: ±10  Enter: step mode";
 
+  const borderCol = isFocused ? theme.borderActive : theme.border;
+
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={isFocused ? "cyan" : "gray"} paddingX={1}>
-      <Box>
-        <Text bold color="cyan">CC  </Text>
+    <Box flexDirection="column" borderStyle="single" borderColor={borderCol} paddingX={1} width={contentWidth}>
+      <Box flexWrap="nowrap">
+        <Text bold color={theme.textDim}>MIX </Text>
         {TRACK_NAMES.map((t, i) => (
-          <Text key={t} bold={i === selectedTrack} color={i === selectedTrack ? "cyan" : "gray"}>
+          <Text key={t} bold={i === selectedTrack} color={i === selectedTrack ? theme.accent : theme.textDim}>
             {i === selectedTrack ? `[${t.toUpperCase()}]` : ` ${t} `}
           </Text>
         ))}
-        <Text color="gray">{`  ${hintText}`}</Text>
+      </Box>
+      <Box marginBottom={0}>
+        <Text color={theme.textFaint}>{hintText}</Text>
       </Box>
       {rows.map(({ key, label, value }, i) => {
         const isSelected = i === selectedParam;
-        const col = isSelected && isFocused ? "cyan" : "white";
+        const col = isSelected && isFocused ? theme.accent : theme.text;
         const isStepEditing = isSelected && isFocused && stepMode && i > 0; // velocity has no step CC
 
         if (isStepEditing) {
@@ -86,12 +97,12 @@ export function CCPanel({
 
           return (
             <Box key={key}>
-              <Text color="gray">{`[${i}]`}</Text>
+              <Text color={theme.textFaint}>{`[${i}]`}</Text>
               {/* Single ASCII char selector — same pattern as PatternGrid */}
               <Text bold color={col}>{">"}</Text>
               <Text>{" "}</Text>
               <Text bold color={col}>{label.padEnd(10)}</Text>
-              <Text color="gray">{"["}</Text>
+              <Text color={theme.textFaint}>{"["}</Text>
               {Array.from({ length: 16 }, (_, s) => {
                 const isCurrentStep = s === selectedStep;
                 const cellValue = isCurrentStep ? previewValue : (stepOverrides?.[s] ?? null);
@@ -102,8 +113,8 @@ export function CCPanel({
                     bold={isCurrentStep}
                     color={
                       isCurrentStep
-                        ? (isBuffering ? "magenta" : "yellow")
-                        : cellValue !== null ? "cyan" : "gray"
+                        ? (isBuffering ? theme.warn : theme.accent)
+                        : cellValue !== null ? theme.accentMuted : theme.textFaint
                     }
                   >
                     {stepCell(cellValue)}
@@ -111,9 +122,9 @@ export function CCPanel({
                   </Text>
                 );
               })}
-              <Text color="gray">{"]"}</Text>
+              <Text color={theme.textFaint}>{"]"}</Text>
               {/* Fixed-width step label — always same width */}
-              <Text bold color="yellow">
+              <Text bold color={theme.accent}>
                 {" s"}{String(selectedStep + 1).padStart(2)}{": "}
                 {stepInputBuffer.length > 0
                   ? `${stepInputBuffer}_`
@@ -126,21 +137,21 @@ export function CCPanel({
 
         return (
           <Box key={key}>
-            <Text color="gray">{`[${i}]`}</Text>
+            <Text color={theme.textFaint}>{`[${i}]`}</Text>
             {/* Single ASCII char selector — same pattern as PatternGrid */}
-            <Text bold color={isSelected && isFocused ? "cyan" : undefined}>
+            <Text bold color={isSelected && isFocused ? theme.accent : undefined}>
               {isSelected && isFocused ? ">" : " "}
             </Text>
             <Text>{" "}</Text>
             <Text bold={isSelected} color={col}>{label.padEnd(10)}</Text>
-            <Text color="gray">{"["}</Text>
-            <Text color={isSelected && isFocused ? "cyan" : "blue"}>{barGraph(value)}</Text>
-            <Text color="gray">{"]"}</Text>
+            <Text color={theme.textFaint}>{"["}</Text>
+            <Text color={isSelected && isFocused ? theme.accent : theme.accentSubtle}>{barGraph(value, barSlots)}</Text>
+            <Text color={theme.textFaint}>{"]"}</Text>
             <Text>{"  "}</Text>
             <Text bold={isSelected} color={col}>{String(value).padStart(3)}</Text>
             {/* Fixed-width tail: space + ASCII char — matches the > prefix width */}
             <Text>{" "}</Text>
-            <Text color={isSelected && isFocused ? "yellow" : undefined}>
+            <Text color={isSelected && isFocused ? theme.warn : undefined}>
               {isSelected && isFocused ? "<" : " "}
             </Text>
           </Box>
