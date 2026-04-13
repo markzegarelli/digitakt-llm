@@ -1,6 +1,5 @@
 # tests/test_chain.py
-import pytest
-from core.state import AppState
+from core.state import AppState, TRACK_NAMES
 
 
 def test_set_chain_stores_names():
@@ -93,3 +92,49 @@ def test_chain_current_after_next():
 def test_chain_current_empty():
     state = AppState()
     assert state.chain_current() is None
+
+
+def test_reset_clears_chain():
+    state = AppState()
+    state.set_chain(["intro", "drop"], auto=True)
+    state.chain_next()
+    pattern = {track: [0] * 16 for track in TRACK_NAMES}
+    state.reset(pattern, 120.0, None)
+    assert state.chain == []
+    assert state.chain_index == -1
+    assert state.chain_auto is False
+
+
+import threading
+
+
+def test_chain_next_thread_safety():
+    state = AppState()
+    state.set_chain([str(i) for i in range(10)], auto=True)
+    errors = []
+
+    def advance():
+        try:
+            for _ in range(50):
+                state.chain_next()
+        except Exception as e:
+            errors.append(e)
+
+    def reset_chain():
+        try:
+            for _ in range(10):
+                state.set_chain(["a", "b", "c"], auto=True)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=advance) for _ in range(5)]
+    threads += [threading.Thread(target=reset_chain) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == [], f"Thread safety errors: {errors}"
+    # After concurrent access, chain_index must be a valid index
+    with state._lock:
+        assert -1 <= state.chain_index < len(state.chain) or state.chain == []

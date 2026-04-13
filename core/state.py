@@ -192,6 +192,9 @@ class AppState:
                 self.track_velocity[track] = 127
             self.pending_mutes.clear()
             self._fill_fsm = FillFSM()
+            self.chain.clear()
+            self.chain_index = -1
+            self.chain_auto = False
 
     # ── Bar-boundary logic (called only by the player loop) ───────────────
 
