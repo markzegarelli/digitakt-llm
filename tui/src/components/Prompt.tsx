@@ -20,6 +20,10 @@ const HELP_LINES = [
   "  load <name>                          queue saved pattern for next loop",
   "  patterns [#tag]                      list saved patterns (filter by tag)",
   "  fill <name>                          one-shot fill (plays once, reverts)",
+  "  chain <p1> <p2> ... [--auto]         define a setlist; patterns must be saved",
+  "  chain-next                           queue next pattern in chain at bar boundary",
+  "  chain-status                         show current chain position and setlist",
+  "  chain-clear                          exit chain mode",
   "  log                                  toggle activity log",
   "  new                                  reset to empty pattern",
   "  undo                                 revert to previous pattern",
@@ -52,7 +56,7 @@ const HELP_LINES = [
 
 // All slash commands for autocomplete
 const COMMANDS = [
-  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "gate",
+  "ask", "bpm", "cc", "cc-step", "chain", "chain-clear", "chain-next", "chain-status", "clear", "cond", "fill", "gate",
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",

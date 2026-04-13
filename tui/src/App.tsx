@@ -185,6 +185,50 @@ export function App({ baseUrl }: AppProps) {
           });
         break;
       }
+      case "chain": {
+        const autoFlag = parts.includes("--auto");
+        const names = parts.slice(1).filter((p) => p !== "--auto");
+        if (names.length === 0) {
+          actions.addLog("usage: /chain <p1> <p2> ... [--auto]  — define a setlist");
+          return;
+        }
+        try {
+          actions.setChain(names, autoFlag).then(() => {
+            actions.addLog(
+              `chain set: ${names.join(" → ")}${autoFlag ? "  (auto)" : ""}`
+            );
+          }).catch(() => {
+            actions.addLog("chain: one or more patterns not found in library");
+          });
+        } catch {
+          actions.addLog("chain: one or more patterns not found in library");
+        }
+        return;
+      }
+      case "chain-next":
+        actions.chainNext().then(() => {
+          actions.addLog("chain: queuing next pattern at bar boundary");
+        }).catch(() => {
+          actions.addLog("chain: end of chain (use --auto to loop)");
+        });
+        return;
+      case "chain-status": {
+        const { chain, chain_index, chain_auto } = state;
+        if (chain.length === 0) {
+          actions.addLog("no chain defined — use /chain <p1> <p2> ...");
+        } else {
+          const pos = chain_index < 0 ? "unstarted" : `${chain_index + 1}/${chain.length}`;
+          actions.addLog(
+            `chain [${pos}]: ${chain.join(" → ")}${chain_auto ? "  (auto)" : ""}`
+          );
+        }
+        return;
+      }
+      case "chain-clear":
+        actions.chainClear().then(() => {
+          actions.addLog("chain cleared");
+        });
+        return;
       default:
         if (cmd.startsWith("/")) { actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`); return; }
         if (stripped.trim()) {
