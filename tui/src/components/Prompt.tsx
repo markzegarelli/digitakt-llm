@@ -20,6 +20,10 @@ const HELP_LINES = [
   "  load <name>                          queue saved pattern for next loop",
   "  patterns [#tag]                      list saved patterns (filter by tag)",
   "  fill <name>                          one-shot fill (plays once, reverts)",
+  "  chain <p1> <p2> ... [--auto]         define setlist",
+  "  chain-next                           queue next pattern in chain",
+  "  chain-status                         show chain position",
+  "  chain-clear                          clear chain state",
   "  log                                  toggle activity log",
   "  new                                  reset to empty pattern",
   "  undo                                 revert to previous pattern",
@@ -34,6 +38,9 @@ const HELP_LINES = [
   "  Ctrl+G                               generate while viewing an /ask answer",
   "                                       or any time after an /ask (hint shown)",
   "  mode [chat|beat]                     switch input mode",
+  "  next [section]                       context-aware next pattern",
+  "  vary [light|medium|heavy]            variation of current pattern",
+  "  read                                 Claude describes current pattern",
   "",
   "── App ────────────────────────────────────────────────────────",
   "  help                                 show this help",
@@ -56,6 +63,7 @@ const COMMANDS = [
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
+  "chain", "chain-next", "chain-status", "chain-clear", "next", "vary", "read",
 ];
 
 function getSuggestions(text: string): string[] {

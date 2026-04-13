@@ -33,7 +33,16 @@ export interface DigitaktState {
   midi_connected: boolean;
   log: string[];
   current_step: number | null;
+  last_prompt: string | null;
   pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
+  chain: string[];
+  chain_index: number;
+  chain_auto: boolean;
+  generation_summary: {
+    prompt: string;
+    track_summary: string;
+    latency_ms: number;
+  } | null;
 }
 
 export type FocusPanel = "pattern" | "cc" | "log" | "prompt";

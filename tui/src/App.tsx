@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useDigitakt } from "./hooks/useDigitakt.js";
-import { Header } from "./components/Header.js";
-import { PatternGrid } from "./components/PatternGrid.js";
+import { StatusBar } from "./components/StatusBar.js";
+import { StepGrid } from "./components/StepGrid.js";
+import { ChainPanel } from "./components/ChainPanel.js";
+import { GenerationSummary } from "./components/GenerationSummary.js";
 import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
@@ -46,6 +48,7 @@ export function App({ baseUrl }: AppProps) {
   const [showHistory, setShowHistory]   = useState(false);
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
   const [implementableHint, setImplementableHint] = useState(false);
+  const [barCount, setBarCount] = useState(0);
   const acActiveRef = useRef(false);
 
   // Clear the full screen when generation completes so Ink redraws into a
@@ -60,6 +63,12 @@ export function App({ baseUrl }: AppProps) {
     }
     prevGenStatus.current = state.generation_status;
   }, [state.generation_status, stdout, forceRedraw]);
+
+  useEffect(() => {
+    if (state.current_step === 0 && state.is_playing) {
+      setBarCount((n) => n + 1);
+    }
+  }, [state.current_step, state.is_playing]);
 
   // Ink 5.x uses eraseLines(n) on every re-render to wipe ghost rows from
   // taller previous frames, so no manual screen clear is needed when the
@@ -174,6 +183,35 @@ export function App({ baseUrl }: AppProps) {
         break;
       case "fill":
         if (parts[1]) actions.queueFill(parts[1]).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
+        break;
+      case "chain": {
+        const autoFlag = parts.includes("--auto");
+        const names = parts.slice(1).filter((p) => p !== "--auto");
+        if (names.length === 0) {
+          actions.addLog("usage: /chain <p1> <p2> ... [--auto]");
+          return;
+        }
+        actions.setChain(names, autoFlag)
+          .then(() => actions.addLog(`chain set: ${names.join(" -> ")}${autoFlag ? " (auto)" : ""}`))
+          .catch(dispatchError);
+        break;
+      }
+      case "chain-next":
+        actions.chainNext()
+          .then(() => actions.addLog("chain: queueing next pattern"))
+          .catch(dispatchError);
+        break;
+      case "chain-status": {
+        const { chain, chain_index, chain_auto } = state;
+        if (chain.length === 0) actions.addLog("no chain defined");
+        else {
+          const pos = chain_index < 0 ? "unstarted" : `${chain_index + 1}/${chain.length}`;
+          actions.addLog(`chain [${pos}]: ${chain.join(" -> ")}${chain_auto ? " (auto)" : ""}`);
+        }
+        break;
+      }
+      case "chain-clear":
+        actions.chainClear().then(() => actions.addLog("chain cleared")).catch(dispatchError);
         break;
       case "patterns": {
         const filterTag = parts[1]?.startsWith("#") ? parts[1].slice(1) : null;
@@ -378,28 +416,25 @@ export function App({ baseUrl }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Header
+      <StatusBar
         bpm={state.bpm}
         swing={state.swing}
         isPlaying={state.is_playing}
-        midiPort={state.midi_port_name}
         midiConnected={state.midi_connected}
         generationStatus={state.generation_status}
-        fillActive={state.fill_active}
-        fillQueued={state.fill_queued}
-        muteCount={Object.values(state.track_muted).filter(Boolean).length}
+        patternName={state.last_prompt}
+        patternLength={state.pattern_length}
+        barCount={barCount}
       />
+      <ChainPanel chain={state.chain} chainIndex={state.chain_index} chainAuto={state.chain_auto} />
       <Box flexDirection="row">
         <Box flexDirection="column" flexGrow={1}>
-          <PatternGrid
+          <StepGrid
             pattern={state.current_pattern}
+            patternLength={state.pattern_length}
+            currentStep={state.current_step}
             trackMuted={state.track_muted}
             selectedTrack={patternTrack}
-            isFocused={focus === "pattern"}
-            currentStep={state.current_step}
-            patternLength={state.pattern_length}
-            condMap={(state.current_pattern as Record<string, unknown>)["cond"] as Record<string, (string | null)[]> | undefined}
-            probMap={(state.current_pattern as Record<string, unknown>)["prob"] as Record<string, number[]> | undefined}
             pendingMuteTracks={pendingMuteTracks}
           />
           <CCPanel
@@ -431,6 +466,11 @@ export function App({ baseUrl }: AppProps) {
             implementableHint={implementableHint}
             onDismissHint={() => setImplementableHint(false)}
             acActiveRef={acActiveRef}
+          />
+          <GenerationSummary
+            summary={state.generation_summary}
+            generationStatus={state.generation_status}
+            lastPrompt={state.last_prompt}
           />
           <Box paddingX={1}>
             <Text color="gray">

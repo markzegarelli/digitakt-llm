@@ -3,7 +3,7 @@ import json
 from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
-from core.generator import Generator
+from core.generator import Generator, _compute_generation_summary
 
 VALID_PATTERN = {k: [0] * 16 for k in TRACK_NAMES}
 VALID_PATTERN["kick"][0] = 100
@@ -32,6 +32,19 @@ def test_valid_json_emits_generation_complete():
     assert events[1][0] == "complete"
     assert events[1][1]["pattern"] == VALID_PATTERN
     assert events[1][1]["prompt"] == "heavy kick"
+    assert events[1][1]["summary"]["prompt"] == "heavy kick"
+    assert "latency_ms" in events[1][1]["summary"]
+
+
+def test_compute_generation_summary_counts_tracks():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["snare"][4] = 90
+    summary = _compute_generation_summary("test", pattern, 123)
+    assert summary["prompt"] == "test"
+    assert summary["latency_ms"] == 123
+    assert "BDx1" in summary["track_summary"]
+    assert "SDx1" in summary["track_summary"]
 
 
 def test_valid_json_updates_state():

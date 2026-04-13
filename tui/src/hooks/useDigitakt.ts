@@ -33,7 +33,12 @@ const DEFAULT_STATE: DigitaktState = {
   midi_connected: false,
   log: [],
   current_step: null,
+  last_prompt: null,
   pattern_history: [],
+  chain: [],
+  chain_index: -1,
+  chain_auto: false,
+  generation_summary: null,
 };
 
 function formatLogEntry(event: string, data: Record<string, unknown>): string {
@@ -92,6 +97,9 @@ export interface DigitaktActions {
   setGate(track: string, step: number, value: number): Promise<Response>;
   setPitch(track: string, value: number): Promise<Response>;
   setCond(track: string, step: number, value: string | null): Promise<Response>;
+  setChain(names: string[], auto?: boolean): Promise<void>;
+  chainNext(): Promise<void>;
+  chainClear(): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -145,7 +153,11 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         track_velocity: data["track_velocity"] as DigitaktState["track_velocity"],
         track_pitch: (data["track_pitch"] as Record<string, number>) ?? {},
         step_cc: (pattern["step_cc"] as DigitaktState["step_cc"]) ?? null,
+        last_prompt: (data["last_prompt"] as string | null) ?? null,
         pattern_history: (data["pattern_history"] as DigitaktState["pattern_history"]) ?? [],
+        chain: (data["chain"] as string[]) ?? prev.chain,
+        chain_index: (data["chain_index"] as number) ?? prev.chain_index,
+        chain_auto: (data["chain_auto"] as boolean) ?? prev.chain_auto,
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
@@ -189,7 +201,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "playback_stopped":
               return { ...prev, is_playing: false, current_step: null, log: newLog };
             case "step_changed":
-              return { ...prev, current_step: msg.data["step"] as number };
+              return { ...prev, current_step: msg.data["step"] as number, log: newLog };
             case "generation_started":
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete": {
@@ -198,6 +210,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 ...prev,
                 generation_status: "idle",
                 current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"],
+                last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
+                generation_summary: (msg.data["summary"] as DigitaktState["generation_summary"]) ?? null,
                 ...(genBpm ? { bpm: genBpm } : {}),
                 log: newLog,
               };
@@ -299,6 +313,21 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "state_reset":
               fetchState();
               return { ...prev, log: newLog };
+            case "chain_updated":
+              return {
+                ...prev,
+                chain: (msg.data["chain"] as string[]) ?? [],
+                chain_index: (msg.data["chain_index"] as number) ?? -1,
+                chain_auto: (msg.data["chain_auto"] as boolean) ?? false,
+                log: newLog,
+              };
+            case "chain_advanced":
+              return {
+                ...prev,
+                chain: (msg.data["chain"] as string[]) ?? prev.chain,
+                chain_index: (msg.data["chain_index"] as number) ?? prev.chain_index,
+                log: newLog,
+              };
             case "ask_complete":
               return { ...prev, log: newLog };
             default:
@@ -456,6 +485,18 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ track, step, value }),
       }), [baseUrl]),
+
+    setChain: useCallback(async (names: string[], auto = false) => {
+      await api("POST", "/chain", { names, auto });
+    }, [api]),
+
+    chainNext: useCallback(async () => {
+      await api("POST", "/chain/next");
+    }, [api]),
+
+    chainClear: useCallback(async () => {
+      await api("DELETE", "/chain");
+    }, [api]),
   };
 
   return [state, actions];
