@@ -32,9 +32,6 @@ export function FocusRail({ focus, showLog }: FocusRailProps) {
       <NavLine active={focus === "cc"} label="MIX" />
       {showLog && <NavLine active={focus === "log"} label="LOG" />}
       <NavLine active={focus === "prompt"} label="CMD" />
-      <Box marginTop={1}>
-        <Text color={theme.textFaint}>TAB cycle</Text>
-      </Box>
     </Box>
   );
 }
