@@ -103,6 +103,22 @@ def test_load_nonexistent_pattern_returns_404(tmp_path):
     assert resp.status_code == 404
 
 
+def test_load_while_stopped_applies_pattern_immediately(tmp_path):
+    """GET /patterns/{name} must update the grid when playback is stopped (no player loop)."""
+    client = _make_test_client(tmp_path)
+    client.post("/patterns/snap")
+    client.post("/vel", json={"track": "kick", "step": 1, "value": 5})
+    assert client.get("/state").json()["current_pattern"]["kick"][0] == 5
+    assert server_module._state.is_playing is False
+
+    load_resp = client.get("/patterns/snap")
+    assert load_resp.status_code == 200
+
+    state = client.get("/state").json()
+    assert state["current_pattern"]["kick"][0] == DEFAULT_PATTERN["kick"][0]
+    assert server_module._state.pending_pattern is None
+
+
 def test_websocket_connects(tmp_path):
     client = _make_test_client(tmp_path)
     with client.websocket_connect("/ws") as ws:

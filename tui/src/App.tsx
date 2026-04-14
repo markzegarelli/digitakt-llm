@@ -179,10 +179,27 @@ export function App({ baseUrl }: AppProps) {
         }
         break;
       }
-      case "load":
-        if (parts[1]) fetch(`${baseUrl}/patterns/${encodeURIComponent(parts[1])}`)
-          .then(r => { if (!r.ok) actions.addLog(`Pattern "${parts[1]}" not found`); });
+      case "load": {
+        const name = parts[1];
+        if (!name) break;
+        setShowLog(true);
+        fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`)
+          .then(async (r) => {
+            if (!r.ok) {
+              const b = await r.json().catch(() => ({})) as { detail?: unknown };
+              const d = b.detail;
+              actions.addLog(
+                typeof d === "string" ? `✗ ${d}` : `Pattern "${name}" not found`,
+              );
+              return;
+            }
+            actions.addLog(
+              state.is_playing ? `Queued "${name}" for next bar` : `Loaded "${name}"`,
+            );
+          })
+          .catch((err: Error) => actions.addLog(`✗ /load: ${err.message}`));
         break;
+      }
       case "fill":
         if (parts[1]) actions.queueFill(parts[1]).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
         break;
@@ -217,12 +234,35 @@ export function App({ baseUrl }: AppProps) {
         break;
       case "patterns": {
         const filterTag = parts[1]?.startsWith("#") ? parts[1].slice(1) : null;
-        fetch(`${baseUrl}/patterns`).then(r => r.json())
-          .then((d: { patterns: Array<{ name: string; tags: string[] }> }) => {
-            const list = filterTag ? d.patterns.filter(p => p.tags.includes(filterTag)) : d.patterns;
-            if (list.length === 0) actions.addLog(filterTag ? `No patterns tagged #${filterTag}.` : "No saved patterns.");
-            else list.forEach(p => actions.addLog(`  ${p.name}${p.tags.length ? `  [${p.tags.join(", ")}]` : ""}`));
-          });
+        setShowLog(true);
+        fetch(`${baseUrl}/patterns`)
+          .then(async (r) => {
+            if (!r.ok) {
+              const b = await r.json().catch(() => ({})) as { detail?: unknown };
+              const d = b.detail;
+              actions.addLog(
+                typeof d === "string" ? `✗ /patterns: ${d}` : `✗ /patterns: HTTP ${r.status}`,
+              );
+              return null;
+            }
+            return r.json() as Promise<{ patterns?: Array<{ name: string; tags?: string[] }> }>;
+          })
+          .then((d) => {
+            if (!d) return;
+            const entries = Array.isArray(d.patterns) ? d.patterns : [];
+            const list = filterTag
+              ? entries.filter((p) => Array.isArray(p.tags) && p.tags.includes(filterTag))
+              : entries;
+            if (list.length === 0) {
+              actions.addLog(filterTag ? `No patterns tagged #${filterTag}.` : "No saved patterns.");
+              return;
+            }
+            list.forEach((p) => {
+              const tags = Array.isArray(p.tags) ? p.tags : [];
+              actions.addLog(`  ${p.name}${tags.length ? `  [${tags.join(", ")}]` : ""}`);
+            });
+          })
+          .catch((err: Error) => actions.addLog(`✗ /patterns: ${err.message}`));
         break;
       }
       default:
@@ -239,7 +279,7 @@ export function App({ baseUrl }: AppProps) {
           } else { setImplementableHint(false); actions.generate(stripped.trim()); }
         }
     }
-  }, [actions, baseUrl, exit, inputMode, state.track_muted, state.chain, state.chain_index, state.chain_auto]);
+  }, [actions, baseUrl, exit, inputMode, setShowLog, state.is_playing, state.track_muted, state.chain, state.chain_index, state.chain_auto]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {

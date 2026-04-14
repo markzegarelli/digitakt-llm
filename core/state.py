@@ -142,6 +142,12 @@ class AppState:
         with self._lock:
             self.pending_pattern = pattern
 
+    def replace_current_pattern(self, pattern: dict) -> None:
+        """Set the live pattern and clear pending swap (e.g. GET /patterns/{name} while stopped)."""
+        with self._lock:
+            self.current_pattern = pattern
+            self.pending_pattern = None
+
     def reset(self, pattern: dict, bpm: float, prompt: str | None) -> None:
         """Atomic bulk reset (used by /new)."""
         with self._lock:

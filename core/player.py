@@ -51,7 +51,7 @@ class Player:
         self.bus.emit("bpm_changed", {"bpm": bpm})
 
     def queue_pattern(self, pattern: dict) -> None:
-        self.state.pending_pattern = pattern
+        self.state.queue_pattern(pattern)
 
     def _step_duration(self) -> float:
         return 60.0 / self.state.bpm / 4.0

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import threading
@@ -156,7 +157,6 @@ def post_stop():
 
 @app.post("/new")
 def post_new():
-    import copy
     from core.state import EMPTY_PATTERN
     _state.pending_pattern = copy.deepcopy(EMPTY_PATTERN)
     _state.bpm = 120.0
@@ -433,8 +433,17 @@ def load_pattern(name: str):
         data = json.load(f)
     # Old format: raw pattern dict. New format: {"pattern": {...}, "tags": [...]}
     pattern = data.get("pattern", data) if isinstance(data, dict) and "pattern" in data else data
-    _player.queue_pattern(pattern)
+    pattern = copy.deepcopy(pattern)
     _state.last_prompt = name
+    if _state.is_playing:
+        _player.queue_pattern(pattern)
+    else:
+        # No player loop is advancing bar boundaries — apply immediately so /load works while stopped.
+        _state.replace_current_pattern(pattern)
+        _bus.emit(
+            "pattern_changed",
+            {"pattern": _state.current_pattern, "prompt": name},
+        )
     return {"loaded": name}
 
 
