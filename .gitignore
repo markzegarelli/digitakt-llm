@@ -24,3 +24,6 @@ docs/plans/
 docs/specs/
 docs/superpowers/
 .superpowers/
+
+# Saved patterns (user data; created at runtime by the server)
+patterns/
