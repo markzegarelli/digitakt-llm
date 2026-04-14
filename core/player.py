@@ -24,15 +24,14 @@ class Player:
     def start(self) -> bool:
         if self._thread and self._thread.is_alive():
             return True
-        if self.port is None:
-            return False
-        midi_utils.send_start(self.port)
-        # Flush all stored CC values so the Digitakt syncs immediately
-        for track, params in self.state.track_cc.items():
-            channel = TRACK_CHANNELS[track]
-            for param, value in params.items():
-                if param in midi_utils.CC_MAP:
-                    midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], value)
+        if self.port is not None:
+            midi_utils.send_start(self.port)
+            # Flush all stored CC values so the Digitakt syncs immediately
+            for track, params in self.state.track_cc.items():
+                channel = TRACK_CHANNELS[track]
+                for param, value in params.items():
+                    if param in midi_utils.CC_MAP:
+                        midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], value)
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -102,49 +101,12 @@ class Player:
             if velocity > 0:
                 scale = self.state.track_velocity.get(track, 127)
                 velocity = max(1, (velocity * scale) // 127)
-                try:
-                    midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
-                except Exception:
-                    logger.error(
-                        "MIDI send failed during note playback",
-                        extra={"error_type": "midi_disconnect"},
-                        exc_info=True,
-                    )
-                    self.state.is_playing = False
-                    self.bus.emit("playback_stopped", {})
-                    self.bus.emit(
-                        "midi_disconnected",
-                        {"port": self.state.midi_port_name},
-                    )
-                    self._stop_event.set()
-                    return
-                # Schedule note_off if gate < 100
-                gate_track = pattern.get("gate", {}).get(track)
-                gate_pct = gate_track[step] if gate_track is not None else 100
-                if gate_pct < 100:
-                    note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
-                    port_ref = self.port
-                    note_ref = note
-                    ch_ref = TRACK_CHANNELS[track]
-                    def _send_off(p=port_ref, n=note_ref, ch=ch_ref):
-                        try:
-                            send_note_off(p, n, channel=ch)
-                        except Exception:
-                            pass
-                    threading.Timer(note_off_delay, _send_off).start()
-        # Send per-step CC overrides
-        step_cc = pattern.get("step_cc", {})
-        for track in TRACK_NAMES:
-            channel = TRACK_CHANNELS[track]
-            for param, steps in step_cc.get(track, {}).items():
-                override = steps[step]
-                if override is not None and param in midi_utils.CC_MAP:
-                    dirty_cc.add((track, param))
+                if self.port is not None:
                     try:
-                        midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], override)
+                        midi_utils.send_note(self.port, note, velocity, channel=TRACK_CHANNELS[track])
                     except Exception:
                         logger.error(
-                            "MIDI send failed during CC override",
+                            "MIDI send failed during note playback",
                             extra={"error_type": "midi_disconnect"},
                             exc_info=True,
                         )
@@ -156,6 +118,45 @@ class Player:
                         )
                         self._stop_event.set()
                         return
+                    # Schedule note_off if gate < 100
+                    gate_track = pattern.get("gate", {}).get(track)
+                    gate_pct = gate_track[step] if gate_track is not None else 100
+                    if gate_pct < 100:
+                        note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
+                        port_ref = self.port
+                        note_ref = note
+                        ch_ref = TRACK_CHANNELS[track]
+                        def _send_off(p=port_ref, n=note_ref, ch=ch_ref):
+                            try:
+                                send_note_off(p, n, channel=ch)
+                            except Exception:
+                                pass
+                        threading.Timer(note_off_delay, _send_off).start()
+        # Send per-step CC overrides
+        step_cc = pattern.get("step_cc", {})
+        for track in TRACK_NAMES:
+            channel = TRACK_CHANNELS[track]
+            for param, steps in step_cc.get(track, {}).items():
+                override = steps[step]
+                if override is not None and param in midi_utils.CC_MAP:
+                    dirty_cc.add((track, param))
+                    if self.port is not None:
+                        try:
+                            midi_utils.send_cc(self.port, channel, midi_utils.CC_MAP[param], override)
+                        except Exception:
+                            logger.error(
+                                "MIDI send failed during CC override",
+                                extra={"error_type": "midi_disconnect"},
+                                exc_info=True,
+                            )
+                            self.state.is_playing = False
+                            self.bus.emit("playback_stopped", {})
+                            self.bus.emit(
+                                "midi_disconnected",
+                                {"port": self.state.midi_port_name},
+                            )
+                            self._stop_event.set()
+                            return
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
@@ -175,34 +176,36 @@ class Player:
                         self._play_step(step, dirty_cc)
                     if self._stop_event.is_set():
                         break
-                    try:
-                        midi_utils.send_clock(self.port)
-                    except Exception:
-                        logger.error(
-                            "MIDI clock send failed",
-                            extra={"error_type": "midi_disconnect"},
-                            exc_info=True,
-                        )
-                        self.state.is_playing = False
-                        self.bus.emit("playback_stopped", {})
-                        self.bus.emit(
-                            "midi_disconnected",
-                            {"port": self.state.midi_port_name},
-                        )
-                        self._stop_event.set()
-                        return
+                    if self.port is not None:
+                        try:
+                            midi_utils.send_clock(self.port)
+                        except Exception:
+                            logger.error(
+                                "MIDI clock send failed",
+                                extra={"error_type": "midi_disconnect"},
+                                exc_info=True,
+                            )
+                            self.state.is_playing = False
+                            self.bus.emit("playback_stopped", {})
+                            self.bus.emit(
+                                "midi_disconnected",
+                                {"port": self.state.midi_port_name},
+                            )
+                            self._stop_event.set()
+                            return
                     next_tick += self._tick_duration()
                     sleep_time = next_tick - time.perf_counter()
                     if sleep_time > 0:
                         self._stop_event.wait(sleep_time)
 
             # Restore global CC for any params overridden during this loop
-            for track, param in dirty_cc:
-                global_val = self.state.track_cc.get(track, {}).get(param)
-                if global_val is not None and param in midi_utils.CC_MAP:
-                    midi_utils.send_cc(
-                        self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
-                    )
+            if self.port is not None:
+                for track, param in dirty_cc:
+                    global_val = self.state.track_cc.get(track, {}).get(param)
+                    if global_val is not None and param in midi_utils.CC_MAP:
+                        midi_utils.send_cc(
+                            self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
+                        )
 
             # End of loop: apply queued mutes at bar boundary
             mute_changes = self.state.apply_pending_mutes()

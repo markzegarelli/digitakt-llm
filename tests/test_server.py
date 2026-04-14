@@ -56,6 +56,20 @@ def test_post_play_returns_200(tmp_path):
     server_module._player.stop()
 
 
+def test_post_play_without_midi_returns_200(tmp_path):
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    bus = EventBus()
+    player = Player(state, bus, None)
+    gen = Generator(state, bus)
+    gen._client = MagicMock()
+    server_module.init(state, bus, player, gen, patterns_dir=str(tmp_path))
+    client = TestClient(server_module.app)
+    resp = client.post("/play")
+    assert resp.status_code == 200
+    server_module._player.stop()
+
+
 def test_post_stop_returns_200(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/stop")

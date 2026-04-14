@@ -142,8 +142,9 @@ def post_bpm(req: BpmRequest):
 
 @app.post("/play")
 def post_play():
+    """Start the sequencer. With a Digitakt connected, sends MIDI clock and notes; without hardware, runs a local timing loop so the UI still advances."""
     if not _player.start():
-        raise HTTPException(status_code=503, detail="No MIDI device connected")
+        raise HTTPException(status_code=503, detail="Playback could not start")
     return {"status": "playing"}
 
 

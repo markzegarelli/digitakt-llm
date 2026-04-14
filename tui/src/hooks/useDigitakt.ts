@@ -401,7 +401,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       } catch {
         setState((s) => ({
           ...s,
-          log: [...s.log, "✗ No MIDI device connected"].slice(-50),
+          log: [...s.log, "✗ Playback could not start"].slice(-50),
         }));
       }
     }, [api]),

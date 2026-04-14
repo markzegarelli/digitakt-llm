@@ -355,20 +355,27 @@ def test_player_uses_track_pitch():
     assert found, "Expected note_on with pitch 48 for kick"
 
 
-def test_start_with_no_port_returns_false():
+def test_start_with_no_port_runs_local_preview_without_midi():
     state = AppState()
     state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
     bus = EventBus()
     player = Player(state, bus, None)
 
-    events = []
-    bus.subscribe("playback_started", lambda p: events.append(p))
+    started = []
+    steps = []
+    bus.subscribe("playback_started", lambda p: started.append(p))
+    bus.subscribe("step_changed", lambda p: steps.append(p["step"]))
 
     result = player.start()
+    time.sleep(0.05)
 
-    assert result is False
+    assert result is True
+    assert state.is_playing is True
+    assert started == [{}]
+    assert len(steps) >= 1
+    player.stop()
+    time.sleep(0.02)
     assert state.is_playing is False
-    assert events == []
 
 
 def test_midi_error_during_step_emits_playback_stopped():
