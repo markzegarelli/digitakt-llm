@@ -75,15 +75,15 @@ Type `/help` in the prompt panel for the full reference. All commands are prefix
 | `bpm <n>` | Set tempo (20–400) |
 | `swing <n>` | Set swing amount (0–100) |
 | `length [8\|16\|32]` | Set pattern step count |
-| `prob <track> <step> <value>` | Step probability 0–100 (1-indexed) |
-| `vel <track> <step> <value>` | Step velocity 0–127 (1-indexed) |
+| `prob <track> <step> <value>` | Step probability 0–100 (1-indexed, within current pattern length) |
+| `vel <track> <step> <value>` | Step velocity 0–127 (1-indexed, within current pattern length) |
 | `gate <track> <step> <0-100>` | Note gate length (% of step duration) |
 | `pitch <track> <0-127>` | MIDI note number for track (chromatic mode) |
 | `cond <track> <step> <1:2\|not:2\|fill\|clear>` | Conditional trig on a step |
 | `random [track\|all] [vel\|prob] [lo-hi]` | Randomize velocity or probability |
 | `randbeat` | Generate a random techno beat |
 | `cc <track> <param> <value>` | Send CC to track globally (0–127) |
-| `cc-step <track> <param> <step> <v>` | Per-step CC override (-1 to clear) |
+| `cc-step <track> <param> <step> <v>` | Per-step CC override (-1 to clear; step must be within current pattern length) |
 | `save <name> [#tag1 #tag2]` | Save pattern with optional tags |
 | `load <name>` | Queue a saved pattern for the next loop |
 | `patterns [#tag]` | List saved patterns, optionally filtered by tag |
@@ -113,13 +113,14 @@ Each track maps to its own MIDI channel (kick → ch 1, snare → ch 2, … perc
 | Param | CC# | Default | Description |
 |-------|-----|---------|-------------|
 | `tune` | 16 | 64 | Sample pitch |
-| `filter` | 74 | 64 | Filter cutoff |
-| `resonance` | 71 | 64 | Filter resonance |
-| `attack` | 80 | 64 | Amp attack |
-| `decay` | 82 | 64 | Amp decay |
-| `volume` | 95 | 100 | Track volume |
-| `reverb` | 91 | 0 | Reverb send |
-| `delay` | 30 | 0 | Delay send |
+| `filter` | 74 | 127 | Filter cutoff |
+| `resonance` | 75 | 0 | Filter resonance |
+| `attack` | 78 | 0 | Amp attack |
+| `hold` | 79 | 0 | Amp hold |
+| `decay` | 80 | 64 | Amp decay |
+| `volume` | 7 | 100 | Track volume |
+| `reverb` | 83 | 0 | Reverb send |
+| `delay` | 82 | 0 | Delay send |
 
 ```
 > cc kick filter 90
@@ -163,23 +164,45 @@ Use **Tab** to cycle focus between panels (see **Usage**).
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | (required) | Anthropic API key |
 | `PORT` | `8000` | FastAPI server port |
+| `DIGITAKT_HOST` | `127.0.0.1` | FastAPI bind host (`0.0.0.0` only when explicitly needed) |
+| `DIGITAKT_ENABLE_TRACES` | `0` | Enable `GET /traces` observability endpoint |
+| `DIGITAKT_ADMIN_TOKEN` | unset | Optional token required via `X-Digitakt-Token` for protected admin endpoints (including `/traces` when set) |
 
 ## API Reference
 
-The FastAPI server starts automatically on `http://localhost:8000`.
+The FastAPI server starts automatically on `http://localhost:8000` (bound to `127.0.0.1` by default).
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/state` | Full application state as JSON |
 | `POST` | `/generate` | `{"prompt": "..."}` → 202 Accepted |
+| `POST` | `/ask` | Ask Claude a question |
 | `POST` | `/bpm` | `{"bpm": 140.0}` |
+| `POST` | `/swing` | `{"amount": 25}` |
+| `POST` | `/length` | `{"steps": 8\|16\|32}` |
 | `POST` | `/play` | Start playback |
 | `POST` | `/stop` | Stop playback |
-| `GET` | `/patterns` | `{"names": [...]}` |
+| `POST` | `/new` | Reset to empty pattern |
+| `POST` | `/undo` | Revert to previous pattern |
+| `GET` | `/patterns` | `{"patterns":[{"name":"...","tags":[...]}]}` |
 | `POST` | `/patterns/{name}` | Save current pattern |
-| `GET` | `/patterns/{name}` | Queue saved pattern |
+| `GET` | `/patterns/{name}` | Load pattern (queued if playing, immediate if stopped) |
+| `POST` | `/fill/{name}` | Queue one-shot fill from saved pattern |
+| `POST` | `/prob` | Set step probability |
+| `POST` | `/vel` | Set step velocity |
+| `POST` | `/gate` | Set step gate |
+| `POST` | `/pitch` | Set track pitch |
+| `POST` | `/cond` | Set conditional trig |
+| `POST` | `/random` | Randomize velocity or probability |
+| `POST` | `/randbeat` | Generate a random techno beat |
 | `POST` | `/cc` | `{"track": "kick", "param": "filter", "value": 90}` |
+| `GET` | `/cc-params` | List supported CC params and defaults |
+| `POST` | `/cc-step` | Set per-step CC override |
 | `GET` | `/cc` | Current CC state for all tracks |
+| `POST` | `/mute` | Immediate mute toggle/update |
+| `POST` | `/mute-queued` | Queue mute for next bar boundary |
+| `POST` | `/velocity` | Set global per-track velocity scale |
+| `GET` | `/traces` | Recent LLM traces (disabled by default, optional token-protected) |
 | `WS` | `/ws` | Event stream (see below) |
 
 ## Contributing

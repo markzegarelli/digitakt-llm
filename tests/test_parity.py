@@ -120,6 +120,14 @@ def test_parity_cond_invalid_value_rejected(client):
     assert client.post("/cond", json={"track": "kick", "step": 1, "value": "bogus"}).status_code == 422
 
 
+def test_parity_gate_invalid_track_rejected(client):
+    assert client.post("/gate", json={"track": "cowbell", "step": 1, "value": 50}).status_code == 422
+
+
+def test_parity_cond_invalid_track_rejected(client):
+    assert client.post("/cond", json={"track": "cowbell", "step": 1, "value": "1:2"}).status_code == 422
+
+
 def test_parity_velocity_out_of_range_rejected(client):
     assert client.post("/velocity", json={"track": "kick", "value": 200}).status_code == 422
 

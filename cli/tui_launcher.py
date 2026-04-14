@@ -1,11 +1,9 @@
 """Launches the FastAPI backend and Bun TUI together."""
 from __future__ import annotations
 import os
-import signal
 import socket
 import subprocess
 import sys
-import time
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -17,22 +15,6 @@ load_dotenv()
 def _port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("localhost", port)) == 0
-
-
-def _kill_stale_server(port: int) -> None:
-    """Kill whatever process is holding the port."""
-    result = subprocess.run(
-        ["lsof", "-ti", f"tcp:{port}"],
-        capture_output=True, text=True,
-    )
-    pids = result.stdout.strip().split()
-    for pid in pids:
-        try:
-            os.kill(int(pid), signal.SIGTERM)
-        except (ProcessLookupError, ValueError):
-            pass
-    if pids:
-        time.sleep(0.5)  # brief grace period
 
 
 def _start_server(api_port: int) -> None:
@@ -91,11 +73,11 @@ def main() -> None:
     url = os.environ.get("DIGITAKT_URL", f"http://localhost:{api_port}")
 
     if _port_in_use(api_port):
-        print(f"Port {api_port} already in use — killing stale server...")
-        _kill_stale_server(api_port)
-        if _port_in_use(api_port):
-            print(f"Error: could not free port {api_port}. Stop the process manually and retry.")
-            sys.exit(1)
+        print(
+            f"Error: port {api_port} is already in use. "
+            "Stop the existing process manually and retry."
+        )
+        sys.exit(1)
 
     _start_server(api_port)
 

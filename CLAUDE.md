@@ -138,3 +138,6 @@ Key endpoints:
 | `DIGITAKT_URL` | `http://localhost:8000` | no |
 | `DIGITAKT_LOG_FILE` | — | no (enables JSON-lines structured log file) |
 | `DIGITAKT_TRACE_FILE` | — | no (enables JSON-lines LLM trace file) |
+| `DIGITAKT_HOST` | `127.0.0.1` | no (FastAPI bind host; set `0.0.0.0` only when remote access is intentional) |
+| `DIGITAKT_ENABLE_TRACES` | `0` | no (set `1` to expose `GET /traces`) |
+| `DIGITAKT_ADMIN_TOKEN` | — | no (required `x-digitakt-token` header when set for protected admin endpoints like `/traces`) |

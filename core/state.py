@@ -134,6 +134,56 @@ class AppState:
         with self._lock:
             self.pattern_length = steps
 
+    def normalize_pattern_length(self, pattern: dict, steps: int | None = None) -> dict:
+        """Resize all step-indexed pattern structures to match the target length."""
+        target_steps = self.pattern_length if steps is None else steps
+        result = copy.deepcopy(pattern)
+
+        for track in TRACK_NAMES:
+            cur = list(result.get(track, []))
+            if len(cur) < target_steps:
+                cur.extend([0] * (target_steps - len(cur)))
+            else:
+                cur = cur[:target_steps]
+            result[track] = cur
+
+        if "prob" in result and isinstance(result["prob"], dict):
+            result["prob"] = {
+                track: (list(vals) + [100] * max(0, target_steps - len(vals)))[:target_steps]
+                for track, vals in result["prob"].items()
+                if isinstance(vals, list)
+            }
+
+        if "gate" in result and isinstance(result["gate"], dict):
+            result["gate"] = {
+                track: (list(vals) + [100] * max(0, target_steps - len(vals)))[:target_steps]
+                for track, vals in result["gate"].items()
+                if isinstance(vals, list)
+            }
+
+        if "cond" in result and isinstance(result["cond"], dict):
+            result["cond"] = {
+                track: (list(vals) + [None] * max(0, target_steps - len(vals)))[:target_steps]
+                for track, vals in result["cond"].items()
+                if isinstance(vals, list)
+            }
+
+        if "step_cc" in result and isinstance(result["step_cc"], dict):
+            new_step_cc: dict[str, dict[str, list]] = {}
+            for track, param_map in result["step_cc"].items():
+                if not isinstance(param_map, dict):
+                    continue
+                new_step_cc[track] = {}
+                for param, vals in param_map.items():
+                    if not isinstance(vals, list):
+                        continue
+                    new_step_cc[track][param] = (
+                        list(vals) + [None] * max(0, target_steps - len(vals))
+                    )[:target_steps]
+            result["step_cc"] = new_step_cc
+
+        return result
+
     def update_pitch(self, track: str, value: int) -> None:
         with self._lock:
             self.track_pitch[track] = value
