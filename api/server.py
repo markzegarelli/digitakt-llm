@@ -40,6 +40,12 @@ from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
 from core.mutator import PatternMutator
 from core.state import AppState, TRACK_NAMES, _DEFAULT_CC_PARAMS
+from core.pattern_snapshot import (
+    build_save_file_dict,
+    extract_pattern_from_saved_json,
+    merge_session_snapshot_into_state,
+    parse_session_snapshot,
+)
 from core.tracing import tracer
 
 @asynccontextmanager
@@ -73,7 +79,7 @@ _ALL_EVENTS = [
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "cond_changed", "state_reset",
-    "ask_complete",
+    "ask_complete", "pattern_loaded",
 ]
 
 
@@ -94,6 +100,17 @@ def _broadcast_event(event_name: str, payload: dict) -> None:
             _broadcast_to_clients({"event": event_name, "data": payload}),
             _state.event_loop,
         )
+
+
+def _send_all_track_cc_to_midi() -> None:
+    """Push every global track CC to the Digitakt (same idea as Player.start)."""
+    if not _player or not _player.port:
+        return
+    for track, params in _state.track_cc.items():
+        channel = TRACK_CHANNELS[track]
+        for param, value in params.items():
+            if param in CC_MAP:
+                send_cc(_player.port, channel, CC_MAP[param], value)
 
 
 async def _broadcast_to_clients(message: dict) -> None:
@@ -401,11 +418,12 @@ def get_patterns():
 @app.post("/patterns/{name}")
 async def save_pattern(name: str, req: SavePatternRequest = SavePatternRequest()):
     path = os.path.join(_patterns_dir, f"{name}.json")
-    payload = {
-        "pattern": _state.current_pattern,
-        "tags": req.tags,
-        "saved_at": datetime.datetime.utcnow().isoformat(),
-    }
+    payload = build_save_file_dict(
+        _state,
+        _state.current_pattern,
+        req.tags,
+        datetime.datetime.utcnow().isoformat(),
+    )
     with open(path, "w") as f:
         json.dump(payload, f)
     return {"saved": name}
@@ -431,9 +449,15 @@ def load_pattern(name: str):
         raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
     with open(path) as f:
         data = json.load(f)
-    # Old format: raw pattern dict. New format: {"pattern": {...}, "tags": [...]}
-    pattern = data.get("pattern", data) if isinstance(data, dict) and "pattern" in data else data
-    pattern = copy.deepcopy(pattern)
+    pattern = extract_pattern_from_saved_json(data)
+    snapshot = parse_session_snapshot(data)
+    if snapshot:
+        merge_session_snapshot_into_state(_state, snapshot)
+        if "bpm" in snapshot:
+            _player.set_bpm(snapshot["bpm"])
+        if "pattern_length" in snapshot:
+            _bus.emit("length_changed", {"steps": _state.pattern_length})
+        _send_all_track_cc_to_midi()
     _state.last_prompt = name
     if _state.is_playing:
         _player.queue_pattern(pattern)
@@ -444,6 +468,7 @@ def load_pattern(name: str):
             "pattern_changed",
             {"pattern": _state.current_pattern, "prompt": name},
         )
+    _bus.emit("pattern_loaded", {})
     return {"loaded": name}
 
 
