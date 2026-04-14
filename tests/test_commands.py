@@ -100,12 +100,26 @@ def test_apply_random_prob_sets_16_values_in_range():
     assert all(v == 50 for v in result["prob"]["kick"])
 
 
+def test_apply_random_prob_respects_pattern_length_32():
+    pattern = {k: [0] * 32 for k in TRACK_NAMES}
+    result = apply_random_prob(pattern, ["kick"], lo=55, hi=55)
+    assert len(result["prob"]["kick"]) == 32
+    assert all(v == 55 for v in result["prob"]["kick"])
+
+
 # ── apply_prob_step ───────────────────────────────────────────────────────────
 
 def test_apply_prob_step_sets_correct_index():
     pattern = _fresh_pattern()
     result = apply_prob_step(pattern, "kick", 3, 75)
     assert result["prob"]["kick"][3] == 75
+
+
+def test_apply_prob_step_initializes_to_pattern_length_32():
+    pattern = {k: [0] * 32 for k in TRACK_NAMES}
+    result = apply_prob_step(pattern, "kick", 31, 88)
+    assert len(result["prob"]["kick"]) == 32
+    assert result["prob"]["kick"][31] == 88
 
 
 # ── apply_vel_step ────────────────────────────────────────────────────────────

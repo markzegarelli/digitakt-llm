@@ -8,6 +8,14 @@ import re
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
 
+def _pattern_length(pattern: dict) -> int:
+    for track in TRACK_NAMES:
+        vals = pattern.get(track)
+        if isinstance(vals, list):
+            return len(vals)
+    return 16
+
+
 def parse_random_range(range_str: str | None, param: str) -> tuple[int, int]:
     """
     Parse a range string like "[40-60]" into (lo, hi).
@@ -118,13 +126,19 @@ def apply_random_prob(
 
     # Expand "all" to all track names
     target_tracks = TRACK_NAMES if "all" in tracks else tracks
+    length = _pattern_length(result)
 
     for track in target_tracks:
         # Initialize track's prob list if not present
         if track not in result["prob"]:
-            result["prob"][track] = [100] * 16
+            result["prob"][track] = [100] * length
 
-        for step in range(16):
+        if len(result["prob"][track]) < length:
+            result["prob"][track] += [100] * (length - len(result["prob"][track]))
+        elif len(result["prob"][track]) > length:
+            result["prob"][track] = result["prob"][track][:length]
+
+        for step in range(length):
             result["prob"][track][step] = random.randint(lo, hi)
 
     return result
@@ -148,10 +162,15 @@ def apply_prob_step(pattern: dict, track: str, step: int, value: int) -> dict:
     # Initialize prob dict if not present
     if "prob" not in result:
         result["prob"] = {}
+    length = _pattern_length(result)
 
     # Initialize track's prob list if not present
     if track not in result["prob"]:
-        result["prob"][track] = [100] * 16
+        result["prob"][track] = [100] * length
+    elif len(result["prob"][track]) < length:
+        result["prob"][track] += [100] * (length - len(result["prob"][track]))
+    elif len(result["prob"][track]) > length:
+        result["prob"][track] = result["prob"][track][:length]
 
     result["prob"][track][step] = value
     return result
@@ -171,9 +190,10 @@ def apply_vel_step(pattern: dict, track: str, step: int, value: int) -> dict:
         New pattern dict with updated velocity
     """
     result = copy.deepcopy(pattern)
+    length = _pattern_length(result)
 
     if track not in result:
-        result[track] = [0] * 16
+        result[track] = [0] * length
 
     result[track][step] = value
     return result
@@ -194,12 +214,17 @@ def apply_cc_step(pattern: dict, track: str, param: str, step: int, value: int |
         New pattern dict with updated step_cc
     """
     result = copy.deepcopy(pattern)
+    length = _pattern_length(result)
     if "step_cc" not in result:
         result["step_cc"] = {}
     if track not in result["step_cc"]:
         result["step_cc"][track] = {}
     if param not in result["step_cc"][track]:
-        result["step_cc"][track][param] = [None] * 16
+        result["step_cc"][track][param] = [None] * length
+    elif len(result["step_cc"][track][param]) < length:
+        result["step_cc"][track][param] += [None] * (length - len(result["step_cc"][track][param]))
+    elif len(result["step_cc"][track][param]) > length:
+        result["step_cc"][track][param] = result["step_cc"][track][param][:length]
     result["step_cc"][track][param][step] = value
     return result
 

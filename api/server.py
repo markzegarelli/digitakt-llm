@@ -5,13 +5,14 @@ import asyncio
 import copy
 import json
 import os
+import re
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Set
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 
 import datetime
 from core.logging_config import get_logger
@@ -71,6 +72,7 @@ _generator = None
 _mutator: PatternMutator | None = None
 _patterns_dir: str = "patterns"
 _ws_clients: Set[WebSocket] = set()
+_PATTERN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
@@ -111,6 +113,50 @@ def _send_all_track_cc_to_midi() -> None:
         for param, value in params.items():
             if param in CC_MAP:
                 send_cc(_player.port, channel, CC_MAP[param], value)
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _admin_token() -> str | None:
+    token = os.environ.get("DIGITAKT_ADMIN_TOKEN")
+    if token is None:
+        return None
+    token = token.strip()
+    return token or None
+
+
+def _require_admin_access(request: Request) -> None:
+    token = _admin_token()
+    if token is None:
+        return
+    if request.headers.get("x-digitakt-token") != token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _validate_step_in_pattern(step: int) -> None:
+    if step > _state.pattern_length:
+        raise HTTPException(
+            status_code=422,
+            detail=f"step must be between 1 and current pattern length ({_state.pattern_length})",
+        )
+
+
+def _resolve_pattern_path(name: str) -> Path:
+    if not _PATTERN_NAME_RE.fullmatch(name):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid pattern name; use letters, numbers, dash, or underscore only",
+        )
+    patterns_root = Path(_patterns_dir).resolve()
+    target = (patterns_root / f"{name}.json").resolve()
+    if patterns_root != target.parent:
+        raise HTTPException(status_code=422, detail="Invalid pattern name")
+    return target
 
 
 async def _broadcast_to_clients(message: dict) -> None:
@@ -233,6 +279,7 @@ def set_cc_step(req: CCStepRequest):
         raise HTTPException(422, f"Unknown track: {req.track}")
     if req.param not in CC_MAP:
         raise HTTPException(422, f"Unknown param: {req.param}")
+    _validate_step_in_pattern(req.step)
     value = None if req.value == -1 else req.value
     _mutator.apply(
         lambda p: apply_cc_step(p, req.track, req.param, req.step - 1, value),
@@ -301,18 +348,10 @@ def set_swing(req: SwingRequest):
 @app.post("/length", response_model=LengthResponse)
 def set_length(req: LengthRequest):
     _state.set_pattern_length(req.steps)
-
-    def _resize(p: dict) -> dict:
-        result = dict(p)
-        for track in TRACK_NAMES:
-            cur = result.get(track, [])
-            if len(cur) < req.steps:
-                result[track] = cur + [0] * (req.steps - len(cur))
-            elif len(cur) > req.steps:
-                result[track] = cur[:req.steps]
-        return result
-
-    new_pattern = _mutator.apply(_resize, mode="none")
+    new_pattern = _mutator.apply(
+        lambda p: _state.normalize_pattern_length(p, req.steps),
+        mode="none",
+    )
     _bus.emit("length_changed", {"steps": req.steps})
     _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
     return LengthResponse(steps=req.steps)
@@ -322,6 +361,7 @@ def set_length(req: LengthRequest):
 def set_vel(req: VelRequest):
     if req.track not in TRACK_NAMES:
         raise HTTPException(422, f"Unknown track: {req.track}")
+    _validate_step_in_pattern(req.step)
     _mutator.apply(
         lambda p: apply_vel_step(p, req.track, req.step - 1, req.value),
         event="vel_changed",
@@ -332,6 +372,9 @@ def set_vel(req: VelRequest):
 
 @app.post("/gate", response_model=GateResponse)
 async def set_gate(req: GateRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _validate_step_in_pattern(req.step)
     step_0 = req.step - 1
     _mutator.apply(
         lambda p: apply_gate_step(p, req.track, step_0, req.value),
@@ -352,8 +395,11 @@ async def set_pitch(req: PitchRequest):
 
 @app.post("/cond", response_model=CondResponse)
 async def set_cond(req: CondRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
     if req.value is not None and req.value not in ("1:2", "not:2", "fill"):
         raise HTTPException(status_code=422, detail=f"Invalid condition '{req.value}'")
+    _validate_step_in_pattern(req.step)
     step_0 = req.step - 1
     _mutator.apply(
         lambda p: apply_cond_step(p, req.track, step_0, req.value),
@@ -417,24 +463,24 @@ def get_patterns():
 
 @app.post("/patterns/{name}")
 async def save_pattern(name: str, req: SavePatternRequest = SavePatternRequest()):
-    path = os.path.join(_patterns_dir, f"{name}.json")
+    path = _resolve_pattern_path(name)
     payload = build_save_file_dict(
         _state,
         _state.current_pattern,
         req.tags,
         datetime.datetime.utcnow().isoformat(),
     )
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f)
     return {"saved": name}
 
 
 @app.post("/fill/{name}")
 async def queue_fill_pattern(name: str):
-    path = os.path.join(_patterns_dir, f"{name}.json")
-    if not os.path.exists(path):
+    path = _resolve_pattern_path(name)
+    if not path.exists():
         raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     # Support both old format (raw pattern dict) and new format ({"pattern": ...})
     pattern = data.get("pattern", data)
@@ -444,10 +490,10 @@ async def queue_fill_pattern(name: str):
 
 @app.get("/patterns/{name}")
 def load_pattern(name: str):
-    path = os.path.join(_patterns_dir, f"{name}.json")
-    if not os.path.exists(path):
+    path = _resolve_pattern_path(name)
+    if not path.exists():
         raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     pattern = extract_pattern_from_saved_json(data)
     snapshot = parse_session_snapshot(data)
@@ -458,6 +504,7 @@ def load_pattern(name: str):
         if "pattern_length" in snapshot:
             _bus.emit("length_changed", {"steps": _state.pattern_length})
         _send_all_track_cc_to_midi()
+    pattern = _state.normalize_pattern_length(pattern, _state.pattern_length)
     _state.last_prompt = name
     if _state.is_playing:
         _player.queue_pattern(pattern)
@@ -473,8 +520,11 @@ def load_pattern(name: str):
 
 
 @app.get("/traces")
-def get_traces():
+def get_traces(request: Request):
     """Return recent LLM prompt/response traces for observability."""
+    if not _env_flag("DIGITAKT_ENABLE_TRACES", default=False):
+        raise HTTPException(status_code=404, detail="Not found")
+    _require_admin_access(request)
     return {"traces": tracer.traces}
 
 
@@ -489,11 +539,12 @@ async def websocket_endpoint(websocket: WebSocket):
         _ws_clients.discard(websocket)
 
 
-def start_background(port: int = 8000) -> None:
+def start_background(port: int = 8000, host: str | None = None) -> None:
+    bind_host = host or os.environ.get("DIGITAKT_HOST", "127.0.0.1")
     thread = threading.Thread(
         target=uvicorn.run,
         args=(app,),
-        kwargs={"host": "0.0.0.0", "port": port, "log_level": "error"},
+        kwargs={"host": bind_host, "port": port, "log_level": "error"},
         daemon=True,
     )
     thread.start()

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
+import pytest
 from fastapi.testclient import TestClient
 
 from core.state import AppState, DEFAULT_PATTERN, TRACK_NAMES
@@ -418,6 +419,21 @@ def test_post_fill_missing_pattern_returns_404(tmp_path):
     assert resp.status_code == 404
 
 
+def test_pattern_name_path_traversal_rejected(tmp_path):
+    _make_test_client(tmp_path)
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        server_module._resolve_pattern_path("../escape")
+    assert exc.value.status_code == 422
+
+
+def test_pattern_name_invalid_characters_rejected(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/patterns/bad.name")
+    assert resp.status_code == 422
+
+
 def test_post_length_sets_pattern_length(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/length", json={"steps": 8})
@@ -433,6 +449,25 @@ def test_post_length_rejects_invalid_value(tmp_path):
     assert resp.status_code == 422
 
 
+def test_post_length_normalizes_aux_step_structures(tmp_path):
+    client = _make_test_client(tmp_path)
+    # Seed 16-step auxiliary arrays.
+    client.post("/prob", json={"track": "kick", "step": 1, "value": 42})
+    client.post("/gate", json={"track": "kick", "step": 1, "value": 50})
+    client.post("/cond", json={"track": "kick", "step": 1, "value": "1:2"})
+    client.post("/cc-step", json={"track": "kick", "param": "filter", "step": 1, "value": 64})
+
+    resp = client.post("/length", json={"steps": 32})
+    assert resp.status_code == 200
+    state = client.get("/state").json()
+    pat = state["current_pattern"]
+    assert len(pat["kick"]) == 32
+    assert len(pat["prob"]["kick"]) == 32
+    assert len(pat["gate"]["kick"]) == 32
+    assert len(pat["cond"]["kick"]) == 32
+    assert len(pat["step_cc"]["kick"]["filter"]) == 32
+
+
 # ── /gate ──────────────────────────────────────────────────────────────────
 
 def test_post_gate_sets_step_gate(tmp_path):
@@ -442,6 +477,12 @@ def test_post_gate_sets_step_gate(tmp_path):
     assert resp.json()["track"] == "kick"
     assert resp.json()["step"] == 1
     assert resp.json()["value"] == 50
+
+
+def test_post_gate_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/gate", json={"track": "cowbell", "step": 1, "value": 50})
+    assert resp.status_code == 422
 
 
 # ── /pitch ─────────────────────────────────────────────────────────────────
@@ -472,6 +513,12 @@ def test_post_cond_clears_step_condition(tmp_path):
     resp = client.post("/cond", json={"track": "kick", "step": 1, "value": None})
     assert resp.status_code == 200
     assert resp.json()["value"] is None
+
+
+def test_post_cond_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/cond", json={"track": "cowbell", "step": 1, "value": "1:2"})
+    assert resp.status_code == 422
 
 
 # ── /new regression tests ──────────────────────────────────────────────────
@@ -589,3 +636,19 @@ def test_post_ask_returns_is_implementable_true(tmp_path):
     data = resp.json()
     assert data["is_implementable"] is True
     assert "130 BPM" in data["answer"]
+
+
+def test_get_traces_disabled_by_default(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.get("/traces")
+    assert resp.status_code == 404
+
+
+def test_get_traces_requires_token_when_configured(tmp_path):
+    client = _make_test_client(tmp_path)
+    with patch.dict(os.environ, {"DIGITAKT_ENABLE_TRACES": "1", "DIGITAKT_ADMIN_TOKEN": "secret"}):
+        unauthorized = client.get("/traces")
+        assert unauthorized.status_code == 401
+        authorized = client.get("/traces", headers={"x-digitakt-token": "secret"})
+        assert authorized.status_code == 200
+        assert "traces" in authorized.json()

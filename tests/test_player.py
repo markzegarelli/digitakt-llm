@@ -423,3 +423,17 @@ def test_condition_1_2_fires_on_even_loops():
     total_loops_approx = 12  # generous upper bound
     assert len(kick_note_ons) <= total_loops_approx // 2 + 1, \
         f"1:2 condition fired too often: {len(kick_note_ons)} times in ~{total_loops_approx} loops"
+
+
+def test_play_step_handles_32_step_aux_arrays_without_index_error():
+    """Regression: when pattern_length is 32, aux arrays must also support step >= 16."""
+    player, state, _, port = _make_player()
+    state.pattern_length = 32
+    state.current_pattern = {k: [0] * 32 for k in TRACK_NAMES}
+    state.current_pattern["kick"][31] = 100
+    state.current_pattern["prob"] = {"kick": [100] * 32}
+    state.current_pattern["gate"] = {"kick": [100] * 32}
+    state.current_pattern["cond"] = {"kick": [None] * 32}
+    state.current_pattern["step_cc"] = {"kick": {"filter": [None] * 32}}
+    player._play_step(31)
+    assert port.send.called
