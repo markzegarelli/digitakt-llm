@@ -71,6 +71,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/vel`, `/vel-step`,
 | `pitch_changed` | Server | `{track, value}` |
 | `cond_changed` | Server | `{track, step, value}` |
 | `state_reset` | Server | `{}` |
+| `pattern_loaded` | Server | `{}` — TUI refetches `/state` after a named pattern load |
 
 All events are forwarded via WebSocket to the Bun/Ink TUI as `{"event": "<name>", "data": {...}}`.
 
@@ -106,6 +107,10 @@ yellow). Pressing `Q` (Shift+Q) fires all staged tracks via `/mute-queued` and c
 `POST /fill/<name>` loads a saved pattern and calls `AppState.queue_fill()`. At the next loop
 boundary the player: saves `current_pattern` to `_pre_fill_pattern`, swaps in the fill, plays it
 once, then restores the original. Emits `fill_started` and `fill_ended` events.
+
+## Saved pattern files (JSON)
+
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
 
 ## Pattern Length
 
@@ -284,8 +289,8 @@ The system prompt (`_build_system_prompt()`) encodes two categories of domain kn
 | `POST` | `/pitch` | Set per-track MIDI note number (0–127) |
 | `POST` | `/cond` | Set/clear conditional trig on a step |
 | `GET` | `/patterns` | List saved patterns (with tags) |
-| `POST` | `/patterns/{name}` | Save current pattern with optional tags |
-| `GET` | `/patterns/{name}` | Load and queue a saved pattern |
+| `POST` | `/patterns/{name}` | Save pattern + session snapshot (`version: 2` JSON) with optional tags |
+| `GET` | `/patterns/{name}` | Load pattern; restore BPM/CC/pitch/velocity/mutes/length when snapshot present |
 | `POST` | `/fill/{name}` | Queue saved pattern as one-shot fill |
 | `GET` | `/traces` | Return recent LLM prompt/response traces |
 | `WS` | `/ws` | WebSocket stream of all EventBus events |

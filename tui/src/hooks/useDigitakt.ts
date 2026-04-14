@@ -64,6 +64,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "random_applied":       return `randomized ${data["param"]} for ${data["track"]}`;
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
     case "state_reset":          return "state reset";
+    case "pattern_loaded":       return "pattern loaded";
     case "ask_complete": {
       const ans = (data["answer"] as string) ?? "";
       const preview = ans.length > 80 ? ans.slice(0, 80) + "…" : ans;
@@ -311,6 +312,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "randbeat_applied":
               return { ...prev, log: newLog };
             case "state_reset":
+              fetchState();
+              return { ...prev, log: newLog };
+            case "pattern_loaded":
               fetchState();
               return { ...prev, log: newLog };
             case "chain_updated":

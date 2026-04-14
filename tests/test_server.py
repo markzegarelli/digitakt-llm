@@ -97,6 +97,24 @@ def test_save_and_load_pattern(tmp_path):
     assert load_resp.status_code == 200
 
 
+def test_save_load_round_trip_preserves_bpm_and_cc(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/bpm", json={"bpm": 145.0})
+    client.post("/cc", json={"track": "kick", "param": "filter", "value": 33})
+    client.post("/length", json={"steps": 32})
+    client.post("/patterns/roundtrip")
+
+    client.post("/bpm", json={"bpm": 90.0})
+    client.post("/cc", json={"track": "kick", "param": "filter", "value": 127})
+    client.post("/length", json={"steps": 8})
+
+    assert client.get("/patterns/roundtrip").status_code == 200
+    st = client.get("/state").json()
+    assert st["bpm"] == 145.0
+    assert st["track_cc"]["kick"]["filter"] == 33
+    assert st["pattern_length"] == 32
+
+
 def test_load_nonexistent_pattern_returns_404(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.get("/patterns/does-not-exist")
@@ -362,6 +380,9 @@ def test_save_pattern_with_tags(tmp_path):
     assert data["tags"] == ["dark", "kick-heavy"]
     assert "pattern" in data
     assert "saved_at" in data
+    assert data.get("version") == 2
+    assert "bpm" in data and data["bpm"] == 120.0
+    assert "track_cc" in data
 
 
 def test_list_patterns_includes_tags(tmp_path):
