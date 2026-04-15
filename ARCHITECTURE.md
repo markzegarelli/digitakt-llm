@@ -189,6 +189,32 @@ The TUI input field in `tui/src/App.tsx` routes input:
 `apply_cc_step`, `parse_random_range`, `generate_random_beat`). These functions take and return plain
 dicts (no mutation) and have no UI dependencies — fully testable in isolation.
 
+### SEQ Step Edit + TRIG Side Panel
+
+When focus is on **SEQ**, pressing `Enter` toggles a per-track step edit mode:
+
+- `←/→` select step
+- `Space` toggles the selected step velocity (`0` off, track default on)
+- `↑/↓` can switch tracks while remaining in step edit mode
+
+From SEQ step edit mode, `Tab` opens a contextual **TRIG** side panel for the selected step.
+This panel edits:
+
+- per-step `prob` (`POST /prob`)
+- per-step velocity lane (`POST /vel`)
+- per-track note/pitch (`POST /pitch`) for that track
+- per-step `gate` (`POST /gate`)
+- per-step `cond` (`POST /cond`)
+
+TRIG keyboard behavior:
+
+- `↑/↓` navigate fields
+- `←/→` adjust field value (`Shift+←/→` for ±10 on numeric fields)
+- `0-9` + `Enter` commit typed numeric values directly
+
+In the TUI layout, the left focus rail remains anchored. The sequencer/main stack has priority width,
+while LOG and TRIG share the right-side column when both are visible.
+
 ## Per-Step Parameters
 
 Patterns support several per-step parameters beyond simple on/off:

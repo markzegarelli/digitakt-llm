@@ -6,7 +6,7 @@ Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Op
 
 ## Key features
 
-- **Ink terminal UI** — Elektron-style layout: transport and tempo in the header, **SEQ** (8-track step grid with velocity dots), **MIX** (per-track CC bars and step overrides), and **CMD** (slash commands and natural-language prompts).
+- **Ink terminal UI** — Elektron-style layout: transport and tempo in the header, **SEQ** (8-track step grid with per-step trig metadata), **MIX** (per-track CC bars and step overrides), optional **TRIG** side panel for step edits, and **CMD** (slash commands and natural-language prompts).
 - **Live pattern engine** — WebSocket-driven grid, playhead, mutes, swing, per-step probability, gates, conditional trigs, and chromatic pitch per track.
 - **Claude integration** — Beat mode for generation from text; chat mode and `/ask` for questions; `/gen` and **Ctrl+G** to turn answers into patterns; optional activity log.
 - **Digitakt-oriented MIDI** — Eight tracks map to channels 1–8; CCs for tune, filter, envelopes, sends, and more; save/load patterns, fills, chains, and pattern history.
@@ -61,8 +61,9 @@ digitakt
 
 `digitakt` launches the Bun/Ink TUI (shown above) with **Tab** cycling **SEQ → MIX → CMD** (plus **LOG** when the activity log is open):
 
-- **SEQ** — Step grid for all eight tracks, live from the server, with keyboard mutes and queued mutes.
-- **MIX** — Per-track parameters (velocity + CCs), bar readouts, and step mode for per-step CC edits.
+- **SEQ** — Step grid for all eight tracks, live from the server, with keyboard mutes/queued mutes and **step edit mode** (Enter) to toggle trigs with Space.
+- **MIX** — Per-track parameters (velocity + CCs), bar readouts, and step mode for per-step CC edits; also shows live trig summary for the selected track at the playhead.
+- **TRIG (contextual side panel)** — Available from SEQ step edit mode (Tab). Edit per-step probability, velocity, gate, condition, and track note/pitch.
 - **CMD** — Slash commands, `/help` (scrollable), and bare-text prompts in beat or chat mode.
 
 ### Commands
@@ -137,8 +138,10 @@ snare     64      64   64   64   64  100    0    0
 
 | Panel | Description |
 |-------|-------------|
-| SEQ | Step grid (8/16/32 steps) with mute indicators and focus rail |
-| MIX | Per-track parameters (velocity, filter, decay, reverb, etc.) |
+| SEQ | Step grid (8/16/32 steps) with mute indicators, prob/gate/condition visualization, and step edit mode |
+| MIX | Per-track parameters (velocity, filter, decay, reverb, etc.) plus playhead trig summary |
+| TRIG | Contextual side panel opened from SEQ step edit mode for per-step trig editing |
+| LOG | Activity stream; when TRIG is open, LOG and TRIG share the right-side column |
 | CMD | Commands, generation, and `/help` |
 
 Use **Tab** to cycle focus between panels (see **Usage**).
@@ -148,8 +151,16 @@ Use **Tab** to cycle focus between panels (see **Usage**).
 | Key | Action |
 |-----|--------|
 | `Tab` | Cycle panels (SEQ → MIX → CMD, and LOG when open) |
-| `↑` / `↓` | Navigate tracks (SEQ) or parameters (MIX) |
-| `Space` | Play / stop |
+| `Enter` (SEQ) | Enter/exit SEQ step edit mode |
+| `Space` | Play/stop (normal), or toggle selected SEQ step on/off in step edit mode |
+| `←` / `→` (SEQ step edit) | Move selected step |
+| `↑` / `↓` (SEQ) | Navigate tracks |
+| `Tab` (while in SEQ step edit) | Toggle TRIG side panel |
+| `↑` / `↓` (TRIG) | Move between trig fields |
+| `←` / `→` (TRIG) | Adjust selected field ±1 |
+| `Shift+←` / `Shift+→` (TRIG) | Adjust selected numeric field ±10 |
+| `0-9` + `Enter` (TRIG) | Type and commit numeric trig value |
+| `Esc` (TRIG) | Close TRIG side panel |
 | `+` / `-` | BPM +1 / -1 |
 | `m` | Mute selected track (SEQ panel) |
 | `←` / `→` | Adjust velocity or CC ±1 (MIX panel) |
