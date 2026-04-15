@@ -104,7 +104,7 @@ class VelocityResponse(BaseModel):
 
 class ProbRequest(BaseModel):
     track: str
-    step: int = Field(..., ge=1, le=16)
+    step: int = Field(..., ge=1, le=32)
     value: int = Field(..., ge=0, le=100)
 
 
@@ -114,7 +114,7 @@ class SwingRequest(BaseModel):
 
 class VelRequest(BaseModel):
     track: str
-    step: int = Field(..., ge=1, le=16)
+    step: int = Field(..., ge=1, le=32)
     value: int = Field(..., ge=0, le=127)
 
 
@@ -128,7 +128,7 @@ class RandomRequest(BaseModel):
 class CCStepRequest(BaseModel):
     track: str
     param: str
-    step: int = Field(..., ge=1, le=16)   # 1-indexed
+    step: int = Field(..., ge=1, le=32)   # 1-indexed
     value: int = Field(..., ge=-1, le=127)  # -1 = clear override
 
 

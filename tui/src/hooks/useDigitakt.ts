@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DigitaktState, TrackName, CCParam, CCParamDef } from "../types.js";
-import { TRACK_NAMES } from "../types.js";
+import type { DigitaktState, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
+import { TRACK_NAMES, emptyTrigState, parsePatternFromApi } from "../types.js";
 
 const DEFAULT_STATE: DigitaktState = {
   current_pattern: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, new Array(16).fill(0)])
   ) as DigitaktState["current_pattern"],
+  pattern_trig: emptyTrigState(16),
   bpm: 120,
   swing: 0,
   pattern_length: 16,
@@ -141,12 +142,15 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     try {
       const data = await api("GET", "/state") as Record<string, unknown>;
       const pattern = data["current_pattern"] as Record<string, unknown>;
+      const plen = (data["pattern_length"] as number) ?? 16;
+      const { velocities, trig } = parsePatternFromApi(pattern, plen);
       setState((prev) => ({
         ...prev,
-        current_pattern: pattern as DigitaktState["current_pattern"],
+        current_pattern: velocities,
+        pattern_trig: trig,
         bpm: data["bpm"] as number,
         swing: (data["swing"] as number) ?? 0,
-        pattern_length: (data["pattern_length"] as number) ?? 16,
+        pattern_length: plen,
         is_playing: data["is_playing"] as boolean,
         midi_port_name: data["midi_port_name"] as string | null,
         track_cc: data["track_cc"] as DigitaktState["track_cc"],
@@ -192,8 +196,11 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
           const newLog = [...prev.log, logEntry].slice(-50);
           switch (msg.event) {
             case "pattern_changed": {
-              const newPattern = msg.data["pattern"] as DigitaktState["current_pattern"] | undefined;
-              return { ...prev, ...(newPattern ? { current_pattern: newPattern } : {}), log: newLog };
+              const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
+              if (!raw) return { ...prev, log: newLog };
+              const plen = prev.pattern_length;
+              const { velocities, trig } = parsePatternFromApi(raw, plen);
+              return { ...prev, current_pattern: velocities, pattern_trig: trig, log: newLog };
             }
             case "bpm_changed":
               return { ...prev, bpm: msg.data["bpm"] as number, log: newLog };
@@ -207,10 +214,16 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete": {
               const genBpm = msg.data["bpm"] as number | undefined;
+              const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
+              const plen = prev.pattern_length;
+              const parsed = raw
+                ? parsePatternFromApi(raw, plen)
+                : { velocities: prev.current_pattern, trig: prev.pattern_trig };
               return {
                 ...prev,
                 generation_status: "idle",
-                current_pattern: msg.data["pattern"] as DigitaktState["current_pattern"],
+                current_pattern: parsed.velocities,
+                pattern_trig: parsed.trig,
                 last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
                 generation_summary: (msg.data["summary"] as DigitaktState["generation_summary"]) ?? null,
                 ...(genBpm ? { bpm: genBpm } : {}),
@@ -252,7 +265,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               const csValue = msg.data["value"] as number;
               const prevStepCC = prev.step_cc ?? ({} as DigitaktState["step_cc"]);
               const prevTrack = (prevStepCC as Record<string, Record<string, (number | null)[]>>)[csTrack] ?? {};
-              const prevParam = prevTrack[csParam] ?? new Array(16).fill(null) as (number | null)[];
+              const prevParam = prevTrack[csParam] ?? new Array(prev.pattern_length).fill(null) as (number | null)[];
               const newParam = [...prevParam];
               newParam[csStep] = csValue === -1 ? null : csValue;
               return {
@@ -280,8 +293,25 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return { ...prev, midi_connected: false, log: newLog };
             case "swing_changed":
               return { ...prev, swing: msg.data["amount"] as number, log: newLog };
-            case "length_changed":
-              return { ...prev, pattern_length: (msg.data["steps"] as number) ?? 16, log: newLog };
+            case "length_changed": {
+              const steps = (msg.data["steps"] as number) ?? 16;
+              const { velocities, trig } = parsePatternFromApi(
+                {
+                  ...prev.current_pattern,
+                  prob: prev.pattern_trig.prob,
+                  gate: prev.pattern_trig.gate,
+                  cond: prev.pattern_trig.cond,
+                } as unknown as Record<string, unknown>,
+                steps,
+              );
+              return {
+                ...prev,
+                pattern_length: steps,
+                current_pattern: velocities,
+                pattern_trig: trig,
+                log: newLog,
+              };
+            }
             case "fill_started":
               return { ...prev, fill_active: true, fill_queued: false, log: newLog };
             case "fill_ended":
@@ -295,19 +325,51 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               newPattern[velTrack][velStep] = velValue;
               return { ...prev, current_pattern: newPattern, log: newLog };
             }
-            case "gate_changed":
-              fetchState();
-              return { ...prev, log: newLog };
+            case "gate_changed": {
+              const gTrack = msg.data["track"] as TrackName;
+              const gStep = (msg.data["step"] as number) - 1;
+              const gVal = msg.data["value"] as number;
+              const pt = prev.pattern_trig;
+              const row = [...pt.gate[gTrack]];
+              row[gStep] = gVal;
+              return {
+                ...prev,
+                pattern_trig: { ...pt, gate: { ...pt.gate, [gTrack]: row } },
+                log: newLog,
+              };
+            }
             case "pitch_changed":
               return {
                 ...prev,
                 track_pitch: { ...prev.track_pitch, [msg.data["track"] as string]: msg.data["value"] as number },
                 log: newLog,
               };
-            case "cond_changed":
-              fetchState();
-              return { ...prev, log: newLog };
-            case "prob_changed":
+            case "cond_changed": {
+              const cTrack = msg.data["track"] as TrackName;
+              const cStep = (msg.data["step"] as number) - 1;
+              const cVal = (msg.data["value"] as string | null) ?? null;
+              const pt = prev.pattern_trig;
+              const row = [...pt.cond[cTrack]];
+              row[cStep] = cVal;
+              return {
+                ...prev,
+                pattern_trig: { ...pt, cond: { ...pt.cond, [cTrack]: row } },
+                log: newLog,
+              };
+            }
+            case "prob_changed": {
+              const pTrack = msg.data["track"] as TrackName;
+              const pStep = (msg.data["step"] as number) - 1;
+              const pVal = msg.data["value"] as number;
+              const pt = prev.pattern_trig;
+              const row = [...pt.prob[pTrack]];
+              row[pStep] = pVal;
+              return {
+                ...prev,
+                pattern_trig: { ...pt, prob: { ...pt.prob, [pTrack]: row } },
+                log: newLog,
+              };
+            }
             case "random_applied":
             case "randbeat_applied":
               return { ...prev, log: newLog };

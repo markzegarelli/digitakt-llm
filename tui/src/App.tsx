@@ -9,6 +9,7 @@ import { FocusRail } from "./components/FocusRail.js";
 import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
+import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
@@ -52,6 +53,22 @@ export function App({ baseUrl }: AppProps) {
   const [implementableHint, setImplementableHint] = useState(false);
   const [barCount, setBarCount] = useState(0);
   const acActiveRef = useRef(false);
+
+  const [patternStepEdit, setPatternStepEdit] = useState(false);
+  const [patternSelectedStep, setPatternSelectedStep] = useState(0);
+  const [showTrigPanel, setShowTrigPanel] = useState(false);
+  const [trigField, setTrigField] = useState(0);
+
+  useEffect(() => {
+    setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
+  }, [state.pattern_length]);
+
+  useEffect(() => {
+    if (focus !== "pattern") {
+      setPatternStepEdit(false);
+      setShowTrigPanel(false);
+    }
+  }, [focus]);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
@@ -300,6 +317,10 @@ export function App({ baseUrl }: AppProps) {
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
+        if (focus === "pattern" && patternStepEdit) {
+          setShowTrigPanel((v) => !v);
+          return;
+        }
         setFocus((f) => {
           if (f === "pattern") return "cc";
           if (f === "cc") return showLog ? "log" : "prompt";
@@ -313,6 +334,15 @@ export function App({ baseUrl }: AppProps) {
     if (focus === "prompt") return;  // Prompt handles its own keys
 
     if (input === " ") {
+      if (focus === "pattern" && patternStepEdit) {
+        const track = TRACK_NAMES[patternTrack];
+        if (track) {
+          const cur = state.current_pattern[track][patternSelectedStep] ?? 0;
+          const next = cur > 0 ? 0 : state.track_velocity[track] ?? 127;
+          actions.setVel(track, patternSelectedStep + 1, next).catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        }
+        return;
+      }
       state.is_playing ? actions.stop() : actions.play();
       return;
     }
@@ -320,13 +350,85 @@ export function App({ baseUrl }: AppProps) {
     if (input === "-") { actions.setBpm(Math.max(20,  state.bpm - 1)); return; }
 
     if (focus === "pattern") {
+      const plen = state.pattern_length;
+      const maxStep = Math.max(0, plen - 1);
+
+      if (showTrigPanel) {
+        const track = TRACK_NAMES[patternTrack] as TrackName;
+        const stepIdx = patternSelectedStep;
+        const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
+        const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
+        const pitch = state.track_pitch[track] ?? 60;
+        const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? 100;
+        const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
+
+        if (key.escape) {
+          setShowTrigPanel(false);
+          return;
+        }
+        if (key.upArrow || key.downArrow) {
+          const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
+          const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
+          if (trigField === 0) {
+            actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
+          } else if (trigField === 1) {
+            actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
+          } else if (trigField === 2) {
+            actions.setPitch(track, clamp(pitch + delta, 0, 127)).catch(() => {});
+          } else if (trigField === 3) {
+            actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
+          } else if (trigField === 4) {
+            const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
+            const curI = Math.max(0, order.indexOf(cond));
+            const nextI = (curI + (key.upArrow ? 1 : -1) + order.length) % order.length;
+            actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
+          }
+          return;
+        }
+        if (input === "[" || input === "]") {
+          setTrigField((f) => (f + (input === "]" ? 1 : -1) + 5) % 5);
+          return;
+        }
+        if (key.leftArrow || key.rightArrow) {
+          setPatternSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, maxStep));
+          return;
+        }
+        return;
+      }
+
+      if (patternStepEdit) {
+        if (key.escape) {
+          setPatternStepEdit(false);
+          setShowTrigPanel(false);
+          return;
+        }
+        if (key.return) {
+          setPatternStepEdit(false);
+          setShowTrigPanel(false);
+          return;
+        }
+        if (key.leftArrow || key.rightArrow) {
+          setPatternSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, maxStep));
+          return;
+        }
+        if (key.upArrow)   setPatternTrack((t) => clamp(t - 1, 0, 7));
+        if (key.downArrow) setPatternTrack((t) => clamp(t + 1, 0, 7));
+        return;
+      }
+
       if (key.upArrow)   setPatternTrack((t) => clamp(t - 1, 0, 7));
       if (key.downArrow) setPatternTrack((t) => clamp(t + 1, 0, 7));
+      if (key.return) {
+        setPatternStepEdit(true);
+        setPatternSelectedStep(0);
+        setShowTrigPanel(false);
+        setTrigField(0);
+        return;
+      }
       if (input === "m") {
         const track = TRACK_NAMES[patternTrack];
         if (track) actions.setMute(track, !state.track_muted[track]);
       }
-      // q: stage selected track for queued mute (toggle)
       if (input === "q") {
         const track = TRACK_NAMES[patternTrack];
         if (track) {
@@ -337,7 +439,6 @@ export function App({ baseUrl }: AppProps) {
           });
         }
       }
-      // Q (Shift+Q): fire all staged mutes via /mute-queued
       if (input === "Q" && pendingMuteTracks.size > 0) {
         const tracksToQueue = Array.from(pendingMuteTracks) as TrackName[];
         setPendingMuteTracks(new Set());
@@ -371,7 +472,7 @@ export function App({ baseUrl }: AppProps) {
         if (key.leftArrow || key.rightArrow) {
           commitBuffer(ccStepInputBuffer);
           setCCStepInputBuffer("");
-          setCCSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, 15));
+          setCCSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, Math.max(0, state.pattern_length - 1)));
           return;
         }
 
@@ -458,9 +559,11 @@ export function App({ baseUrl }: AppProps) {
 
   const termCols = stdout?.columns ?? 120;
   const logPanelW = showLog ? Math.max(44, Math.round(termCols * 0.33)) : 0;
+  const trigPanelW =
+    focus === "pattern" && patternStepEdit && showTrigPanel ? Math.min(36, Math.max(28, Math.round(termCols * 0.22))) : 0;
   /** Focus rail: width 12 + single border (2). */
   const focusRailOuter = 14;
-  const mainContentWidth = Math.max(48, termCols - focusRailOuter - logPanelW);
+  const mainContentWidth = Math.max(40, termCols - focusRailOuter - logPanelW - trigPanelW);
 
   return (
     <Box flexDirection="column" width={termCols}>
@@ -476,15 +579,20 @@ export function App({ baseUrl }: AppProps) {
       <ChainPanel chain={state.chain} chainIndex={state.chain_index} chainAuto={state.chain_auto} />
       <Box flexDirection="row" width={termCols}>
         <FocusRail focus={focus} showLog={showLog} />
+        <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column" width={mainContentWidth}>
           <StepGrid
             contentWidth={mainContentWidth}
             pattern={state.current_pattern}
+            patternTrig={state.pattern_trig}
             patternLength={state.pattern_length}
             currentStep={state.current_step}
             trackMuted={state.track_muted}
             selectedTrack={patternTrack}
             pendingMuteTracks={pendingMuteTracks}
+            stepEditMode={patternStepEdit}
+            selectedStep={patternSelectedStep}
+            isFocused={focus === "pattern"}
           />
           <CCPanel
             contentWidth={mainContentWidth}
@@ -492,6 +600,9 @@ export function App({ baseUrl }: AppProps) {
             trackCC={state.track_cc}
             trackVelocity={state.track_velocity}
             stepCC={state.step_cc}
+            patternTrig={state.pattern_trig}
+            patternLength={state.pattern_length}
+            currentStep={state.current_step}
             selectedTrack={ccTrack}
             selectedParam={ccParam}
             isFocused={focus === "cc"}
@@ -528,9 +639,23 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ focus prompt  Tab panels  m mute  q queue  Q fire  +/- BPM  Space transport  Ctrl+C quit"}
+              {"/ prompt  Tab panels (seq: Tab TRIG)  Enter step  Space trig/transport  m mute  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
+        </Box>
+        {trigPanelW > 0 && (
+          <TrigEditPanel
+            width={trigPanelW}
+            track={TRACK_NAMES[patternTrack] as TrackName}
+            stepIndex={patternSelectedStep}
+            prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+            velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+            pitch={state.track_pitch[TRACK_NAMES[patternTrack] as TrackName] ?? 60}
+            gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+            cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+            selectedField={trigField}
+          />
+        )}
         </Box>
         {showLog && (
           <Box width={Math.max(44, Math.round((stdout?.columns ?? 120) * 0.33))}>
