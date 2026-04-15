@@ -58,6 +58,7 @@ export function App({ baseUrl }: AppProps) {
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
   const [showTrigPanel, setShowTrigPanel] = useState(false);
   const [trigField, setTrigField] = useState(0);
+  const [trigInputBuffer, setTrigInputBuffer] = useState("");
 
   useEffect(() => {
     setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
@@ -69,6 +70,10 @@ export function App({ baseUrl }: AppProps) {
       setShowTrigPanel(false);
     }
   }, [focus]);
+
+  useEffect(() => {
+    setTrigInputBuffer("");
+  }, [showTrigPanel, patternSelectedStep, patternTrack]);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
@@ -361,14 +366,56 @@ export function App({ baseUrl }: AppProps) {
         const pitch = state.track_pitch[track] ?? 60;
         const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? 100;
         const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
+        const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
+
+        const commitTrigBuffer = (buf: string) => {
+          if (buf.length === 0 || trigField === 4) return;
+          const raw = parseInt(buf, 10);
+          if (Number.isNaN(raw)) return;
+          if (trigField === 0) {
+            actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+          } else if (trigField === 1) {
+            actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
+          } else if (trigField === 2) {
+            actions.setPitch(track, clamp(raw, 0, 127)).catch(() => {});
+          } else if (trigField === 3) {
+            actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(() => {});
+          }
+        };
 
         if (key.escape) {
+          setTrigInputBuffer("");
           setShowTrigPanel(false);
           return;
         }
+
+        if (key.return) {
+          commitTrigBuffer(trigInputBuffer);
+          setTrigInputBuffer("");
+          return;
+        }
+
         if (key.upArrow || key.downArrow) {
-          const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
-          const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
+          commitTrigBuffer(trigInputBuffer);
+          setTrigInputBuffer("");
+          setTrigField((f) => clamp(f + (key.downArrow ? 1 : -1), 0, 4));
+          return;
+        }
+
+        if (trigField === 4 && (key.leftArrow || key.rightArrow)) {
+          const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
+          const curI = Math.max(0, order.indexOf(cond));
+          const nextI = (curI + (key.rightArrow ? 1 : -1) + order.length) % order.length;
+          actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
+          return;
+        }
+
+        if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
+          if (trigInputBuffer.length > 0) {
+            commitTrigBuffer(trigInputBuffer);
+            setTrigInputBuffer("");
+          }
+          const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
           if (trigField === 0) {
             actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
           } else if (trigField === 1) {
@@ -377,20 +424,29 @@ export function App({ baseUrl }: AppProps) {
             actions.setPitch(track, clamp(pitch + delta, 0, 127)).catch(() => {});
           } else if (trigField === 3) {
             actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
-          } else if (trigField === 4) {
-            const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
-            const curI = Math.max(0, order.indexOf(cond));
-            const nextI = (curI + (key.upArrow ? 1 : -1) + order.length) % order.length;
-            actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
           }
           return;
         }
-        if (input === "[" || input === "]") {
-          setTrigField((f) => (f + (input === "]" ? 1 : -1) + 5) % 5);
+
+        if (trigField !== 4 && (key.backspace || key.delete)) {
+          if (trigInputBuffer.length > 0) {
+            setTrigInputBuffer((b) => b.slice(0, -1));
+          }
           return;
         }
-        if (key.leftArrow || key.rightArrow) {
-          setPatternSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, maxStep));
+
+        if (trigField !== 4 && /^\d$/.test(input)) {
+          const hi = trigField === 0 || trigField === 3 ? 100 : 127;
+          const newBuf = trigInputBuffer + input;
+          const n = parseInt(newBuf, 10);
+          if (n <= hi) {
+            setTrigInputBuffer(newBuf);
+            const maxDigits = hi >= 100 ? 3 : 2;
+            if (newBuf.length >= maxDigits) {
+              commitTrigBuffer(newBuf);
+              setTrigInputBuffer("");
+            }
+          }
           return;
         }
         return;
@@ -558,12 +614,32 @@ export function App({ baseUrl }: AppProps) {
   });
 
   const termCols = stdout?.columns ?? 120;
-  const logPanelW = showLog ? Math.max(44, Math.round(termCols * 0.33)) : 0;
-  const trigPanelW =
-    focus === "pattern" && patternStepEdit && showTrigPanel ? Math.min(36, Math.max(28, Math.round(termCols * 0.22))) : 0;
   /** Focus rail: width 12 + single border (2). */
   const focusRailOuter = 14;
-  const mainContentWidth = Math.max(40, termCols - focusRailOuter - logPanelW - trigPanelW);
+  const centerBudget = Math.max(0, termCols - focusRailOuter);
+
+  const trigOpen = patternStepEdit && showTrigPanel;
+  const rightSplit = showLog && trigOpen;
+
+  let mainContentWidth: number;
+  let trigPanelW = 0;
+  let logPanelW = 0;
+
+  if (rightSplit) {
+    mainContentWidth = Math.round(centerBudget * 0.56);
+    const rightCol = centerBudget - mainContentWidth;
+    trigPanelW = Math.max(26, Math.min(Math.floor(rightCol * 0.48), rightCol - 24));
+    logPanelW = rightCol - trigPanelW;
+    mainContentWidth = centerBudget - trigPanelW - logPanelW;
+  } else if (showLog) {
+    logPanelW = Math.max(32, Math.round(centerBudget * 0.28));
+    mainContentWidth = Math.max(40, centerBudget - logPanelW);
+  } else if (trigOpen) {
+    trigPanelW = Math.max(28, Math.round(centerBudget * 0.26));
+    mainContentWidth = Math.max(40, centerBudget - trigPanelW);
+  } else {
+    mainContentWidth = Math.max(40, centerBudget);
+  }
 
   return (
     <Box flexDirection="column" width={termCols}>
@@ -579,7 +655,7 @@ export function App({ baseUrl }: AppProps) {
       <ChainPanel chain={state.chain} chainIndex={state.chain_index} chainAuto={state.chain_auto} />
       <Box flexDirection="row" width={termCols}>
         <FocusRail focus={focus} showLog={showLog} />
-        <Box flexDirection="row" flexGrow={1}>
+        <Box flexDirection="row" flexGrow={1} width={centerBudget}>
         <Box flexDirection="column" width={mainContentWidth}>
           <StepGrid
             contentWidth={mainContentWidth}
@@ -639,7 +715,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels (seq: Tab TRIG)  Enter step  Space trig/transport  m mute  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  Tab TRIG when in step edit  LOG+TRIG share the right column  Space  m mute  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>
@@ -654,18 +730,18 @@ export function App({ baseUrl }: AppProps) {
             gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
             cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
             selectedField={trigField}
+            inputBuffer={trigInputBuffer}
+          />
+        )}
+        {showLog && logPanelW > 0 && (
+          <ActivityLog
+            log={state.log}
+            isFocused={focus === "log"}
+            maxVisible={Math.max(8, 17 + state.ccParams.length)}
+            width={logPanelW}
           />
         )}
         </Box>
-        {showLog && (
-          <Box width={Math.max(44, Math.round((stdout?.columns ?? 120) * 0.33))}>
-            <ActivityLog
-              log={state.log}
-              isFocused={focus === "log"}
-              maxVisible={Math.max(8, 17 + state.ccParams.length)}
-            />
-          </Box>
-        )}
       </Box>
     </Box>
   );

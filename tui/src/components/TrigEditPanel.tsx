@@ -24,6 +24,8 @@ interface TrigEditPanelProps {
   gate: number;
   cond: string | null;
   selectedField: number;
+  /** Digits being typed for the selected numeric field (prob/vel/note/gate). */
+  inputBuffer: string;
 }
 
 function condLabel(c: string | null): string {
@@ -44,13 +46,23 @@ export function TrigEditPanel({
   gate,
   cond,
   selectedField,
+  inputBuffer,
 }: TrigEditPanelProps) {
-  const values: Record<TrigFieldKey, string> = {
+  const stored: Record<TrigFieldKey, string> = {
     prob: String(prob),
     vel: String(velocity),
     note: String(pitch),
     gate: String(gate),
     cond: condLabel(cond),
+  };
+
+  const displayValue = (i: number, key: TrigFieldKey): string => {
+    const active = i === selectedField;
+    const isNumeric = key !== "cond";
+    if (active && isNumeric && inputBuffer.length > 0) {
+      return `${inputBuffer}_`;
+    }
+    return stored[key];
   };
 
   return (
@@ -65,7 +77,9 @@ export function TrigEditPanel({
       <Text bold color={theme.accent}>
         TRIG {track.toUpperCase()} s{stepIndex + 1}
       </Text>
-      <Text color={theme.textFaint}>↑↓ adjust  [ ] field  Esc close</Text>
+      <Text color={theme.textFaint}>
+        ↑↓ row  ←→ value  Shift+←→ ±10  0-9 type  Enter apply  Esc close
+      </Text>
       {FIELD_KEYS.map((key, i) => {
         const active = i === selectedField;
         return (
@@ -78,7 +92,7 @@ export function TrigEditPanel({
               {LABELS[key].padEnd(18)}
             </Text>
             <Text bold={active} color={active ? theme.accent : theme.text}>
-              {values[key]}
+              {displayValue(i, key)}
             </Text>
           </Box>
         );

@@ -6,6 +6,8 @@ interface ActivityLogProps {
   log: string[];
   isFocused: boolean;
   maxVisible: number;
+  /** When set, constrains the panel width (e.g. side column beside TRIG). */
+  width?: number;
 }
 
 function getLogColor(entry: string): string {
@@ -21,7 +23,7 @@ function getLogColor(entry: string): string {
   return theme.textDim;
 }
 
-export function ActivityLog({ log, isFocused, maxVisible }: ActivityLogProps) {
+export function ActivityLog({ log, isFocused, maxVisible, width }: ActivityLogProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
   const prevLogLen = useRef(log.length);
 
@@ -55,7 +57,14 @@ export function ActivityLog({ log, isFocused, maxVisible }: ActivityLogProps) {
   const borderCol = isFocused ? theme.borderActive : theme.border;
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={borderCol} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={borderCol}
+      paddingX={1}
+      width={width}
+      flexShrink={0}
+    >
       <Text bold color={isFocused ? theme.accent : theme.textDim}>LOG</Text>
       {canScrollUp && (
         <Text color={theme.textFaint}>{`\u2191 ${maxOffset - clampedOffset} more`}</Text>
