@@ -1,6 +1,7 @@
 # digitakt-llm
 
-![digitakt-llm terminal UI: status bar, SEQ step grid, MIX parameter bars, generation summary, and CMD prompt](docs/images/tui-screenshot.png)
+<img width="1407" height="626" alt="image" src="https://github.com/user-attachments/assets/c3f37c29-89a4-4816-82b6-a854128f69e3" />
+
 
 Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Opus 4.6**. Describe a vibe in plain English — the pattern plays over **USB MIDI** and loops until you change it.
 
