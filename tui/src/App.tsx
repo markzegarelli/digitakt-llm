@@ -10,6 +10,7 @@ import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
+import { computePanelLayout } from "./layout.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
@@ -410,6 +411,13 @@ export function App({ baseUrl }: AppProps) {
           return;
         }
 
+        if (input === "[" || input === "]") {
+          commitTrigBuffer(trigInputBuffer);
+          setTrigInputBuffer("");
+          setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+          return;
+        }
+
         if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
           if (trigInputBuffer.length > 0) {
             commitTrigBuffer(trigInputBuffer);
@@ -614,32 +622,12 @@ export function App({ baseUrl }: AppProps) {
   });
 
   const termCols = stdout?.columns ?? 120;
-  /** Focus rail: width 12 + single border (2). */
-  const focusRailOuter = 14;
-  const centerBudget = Math.max(0, termCols - focusRailOuter);
-
   const trigOpen = patternStepEdit && showTrigPanel;
-  const rightSplit = showLog && trigOpen;
-
-  let mainContentWidth: number;
-  let trigPanelW = 0;
-  let logPanelW = 0;
-
-  if (rightSplit) {
-    mainContentWidth = Math.round(centerBudget * 0.56);
-    const rightCol = centerBudget - mainContentWidth;
-    trigPanelW = Math.max(26, Math.min(Math.floor(rightCol * 0.48), rightCol - 24));
-    logPanelW = rightCol - trigPanelW;
-    mainContentWidth = centerBudget - trigPanelW - logPanelW;
-  } else if (showLog) {
-    logPanelW = Math.max(32, Math.round(centerBudget * 0.28));
-    mainContentWidth = Math.max(40, centerBudget - logPanelW);
-  } else if (trigOpen) {
-    trigPanelW = Math.max(28, Math.round(centerBudget * 0.26));
-    mainContentWidth = Math.max(40, centerBudget - trigPanelW);
-  } else {
-    mainContentWidth = Math.max(40, centerBudget);
-  }
+  const { centerBudget, mainWidth: mainContentWidth, trigWidth: trigPanelW, logWidth: logPanelW } = computePanelLayout({
+    termCols,
+    showLog,
+    showTrig: trigOpen,
+  });
 
   return (
     <Box flexDirection="column" width={termCols}>
@@ -715,7 +703,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  Tab TRIG when in step edit  LOG+TRIG share the right column  Space  m mute  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  Tab TRIG  [ ] step in TRIG  Space  m mute  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>

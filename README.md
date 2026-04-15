@@ -159,6 +159,7 @@ Use **Tab** to cycle focus between panels (see **Usage**).
 | `↑` / `↓` (TRIG) | Move between trig fields |
 | `←` / `→` (TRIG) | Adjust selected field ±1 |
 | `Shift+←` / `Shift+→` (TRIG) | Adjust selected numeric field ±10 |
+| `[` / `]` (TRIG) | Move selected SEQ step while keeping TRIG open |
 | `0-9` + `Enter` (TRIG) | Type and commit numeric trig value |
 | `Esc` (TRIG) | Close TRIG side panel |
 | `+` / `-` | BPM +1 / -1 |

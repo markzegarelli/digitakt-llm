@@ -210,6 +210,7 @@ TRIG keyboard behavior:
 
 - `↑/↓` navigate fields
 - `←/→` adjust field value (`Shift+←/→` for ±10 on numeric fields)
+- `[`/`]` navigate steps while keeping TRIG panel open
 - `0-9` + `Enter` commit typed numeric values directly
 
 In the TUI layout, the left focus rail remains anchored. The sequencer/main stack has priority width,

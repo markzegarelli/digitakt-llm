@@ -60,6 +60,7 @@ Keyboard shortcuts (Pattern panel):
 - `Tab` (in SEQ step edit) — toggle TRIG side panel for the selected step
 - `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
 - `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields)
+- `[` / `]` (TRIG panel) — move selected step left/right while keeping TRIG panel open
 - `0-9` then `Enter` (TRIG panel) — type and apply numeric value directly
 - `Esc` (TRIG panel) — close TRIG side panel
 

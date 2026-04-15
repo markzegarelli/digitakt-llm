@@ -78,7 +78,7 @@ export function TrigEditPanel({
         TRIG {track.toUpperCase()} s{stepIndex + 1}
       </Text>
       <Text color={theme.textFaint}>
-        ↑↓ row  ←→ value  Shift+←→ ±10  0-9 type  Enter apply  Esc close
+        ↑↓ row  ←→ value  Shift+←→ ±10  [ ] step  0-9 type  Enter apply  Esc close
       </Text>
       {FIELD_KEYS.map((key, i) => {
         const active = i === selectedField;
