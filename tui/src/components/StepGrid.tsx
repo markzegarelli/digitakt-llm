@@ -125,13 +125,14 @@ export function StepGrid({
           );
         })}
       </Box>
-      {stepEditMode && isFocused && (
-        <Box marginBottom={0}>
-          <Text color={theme.textFaint}>
-            ←→ step  Space trig  Enter exit  Tab TRIG
-          </Text>
-        </Box>
-      )}
+      {/* Fixed slot so entering step-edit mode does not reflow the grid below. */}
+      <Box marginBottom={0} minHeight={1}>
+        <Text color={theme.textFaint}>
+          {stepEditMode && isFocused
+            ? "Step edit: ←→ step  Space on/off  Enter or Esc exit  Tab TRIG panel  ↑↓ other tracks"
+            : " "}
+        </Text>
+      </Box>
       {TRACK_NAMES.map((track, trackIdx) => {
         const steps = pattern[track] ?? [];
         const label = TRACK_LABELS[track];
