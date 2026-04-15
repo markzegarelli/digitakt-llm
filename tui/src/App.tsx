@@ -66,6 +66,11 @@ export function App({ baseUrl }: AppProps) {
   }, [state.pattern_length]);
 
   useEffect(() => {
+    const maxParam = Math.max(0, state.ccParams.length - 1);
+    setCCParam((p) => clamp(p, 0, maxParam));
+  }, [state.ccParams.length]);
+
+  useEffect(() => {
     if (focus !== "pattern") {
       setPatternStepEdit(false);
       setShowTrigPanel(false);
@@ -516,7 +521,7 @@ export function App({ baseUrl }: AppProps) {
     if (focus === "cc") {
       if (ccStepMode) {
         const track = TRACK_NAMES[ccTrack] as TrackName;
-        const param = state.ccParams[ccParam - 1]?.name ?? "";
+        const param = state.ccParams[ccParam]?.name ?? "";
 
         // Commit number buffer helper
         const commitBuffer = (buf: string) => {
@@ -586,14 +591,14 @@ export function App({ baseUrl }: AppProps) {
       }
 
       // Normal CC panel navigation
-      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, state.ccParams.length));
-      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, state.ccParams.length));
+      if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, Math.max(0, state.ccParams.length - 1)));
+      if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, Math.max(0, state.ccParams.length - 1)));
 
       if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
       if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
 
-      // Enter step-edit mode for the selected CC param (not velocity row)
-      if ((input === "e" || key.return) && ccParam > 0) {
+      // Enter step-edit mode for the selected CC param
+      if ((input === "e" || key.return) && state.ccParams.length > 0) {
         setCCStepMode(true);
         setCCSelectedStep(0);
         setCCStepInputBuffer("");
@@ -603,18 +608,10 @@ export function App({ baseUrl }: AppProps) {
       if (key.leftArrow || key.rightArrow) {
         const sign = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
         const track = TRACK_NAMES[ccTrack];
-        if (ccParam === 0) {
-          // velocity row
-          if (track) {
-            const current = state.track_velocity[track] ?? 127;
-            actions.setVelocity(track, clamp(current + sign, 0, 127));
-          }
-        } else {
-          const param = state.ccParams[ccParam - 1]?.name;
-          if (track && param) {
-            const current = state.track_cc[track][param] ?? 64;
-            actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
-          }
+        const param = state.ccParams[ccParam]?.name;
+        if (track && param) {
+          const current = state.track_cc[track][param] ?? 64;
+          actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
         }
       }
       return;
@@ -662,7 +659,6 @@ export function App({ baseUrl }: AppProps) {
             contentWidth={mainContentWidth}
             ccParams={state.ccParams}
             trackCC={state.track_cc}
-            trackVelocity={state.track_velocity}
             stepCC={state.step_cc}
             patternTrig={state.pattern_trig}
             patternLength={state.pattern_length}

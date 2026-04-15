@@ -132,7 +132,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
   const fetchCCParams = useCallback(async () => {
     try {
       const data = await api("GET", "/cc-params") as { params: CCParamDef[] };
-      setState((prev) => ({ ...prev, ccParams: data.params }));
+      const params = data.params.filter((p) => p.name !== "tune");
+      setState((prev) => ({ ...prev, ccParams: params }));
     } catch {
       // Server not ready yet — will retry on reconnect
     }

@@ -9,14 +9,13 @@ interface CCPanelProps {
   contentWidth: number;
   ccParams: CCParamDef[];
   trackCC: DigitaktState["track_cc"];
-  trackVelocity: DigitaktState["track_velocity"];
   stepCC: DigitaktState["step_cc"];
   /** Per-step prob/gate/cond from the live pattern (incl. LLM output). */
   patternTrig: PatternTrigState;
   patternLength: number;
   currentStep: number | null;
   selectedTrack: number;  // 0–7
-  selectedParam: number;  // 0=velocity, 1–N=CC params
+  selectedParam: number;  // index into ccParams
   isFocused: boolean;
   stepMode: boolean;
   selectedStep: number;        // 0–15 (only relevant when stepMode=true)
@@ -42,7 +41,6 @@ export function CCPanel({
   contentWidth,
   ccParams,
   trackCC,
-  trackVelocity,
   stepCC,
   patternTrig,
   patternLength,
@@ -65,15 +63,11 @@ export function CCPanel({
     `s${playIdx + 1} prob ${probHere}% gate ${gateHere}%` +
     (condHere ? ` cond ${condHere}` : "");
 
-  // Row 0 = velocity; rows 1–N = ccParams
-  const rows: Array<{ key: string; label: string; value: number }> = [
-    { key: "velocity", label: "velocity", value: trackVelocity[trackName] ?? 127 },
-    ...ccParams.map((def) => ({
-      key: def.name,
-      label: def.name,
-      value: cc?.[def.name] ?? def.default,
-    })),
-  ];
+  const rows: Array<{ key: string; label: string; value: number }> = ccParams.map((def) => ({
+    key: def.name,
+    label: def.name,
+    value: cc?.[def.name] ?? def.default,
+  }));
 
   const hintText = stepMode
     ? "←→: step  ↑↓: ±1  Shift+↑↓: ±10  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
@@ -101,10 +95,10 @@ export function CCPanel({
       {rows.map(({ key, label, value }, i) => {
         const isSelected = i === selectedParam;
         const col = isSelected && isFocused ? theme.accent : theme.text;
-        const isStepEditing = isSelected && isFocused && stepMode && i > 0; // velocity has no step CC
+        const isStepEditing = isSelected && isFocused && stepMode;
 
         if (isStepEditing) {
-          const param = ccParams[i - 1]?.name ?? "";
+          const param = ccParams[i]?.name ?? "";
           const stepOverrides = stepCC?.[trackName]?.[param] ?? null;
           // What value is the current step actually set to (stored, not preview)
           const storedValue = stepOverrides?.[selectedStep] ?? null;
