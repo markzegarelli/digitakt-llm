@@ -55,6 +55,14 @@ Keyboard shortcuts (Pattern panel):
 - `m` — immediate mute toggle on selected track
 - `q` — stage selected track for queued mute (toggle; shows `[Q]` in yellow)
 - `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
+- `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
+- `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
+- `Tab` (in SEQ step edit) — toggle TRIG side panel for the selected step
+- `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
+- `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields)
+- `[` / `]` (TRIG panel) — move selected step left/right while keeping TRIG panel open
+- `0-9` then `Enter` (TRIG panel) — type and apply numeric value directly
+- `Esc` (TRIG panel) — close TRIG side panel
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { TrackName } from "../types.js";
+import type { TrackName, PatternTrigState } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
 
@@ -15,14 +15,6 @@ const TRACK_LABELS: Record<TrackName, string> = {
   cymbal: "CY",
 };
 
-/** Velocity → OLED-style luminance steps (single accent family). */
-function velColor(velocity: number): string {
-  if (velocity <= 0) return theme.textFaint;
-  if (velocity < 32) return theme.accentSubtle;
-  if (velocity < 88) return theme.accentMuted;
-  return theme.accent;
-}
-
 /** Border (2) + horizontal padding (2). */
 const BORDER_PAD = 4;
 /** Ruler + track label column (fixed so steps align). */
@@ -32,29 +24,74 @@ interface StepGridProps {
   /** Inner width of the bordered panel — drives per-step column width on wide terminals. */
   contentWidth: number;
   pattern: Record<TrackName, number[]>;
+  patternTrig: PatternTrigState;
   patternLength: number;
   currentStep: number | null;
   trackMuted: Record<TrackName, boolean>;
   selectedTrack: number;
   pendingMuteTracks?: Set<TrackName>;
+  /** When true, user is editing steps on `selectedTrack`; `selectedStep` is the cursor column. */
+  stepEditMode: boolean;
+  selectedStep: number;
+  isFocused: boolean;
 }
 
-/** OLED-style dots: empty ·, low ○ (1–63), high ● (64–127). Playhead ►/▷. */
-function stepGlyph(velocity: number, isPlayhead: boolean, _muted: boolean): string {
+function condSuffix(cond: string | null): string {
+  if (cond === "1:2") return "₁";
+  if (cond === "not:2") return "ⁿ";
+  if (cond === "fill") return "f";
+  return "";
+}
+
+/** Core step marker (playhead uses triangles; otherwise ·/○/● by velocity). */
+function stepBaseGlyph(velocity: number, isPlayhead: boolean): string {
   if (isPlayhead) return velocity > 0 ? "\u25BA" : "\u25B9";
   if (velocity === 0) return "\u00B7";
   if (velocity < 64) return "\u25CB";
   return "\u25CF";
 }
 
+function velColor(velocity: number): string {
+  if (velocity <= 0) return theme.textFaint;
+  if (velocity < 32) return theme.accentSubtle;
+  if (velocity < 88) return theme.accentMuted;
+  return theme.accent;
+}
+
+function stepColor(
+  velocity: number,
+  isPlayhead: boolean,
+  muted: boolean,
+  prob: number,
+  cond: string | null,
+  isColCursor: boolean,
+  isRowSelected: boolean,
+): string {
+  if (isColCursor && isRowSelected) return theme.warn;
+  if (muted) return theme.textFaint;
+  if (isPlayhead) return velocity > 0 ? theme.accent : theme.textDim;
+  if (velocity === 0) {
+    if (cond !== null || prob < 100) return theme.textDim;
+    return theme.textFaint;
+  }
+  if (prob < 50) return theme.error;
+  if (prob < 75) return theme.accentMuted;
+  if (prob < 100) return theme.warn;
+  return velColor(velocity);
+}
+
 export function StepGrid({
   contentWidth,
   pattern,
+  patternTrig,
   patternLength,
   currentStep,
   trackMuted,
   selectedTrack,
   pendingMuteTracks = new Set(),
+  stepEditMode,
+  selectedStep,
+  isFocused,
 }: StepGridProps) {
   const stepArea = Math.max(patternLength * 2, contentWidth - BORDER_PAD - LABEL_COL_W);
   const colWidth = Math.max(2, Math.min(6, Math.floor(stepArea / patternLength)));
@@ -63,7 +100,7 @@ export function StepGrid({
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor={theme.border}
+      borderColor={isFocused ? theme.borderActive : theme.border}
       paddingX={1}
       width={contentWidth}
     >
@@ -73,13 +110,28 @@ export function StepGrid({
         </Box>
         {Array.from({ length: patternLength }, (_, i) => {
           const n = i + 1;
+          const isHead = currentStep === i;
+          const isCol = stepEditMode && isFocused && selectedTrack >= 0 && i === selectedStep;
           const label = n % 4 === 1 ? String(n).padStart(2) : "\u00B7\u00B7";
           return (
             <Box key={i} width={colWidth} justifyContent="center">
-              <Text color={n % 4 === 1 ? theme.textDim : theme.textFaint}>{label}</Text>
+              <Text
+                bold={isCol}
+                color={isCol ? theme.warn : isHead ? theme.accent : n % 4 === 1 ? theme.textDim : theme.textFaint}
+              >
+                {label}
+              </Text>
             </Box>
           );
         })}
+      </Box>
+      {/* Fixed slot so entering step-edit mode does not reflow the grid below. */}
+      <Box marginBottom={0} minHeight={1}>
+        <Text color={theme.textFaint}>
+          {stepEditMode && isFocused
+            ? "Step edit: ←→ step  Space on/off  Enter or Esc exit  Tab TRIG panel  ↑↓ other tracks"
+            : " "}
+        </Text>
       </Box>
       {TRACK_NAMES.map((track, trackIdx) => {
         const steps = pattern[track] ?? [];
@@ -91,18 +143,26 @@ export function StepGrid({
         return (
           <Box key={track} flexDirection="row">
             <Box width={LABEL_COL_W}>
-              <Text bold color={labelColor}>{label}</Text>
+              <Text bold color={labelColor}>
+                {isSelected && isFocused ? ">" : " "}
+                {label}
+              </Text>
             </Box>
             {Array.from({ length: patternLength }, (_, i) => {
               const velocity = steps[i] ?? 0;
               const isPlayhead = currentStep === i;
-              const g = stepGlyph(velocity, isPlayhead, muted);
-              let c = velColor(velocity);
-              if (muted) c = theme.textFaint;
-              if (isPlayhead) c = velocity > 0 ? theme.accent : theme.textDim;
+              const prob = patternTrig.prob[track]?.[i] ?? 100;
+              const cond = patternTrig.cond[track]?.[i] ?? null;
+              const suf = condSuffix(cond);
+              const base = stepBaseGlyph(velocity, isPlayhead);
+              const isColCursor = stepEditMode && isFocused && isSelected && i === selectedStep;
+              const c = stepColor(velocity, isPlayhead, muted, prob, cond, isColCursor, isSelected);
               return (
                 <Box key={`${track}-${i}`} width={colWidth} justifyContent="center">
-                  <Text color={c}>{g}</Text>
+                  <Text color={c}>
+                    {base}
+                    {suf ? <Text color={isPlayhead ? c : theme.accentMuted}>{suf}</Text> : ""}
+                  </Text>
                 </Box>
               );
             })}

@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { DigitaktState, TrackName, CCParamDef } from "../types.js";
+import type { DigitaktState, TrackName, CCParamDef, PatternTrigState } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
 
@@ -11,6 +11,10 @@ interface CCPanelProps {
   trackCC: DigitaktState["track_cc"];
   trackVelocity: DigitaktState["track_velocity"];
   stepCC: DigitaktState["step_cc"];
+  /** Per-step prob/gate/cond from the live pattern (incl. LLM output). */
+  patternTrig: PatternTrigState;
+  patternLength: number;
+  currentStep: number | null;
   selectedTrack: number;  // 0–7
   selectedParam: number;  // 0=velocity, 1–N=CC params
   isFocused: boolean;
@@ -40,6 +44,9 @@ export function CCPanel({
   trackCC,
   trackVelocity,
   stepCC,
+  patternTrig,
+  patternLength,
+  currentStep,
   selectedTrack,
   selectedParam,
   isFocused,
@@ -50,6 +57,13 @@ export function CCPanel({
   const barSlots = Math.max(16, Math.min(96, contentWidth - MIX_BAR_OVERHEAD));
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
   const cc = trackCC[trackName];
+  const playIdx = currentStep !== null && currentStep >= 0 ? currentStep : 0;
+  const probHere = patternTrig.prob[trackName]?.[playIdx] ?? 100;
+  const gateHere = patternTrig.gate[trackName]?.[playIdx] ?? 100;
+  const condHere = patternTrig.cond[trackName]?.[playIdx] ?? null;
+  const trigSummary =
+    `s${playIdx + 1} prob ${probHere}% gate ${gateHere}%` +
+    (condHere ? ` cond ${condHere}` : "");
 
   // Row 0 = velocity; rows 1–N = ccParams
   const rows: Array<{ key: string; label: string; value: number }> = [
@@ -80,6 +94,10 @@ export function CCPanel({
       <Box marginBottom={0}>
         <Text color={theme.textFaint}>{hintText}</Text>
       </Box>
+      <Box marginBottom={0}>
+        <Text color={theme.textDim}>TRIG </Text>
+        <Text color={theme.accentMuted}>{trigSummary}</Text>
+      </Box>
       {rows.map(({ key, label, value }, i) => {
         const isSelected = i === selectedParam;
         const col = isSelected && isFocused ? theme.accent : theme.text;
@@ -103,7 +121,7 @@ export function CCPanel({
               <Text>{" "}</Text>
               <Text bold color={col}>{label.padEnd(10)}</Text>
               <Text color={theme.textFaint}>{"["}</Text>
-              {Array.from({ length: 16 }, (_, s) => {
+              {Array.from({ length: patternLength }, (_, s) => {
                 const isCurrentStep = s === selectedStep;
                 const cellValue = isCurrentStep ? previewValue : (stepOverrides?.[s] ?? null);
                 const isBuffering = isCurrentStep && stepInputBuffer.length > 0;
@@ -118,7 +136,7 @@ export function CCPanel({
                     }
                   >
                     {stepCell(cellValue)}
-                    {s < 15 ? " " : ""}
+                    {s < patternLength - 1 ? " " : ""}
                   </Text>
                 );
               })}

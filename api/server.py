@@ -327,6 +327,7 @@ def set_velocity(req: VelocityRequest):
 def set_prob(req: ProbRequest):
     if req.track not in TRACK_NAMES:
         raise HTTPException(422, f"Unknown track: {req.track}")
+    _validate_step_in_pattern(req.step)
     _mutator.apply(
         lambda p: apply_prob_step(p, req.track, req.step - 1, req.value),
         event="prob_changed",
