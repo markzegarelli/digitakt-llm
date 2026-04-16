@@ -26,6 +26,7 @@ const HELP_LINES = [
   "  fill <name>                          one-shot fill (plays once, reverts)",
   "  chain <p1> <p2> ... [--auto]         define setlist",
   "  chain-next                           queue next pattern in chain",
+  "  chain-fire                           arm queued chain pattern for next 1",
   "  chain-status                         show chain position",
   "  chain-clear                          clear chain state",
   "  log                                  toggle activity log",
@@ -54,6 +55,8 @@ const HELP_LINES = [
   "  m (Pattern panel)                    toggle mute on selected track",
   "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
   "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
+  "  n (Pattern panel)                    queue next chain candidate",
+  "  N (Pattern panel)                    arm chain change for next 1 (Shift+N)",
   "",
   "CC / MIX panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "  Value bar: █ filled / ░ empty (0–127), width scales with terminal size",
@@ -94,7 +97,7 @@ const COMMANDS = [
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "prob-track", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel", "vel-track",
-  "chain", "chain-next", "chain-status", "chain-clear", "next", "vary", "read",
+  "chain", "chain-next", "chain-fire", "chain-status", "chain-clear", "next", "vary", "read",
 ];
 
 /** Legend blocks below HELP_LINES (each counts as one scroll row). */

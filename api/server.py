@@ -31,6 +31,7 @@ from api.schemas import (
     PitchRequest, PitchResponse,
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
+    ChainRequest,
 )
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
@@ -82,7 +83,7 @@ _ALL_EVENTS = [
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "cond_changed", "state_reset",
-    "ask_complete", "pattern_loaded",
+    "ask_complete", "pattern_loaded", "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
 ]
 
 
@@ -189,6 +190,11 @@ def get_state():
         track_pitch=_state.track_pitch,
         swing=_state.current_pattern.get("swing", 0),
         pattern_length=_state.pattern_length,
+        chain=_state.chain,
+        chain_index=_state.chain_index,
+        chain_auto=_state.chain_auto,
+        chain_queued_index=_state.chain_queued_index,
+        chain_armed=_state.chain_armed,
     )
 
 
@@ -231,6 +237,7 @@ def post_new():
     for track in TRACK_NAMES:
         _state.track_cc[track] = dict(_DEFAULT_CC_PARAMS)
         _state.track_velocity[track] = 127
+    _state.clear_chain()
     if _state.is_playing:
         _player.stop()
     _broadcast_event("bpm_changed", {"bpm": 120.0})
@@ -524,6 +531,79 @@ async def queue_fill_pattern(name: str):
     pattern = data.get("pattern", data)
     _state.queue_fill(pattern)
     return {"queued": name}
+
+
+@app.post("/chain")
+def set_chain(req: ChainRequest):
+    names = [n.strip() for n in req.names if n.strip()]
+    if not names:
+        raise HTTPException(status_code=422, detail="chain names cannot be empty")
+    patterns: list[dict] = []
+    for name in names:
+        path = _resolve_pattern_path(name)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        pattern = extract_pattern_from_saved_json(data)
+        pattern = _state.normalize_pattern_length(pattern, _state.pattern_length)
+        patterns.append(pattern)
+    _state.set_chain(names, patterns, auto=req.auto)
+    payload = {
+        "chain": _state.chain,
+        "chain_index": _state.chain_index,
+        "chain_auto": _state.chain_auto,
+        "chain_queued_index": _state.chain_queued_index,
+        "chain_armed": _state.chain_armed,
+    }
+    _bus.emit("chain_updated", payload)
+    return payload
+
+
+@app.post("/chain/next")
+def chain_next():
+    queued_index = _state.queue_next_chain_candidate()
+    if queued_index is None:
+        raise HTTPException(status_code=404, detail="No chain configured")
+    payload = {
+        "chain": _state.chain,
+        "chain_index": _state.chain_index,
+        "chain_auto": _state.chain_auto,
+        "chain_queued_index": queued_index,
+        "chain_armed": _state.chain_armed,
+    }
+    _bus.emit("chain_queued", payload)
+    return payload
+
+
+@app.post("/chain/fire")
+def chain_fire():
+    queued_index = _state.arm_chain_candidate()
+    if queued_index is None:
+        raise HTTPException(status_code=404, detail="No chain configured")
+    payload = {
+        "chain": _state.chain,
+        "chain_index": _state.chain_index,
+        "chain_auto": _state.chain_auto,
+        "chain_queued_index": queued_index,
+        "chain_armed": _state.chain_armed,
+    }
+    _bus.emit("chain_armed", payload)
+    return payload
+
+
+@app.delete("/chain")
+def clear_chain():
+    _state.clear_chain()
+    payload = {
+        "chain": _state.chain,
+        "chain_index": _state.chain_index,
+        "chain_auto": _state.chain_auto,
+        "chain_queued_index": _state.chain_queued_index,
+        "chain_armed": _state.chain_armed,
+    }
+    _bus.emit("chain_updated", payload)
+    return payload
 
 
 @app.get("/patterns/{name}")

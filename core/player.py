@@ -207,33 +207,29 @@ class Player:
                             self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                         )
 
-            # End of loop: apply queued mutes at bar boundary
-            mute_changes = self.state.apply_pending_mutes()
+            # End of loop: apply all bar-boundary effects in one place.
+            effects = self.state.apply_bar_boundary()
+            mute_changes = effects.get("mute_changes")
             if mute_changes:
                 for track, muted in mute_changes.items():
                     self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
-            # Permanent pattern swap, then fill logic
-            if self.state.pending_pattern is not None:
-                self.state.current_pattern = self.state.pending_pattern
-                self.state.pending_pattern = None
+            chain_armed = effects.get("chain_armed")
+            if chain_armed:
+                self.bus.emit("chain_armed", chain_armed)
+
+            if effects.get("pattern_changed"):
                 self.bus.emit(
                     "pattern_changed",
-                    {"pattern": self.state.current_pattern, "prompt": self.state.last_prompt or ""},
+                    {"pattern": effects["current_pattern"], "prompt": self.state.last_prompt or ""},
                 )
 
-            if self.state.fill_pattern is not None:
-                # Begin fill: save current, play fill next loop
-                self.state._pre_fill_pattern = self.state.current_pattern
-                self.state.current_pattern = self.state.fill_pattern
-                self.state.fill_pattern = None
-                self.state._fill_active = True
-                self.bus.emit("fill_started", {"pattern": self.state.current_pattern})
-            elif self.state._fill_active:
-                # End fill: restore pre-fill pattern
-                self.state.current_pattern = self.state._pre_fill_pattern
-                self.state._pre_fill_pattern = None
-                self.state._fill_active = False
-                self.bus.emit("fill_ended", {"pattern": self.state.current_pattern})
+            chain_advanced = effects.get("chain_advanced")
+            if chain_advanced:
+                self.bus.emit("chain_advanced", chain_advanced)
+
+            fill_event = effects.get("fill_event")
+            if fill_event in {"fill_started", "fill_ended"}:
+                self.bus.emit(fill_event, {"pattern": effects["current_pattern"]})
 
             self._loop_count += 1
