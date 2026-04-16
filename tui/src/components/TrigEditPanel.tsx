@@ -84,7 +84,7 @@ export function TrigEditPanel({
         {trackWide ? <Text bold color={theme.warn}> ALL</Text> : null}
       </Box>
       <Text color={theme.textFaint}>
-        ↑↓ row  ←→ value  Shift+←→ ±10  [ ] step  t track-wide  0-9 type  Enter apply  Esc close
+        ↑↓ row  ←→ value  Shift+←→ ±10  [ ] step  t close panel  Shift+T ALL  0-9 type  Enter apply  Esc close
       </Text>
       {FIELD_KEYS.map((key, i) => {
         const active = i === selectedField;

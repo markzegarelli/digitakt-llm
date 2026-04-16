@@ -213,7 +213,7 @@ TRIG keyboard behavior:
 - `↑/↓` navigate fields
 - `←/→` adjust field value (`Shift+←/→` for ±10 on numeric fields)
 - `[`/`]` navigate steps while keeping TRIG panel open (and in SEQ step edit without TRIG)
-- `t` toggles track-wide mode for prob/vel/gate (not on the condition row)
+- Plain `t` (step edit only) opens TRIG when closed or closes it when open. `Shift+t` from the **track row** (not in step edit) enters step edit, opens TRIG, and enables ALL (playhead step when playing). `Shift+t` in step edit toggles ALL when TRIG is open (not on the condition row), or opens TRIG with ALL when TRIG is closed
 - `0-9` + `Enter` commit typed numeric values directly
 
 The TUI keeps **SEQ** and **MIX** selected tracks in sync: changing the track in either panel updates the other.

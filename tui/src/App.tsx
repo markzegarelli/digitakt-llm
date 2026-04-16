@@ -371,6 +371,44 @@ export function App({ baseUrl }: AppProps) {
       return;
     }
     if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
+
+    // SEQ (pattern): plain t / Shift+t — step edit + TRIG; Shift+t from row view opens TRIG + ALL in one step.
+    if (focus === "pattern" && !key.ctrl && !key.meta) {
+      const ch = typeof input === "string" ? input.trim() : "";
+      if (ch === "t" || ch === "T") {
+        const shiftT = ch === "T" || (ch === "t" && key.shift);
+
+        if (!patternStepEdit) {
+          if (shiftT) {
+            const maxStep = Math.max(0, state.pattern_length - 1);
+            const play = state.current_step;
+            const step =
+              play !== null && play >= 0 ? clamp(play, 0, maxStep) : 0;
+            setPatternStepEdit(true);
+            setPatternSelectedStep(step);
+            setShowTrigPanel(true);
+            setTrigTrackWide(true);
+            setTrigField(0);
+            setTrigInputBuffer("");
+            return;
+          }
+        } else if (patternStepEdit) {
+          if (!showTrigPanel) {
+            setShowTrigPanel(true);
+            setTrigTrackWide(!!shiftT);
+            return;
+          }
+          if (shiftT) {
+            if (trigField !== 4) setTrigTrackWide((w) => !w);
+            return;
+          }
+          setShowTrigPanel(false);
+          setTrigTrackWide(false);
+          return;
+        }
+      }
+    }
+
     if (focus === "prompt") return;  // Prompt handles its own keys
 
     if (input === " ") {
@@ -434,11 +472,6 @@ export function App({ baseUrl }: AppProps) {
           setTrigInputBuffer("");
           setShowTrigPanel(false);
           setTrigTrackWide(false);
-          return;
-        }
-
-        if (input === "t" && trigField !== 4) {
-          setTrigTrackWide((w) => !w);
           return;
         }
 
@@ -767,7 +800,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  Tab TRIG  [ ] step  t all-tracks in TRIG  Space  m mute  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>

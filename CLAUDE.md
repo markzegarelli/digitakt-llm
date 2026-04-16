@@ -57,11 +57,13 @@ Keyboard shortcuts (Pattern panel):
 - `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
 - `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
 - `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
-- `Tab` (in SEQ step edit) — toggle TRIG side panel for the selected step
+- `Tab` (in SEQ step edit) — toggle TRIG side panel (same as plain **`t`** when TRIG is closed; **`t`** again closes TRIG when it is open)
 - `[` / `]` (SEQ step edit) — move selected step left/right (with or without TRIG open)
 - `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
 - `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields)
-- `t` (TRIG panel, not on condition row) — toggle **track-wide** edits for probability, velocity, and gate (same value on every step); note/pitch stays per-track as today; condition stays per-step only
+- **`t`** (SEQ step edit) — open TRIG side panel if closed; **close** TRIG if it is already open
+- **`Shift+t`** (SEQ focused, **not** in step edit) — enter step edit, open TRIG, and turn **ALL** (track-wide) on; selected step follows the **playhead** when playing, otherwise step 1
+- **`Shift+t`** (SEQ step edit, TRIG open, not on condition row) — toggle **track-wide** (ALL) for probability, velocity, and gate; with TRIG **closed** in step edit, **`Shift+t`** opens TRIG **and** turns track-wide on. Note/pitch stays per-track; condition stays per-step only
 - `[` / `]` (TRIG panel) — move selected step left/right while keeping TRIG panel open
 - `0-9` then `Enter` (TRIG panel) — type and apply numeric value directly
 - `Esc` (TRIG panel) — close TRIG side panel
