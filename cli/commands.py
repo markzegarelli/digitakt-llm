@@ -176,6 +176,25 @@ def apply_prob_step(pattern: dict, track: str, step: int, value: int) -> dict:
     return result
 
 
+def apply_prob_track(pattern: dict, track: str, value: int) -> dict:
+    """Set probability to the same value on every step for one track (0–100)."""
+    if not (0 <= value <= 100):
+        raise ValueError(f"Probability must be 0–100, got {value}")
+    result = copy.deepcopy(pattern)
+    if "prob" not in result:
+        result["prob"] = {}
+    length = _pattern_length(result)
+    if track not in result["prob"]:
+        result["prob"][track] = [100] * length
+    elif len(result["prob"][track]) < length:
+        result["prob"][track] += [100] * (length - len(result["prob"][track]))
+    elif len(result["prob"][track]) > length:
+        result["prob"][track] = result["prob"][track][:length]
+    for step in range(length):
+        result["prob"][track][step] = value
+    return result
+
+
 def apply_vel_step(pattern: dict, track: str, step: int, value: int) -> dict:
     """
     Set velocity for a single step (0-indexed).
@@ -196,6 +215,23 @@ def apply_vel_step(pattern: dict, track: str, step: int, value: int) -> dict:
         result[track] = [0] * length
 
     result[track][step] = value
+    return result
+
+
+def apply_vel_track(pattern: dict, track: str, value: int) -> dict:
+    """Set step velocity to the same value on every step for one track (0–127)."""
+    if not (0 <= value <= 127):
+        raise ValueError(f"Velocity must be 0–127, got {value}")
+    result = copy.deepcopy(pattern)
+    length = _pattern_length(result)
+    if track not in result:
+        result[track] = [0] * length
+    elif len(result[track]) < length:
+        result[track] += [0] * (length - len(result[track]))
+    elif len(result[track]) > length:
+        result[track] = result[track][:length]
+    for step in range(length):
+        result[track][step] = value
     return result
 
 
@@ -240,6 +276,29 @@ def apply_gate_step(pattern: dict, track: str, step: int, value: int) -> dict:
     pattern["gate"] = dict(pattern["gate"])
     pattern["gate"][track] = list(pattern["gate"][track])
     pattern["gate"][track][step] = value
+    return pattern
+
+
+def apply_gate_track(pattern: dict, track: str, value: int) -> dict:
+    """Set gate (0–100) to the same value on every step for one track."""
+    if not (0 <= value <= 100):
+        raise ValueError(f"Gate value must be 0–100, got {value}")
+    pattern = copy.deepcopy(pattern)
+    if "gate" not in pattern:
+        length = len(pattern.get("kick", [None] * 16))
+        pattern["gate"] = {t: [100] * length for t in TRACK_NAMES}
+    pattern["gate"] = dict(pattern["gate"])
+    length = _pattern_length(pattern)
+    if track not in pattern["gate"]:
+        pattern["gate"][track] = [100] * length
+    row = list(pattern["gate"][track])
+    if len(row) < length:
+        row += [100] * (length - len(row))
+    elif len(row) > length:
+        row = row[:length]
+    for step in range(length):
+        row[step] = value
+    pattern["gate"][track] = row
     return pattern
 
 

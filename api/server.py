@@ -23,11 +23,11 @@ from api.schemas import (
     BpmRequest, CCRequest, CCResponse, CCStepRequest, GenerateRequest,
     MuteRequest, MuteResponse, PatternListResponse, StateResponse,
     VelocityRequest, VelocityResponse,
-    ProbRequest, SwingRequest, VelRequest, RandomRequest,
+    ProbRequest, ProbTrackRequest, SwingRequest, VelRequest, VelTrackRequest, RandomRequest,
     AskRequest, AskResponse,
     LengthRequest, LengthResponse,
     SavePatternRequest, PatternEntry,
-    GateRequest, GateResponse,
+    GateRequest, GateTrackRequest, GateResponse,
     PitchRequest, PitchResponse,
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
@@ -35,7 +35,8 @@ from api.schemas import (
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
     apply_random_prob, generate_random_beat, apply_cc_step,
-    apply_gate_step, apply_cond_step,
+    apply_gate_step, apply_gate_track, apply_cond_step,
+    apply_prob_track, apply_vel_track,
 )
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
@@ -336,6 +337,18 @@ def set_prob(req: ProbRequest):
     return {"track": req.track, "step": req.step, "value": req.value}
 
 
+@app.post("/prob-track")
+def set_prob_track(req: ProbTrackRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    new_pattern = _mutator.apply(
+        lambda p: apply_prob_track(p, req.track, req.value),
+        event=None,
+    )
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
+    return {"track": req.track, "value": req.value}
+
+
 @app.post("/swing")
 def set_swing(req: SwingRequest):
     _mutator.apply(
@@ -371,6 +384,18 @@ def set_vel(req: VelRequest):
     return {"track": req.track, "step": req.step, "value": req.value}
 
 
+@app.post("/vel-track")
+def set_vel_track(req: VelTrackRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    new_pattern = _mutator.apply(
+        lambda p: apply_vel_track(p, req.track, req.value),
+        event=None,
+    )
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
+    return {"track": req.track, "value": req.value}
+
+
 @app.post("/gate", response_model=GateResponse)
 async def set_gate(req: GateRequest):
     if req.track not in TRACK_NAMES:
@@ -383,6 +408,18 @@ async def set_gate(req: GateRequest):
         payload={"track": req.track, "step": req.step, "value": req.value},
     )
     return GateResponse(track=req.track, step=req.step, value=req.value)
+
+
+@app.post("/gate-track")
+def set_gate_track(req: GateTrackRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    new_pattern = _mutator.apply(
+        lambda p: apply_gate_track(p, req.track, req.value),
+        event=None,
+    )
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
+    return {"track": req.track, "value": req.value}
 
 
 @app.post("/pitch", response_model=PitchResponse)

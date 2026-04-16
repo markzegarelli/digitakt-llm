@@ -60,10 +60,24 @@ export function App({ baseUrl }: AppProps) {
   const [showTrigPanel, setShowTrigPanel] = useState(false);
   const [trigField, setTrigField] = useState(0);
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
+  const [trigTrackWide, setTrigTrackWide] = useState(false);
 
   useEffect(() => {
     setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
   }, [state.pattern_length]);
+
+  /** Option B: keep SEQ selected track and MIX selected track in lockstep. */
+  useEffect(() => {
+    setCCTrack(patternTrack);
+  }, [patternTrack]);
+
+  useEffect(() => {
+    setPatternTrack(ccTrack);
+  }, [ccTrack]);
+
+  useEffect(() => {
+    if (trigField === 4) setTrigTrackWide(false);
+  }, [trigField]);
 
   useEffect(() => {
     const maxParam = Math.max(0, state.ccParams.length - 1);
@@ -74,6 +88,7 @@ export function App({ baseUrl }: AppProps) {
     if (focus !== "pattern") {
       setPatternStepEdit(false);
       setShowTrigPanel(false);
+      setTrigTrackWide(false);
     }
   }, [focus]);
 
@@ -164,11 +179,20 @@ export function App({ baseUrl }: AppProps) {
       case "prob":
         actions.setProb(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
           .catch(dispatchError); break;
+      case "prob-track":
+        actions.setProbTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
+          .catch(dispatchError); break;
       case "vel":
         actions.setVel(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
           .catch(dispatchError); break;
+      case "vel-track":
+        actions.setVelTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
+          .catch(dispatchError); break;
       case "gate":
         actions.setGate(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
+          .catch(dispatchError); break;
+      case "gate-track":
+        actions.setGateTrack(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "pitch":
         actions.setPitch(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
@@ -329,7 +353,12 @@ export function App({ baseUrl }: AppProps) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
         if (focus === "pattern" && patternStepEdit) {
-          setShowTrigPanel((v) => !v);
+          if (showTrigPanel) {
+            setShowTrigPanel(false);
+            setTrigTrackWide(false);
+          } else {
+            setShowTrigPanel(true);
+          }
           return;
         }
         setFocus((f) => {
@@ -342,6 +371,44 @@ export function App({ baseUrl }: AppProps) {
       return;
     }
     if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
+
+    // SEQ (pattern): plain t / Shift+t — step edit + TRIG; Shift+t from row view opens TRIG + ALL in one step.
+    if (focus === "pattern" && !key.ctrl && !key.meta) {
+      const ch = typeof input === "string" ? input.trim() : "";
+      if (ch === "t" || ch === "T") {
+        const shiftT = ch === "T" || (ch === "t" && key.shift);
+
+        if (!patternStepEdit) {
+          if (shiftT) {
+            const maxStep = Math.max(0, state.pattern_length - 1);
+            const play = state.current_step;
+            const step =
+              play !== null && play >= 0 ? clamp(play, 0, maxStep) : 0;
+            setPatternStepEdit(true);
+            setPatternSelectedStep(step);
+            setShowTrigPanel(true);
+            setTrigTrackWide(true);
+            setTrigField(0);
+            setTrigInputBuffer("");
+            return;
+          }
+        } else if (patternStepEdit) {
+          if (!showTrigPanel) {
+            setShowTrigPanel(true);
+            setTrigTrackWide(!!shiftT);
+            return;
+          }
+          if (shiftT) {
+            if (trigField !== 4) setTrigTrackWide((w) => !w);
+            return;
+          }
+          setShowTrigPanel(false);
+          setTrigTrackWide(false);
+          return;
+        }
+      }
+    }
+
     if (focus === "prompt") return;  // Prompt handles its own keys
 
     if (input === " ") {
@@ -379,19 +446,32 @@ export function App({ baseUrl }: AppProps) {
           const raw = parseInt(buf, 10);
           if (Number.isNaN(raw)) return;
           if (trigField === 0) {
-            actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+            if (trigTrackWide) {
+              actions.setProbTrack(track, clamp(raw, 0, 100)).catch(err);
+            } else {
+              actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+            }
           } else if (trigField === 1) {
-            actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
+            if (trigTrackWide) {
+              actions.setVelTrack(track, clamp(raw, 0, 127)).catch(err);
+            } else {
+              actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
+            }
           } else if (trigField === 2) {
             actions.setPitch(track, clamp(raw, 0, 127)).catch(() => {});
           } else if (trigField === 3) {
-            actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(() => {});
+            if (trigTrackWide) {
+              actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
+            } else {
+              actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(() => {});
+            }
           }
         };
 
         if (key.escape) {
           setTrigInputBuffer("");
           setShowTrigPanel(false);
+          setTrigTrackWide(false);
           return;
         }
 
@@ -430,13 +510,25 @@ export function App({ baseUrl }: AppProps) {
           }
           const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
           if (trigField === 0) {
-            actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
+            if (trigTrackWide) {
+              actions.setProbTrack(track, clamp(prob + delta, 0, 100)).catch(err);
+            } else {
+              actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
+            }
           } else if (trigField === 1) {
-            actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
+            if (trigTrackWide) {
+              actions.setVelTrack(track, clamp(vel + delta, 0, 127)).catch(err);
+            } else {
+              actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
+            }
           } else if (trigField === 2) {
             actions.setPitch(track, clamp(pitch + delta, 0, 127)).catch(() => {});
           } else if (trigField === 3) {
-            actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
+            if (trigTrackWide) {
+              actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
+            } else {
+              actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
+            }
           }
           return;
         }
@@ -469,11 +561,17 @@ export function App({ baseUrl }: AppProps) {
         if (key.escape) {
           setPatternStepEdit(false);
           setShowTrigPanel(false);
+          setTrigTrackWide(false);
           return;
         }
         if (key.return) {
           setPatternStepEdit(false);
           setShowTrigPanel(false);
+          setTrigTrackWide(false);
+          return;
+        }
+        if (input === "[" || input === "]") {
+          setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
           return;
         }
         if (key.leftArrow || key.rightArrow) {
@@ -492,6 +590,7 @@ export function App({ baseUrl }: AppProps) {
         setPatternSelectedStep(0);
         setShowTrigPanel(false);
         setTrigField(0);
+        setTrigTrackWide(false);
         return;
       }
       if (input === "m") {
@@ -664,6 +763,8 @@ export function App({ baseUrl }: AppProps) {
             patternLength={state.pattern_length}
             currentStep={state.current_step}
             selectedTrack={ccTrack}
+            trackMuted={state.track_muted}
+            pendingMuteTracks={pendingMuteTracks}
             selectedParam={ccParam}
             isFocused={focus === "cc"}
             stepMode={ccStepMode}
@@ -699,7 +800,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  Tab TRIG  [ ] step in TRIG  Space  m mute  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>
@@ -715,6 +816,7 @@ export function App({ baseUrl }: AppProps) {
             cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
             selectedField={trigField}
             inputBuffer={trigInputBuffer}
+            trackWide={trigTrackWide}
           />
         )}
         {showLog && logPanelW > 0 && (

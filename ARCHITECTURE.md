@@ -39,8 +39,8 @@ Player._loop()                  ← runs in daemon thread
 ```
 command → clone pattern (deepcopy) → mutate field → queue_pattern → atomic swap at loop end
 ```
-This path bypasses the LLM entirely. It is used by `/prob`, `/vel`, `/vel-step`, `/swing`, `/mute`,
-`/mute-queued`, `/random`, `/gate`, `/pitch`, `/cond`, and `/cc-step`.
+This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel`, `/vel-track`, `/swing`, `/mute`,
+`/mute-queued`, `/random`, `/gate`, `/gate-track`, `/pitch`, `/cond`, and `/cc-step`.
 
 ## EventBus Events
 
@@ -200,18 +200,23 @@ When focus is on **SEQ**, pressing `Enter` toggles a per-track step edit mode:
 From SEQ step edit mode, `Tab` opens a contextual **TRIG** side panel for the selected step.
 This panel edits:
 
-- per-step `prob` (`POST /prob`)
-- per-step velocity lane (`POST /vel`)
+- per-step `prob` (`POST /prob`) or track-wide via `POST /prob-track`
+- per-step velocity lane (`POST /vel`) or track-wide via `POST /vel-track`
 - per-track note/pitch (`POST /pitch`) for that track
-- per-step `gate` (`POST /gate`)
+- per-step `gate` (`POST /gate`) or track-wide via `POST /gate-track`
 - per-step `cond` (`POST /cond`)
+
+`POST /prob-track`, `POST /vel-track`, and `POST /gate-track` apply one value across all steps for the current pattern length, then emit `pattern_changed` with the full pattern (same refresh path as `/length`).
 
 TRIG keyboard behavior:
 
 - `↑/↓` navigate fields
 - `←/→` adjust field value (`Shift+←/→` for ±10 on numeric fields)
-- `[`/`]` navigate steps while keeping TRIG panel open
+- `[`/`]` navigate steps while keeping TRIG panel open (and in SEQ step edit without TRIG)
+- Plain `t` (step edit only) opens TRIG when closed or closes it when open. `Shift+t` from the **track row** (not in step edit) enters step edit, opens TRIG, and enables ALL (playhead step when playing). `Shift+t` in step edit toggles ALL when TRIG is open (not on the condition row), or opens TRIG with ALL when TRIG is closed
 - `0-9` + `Enter` commit typed numeric values directly
+
+The TUI keeps **SEQ** and **MIX** selected tracks in sync: changing the track in either panel updates the other.
 
 In the TUI layout, the left focus rail remains anchored. The sequencer/main stack has priority width,
 while LOG and TRIG share the right-side column when both are visible.
@@ -306,13 +311,16 @@ The system prompt (`_build_system_prompt()`) encodes two categories of domain kn
 | `POST` | `/mute-queued` | Queue mute change for next bar boundary |
 | `POST` | `/velocity` | Set global track velocity (0–127) |
 | `POST` | `/prob` | Set per-step probability (0–100) |
+| `POST` | `/prob-track` | Set probability to the same value on every step for a track |
 | `POST` | `/vel` | Set per-step velocity (0–127) |
+| `POST` | `/vel-track` | Set step velocity to the same value on every step for a track |
 | `POST` | `/random` | Randomize velocity or probability for a track or all |
 | `POST` | `/randbeat` | Generate random techno beat (BPM 128–160, CC randomized) |
 | `POST` | `/cc` | Set global CC parameter for a track |
 | `GET` | `/cc` | Get all track CC values |
 | `POST` | `/cc-step` | Set per-step CC override (-1 to clear) |
 | `POST` | `/gate` | Set per-step gate length (0–100%) |
+| `POST` | `/gate-track` | Set gate to the same value on every step for a track |
 | `POST` | `/pitch` | Set per-track MIDI note number (0–127) |
 | `POST` | `/cond` | Set/clear conditional trig on a step |
 | `GET` | `/patterns` | List saved patterns (with tags) |
