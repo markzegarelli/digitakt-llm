@@ -43,6 +43,27 @@ export ANTHROPIC_API_KEY=sk-ant-...
 uv run digitakt
 ```
 
+### Cloud/agent startup bootstrap
+
+For cloud sessions (or any fresh machine), run:
+
+```bash
+bash scripts/startup-tooling.sh
+```
+
+This script is idempotent and prepares the expected tooling automatically:
+- installs `uv` if missing
+- syncs Python deps (`uv sync --extra dev`)
+- installs `bun` if missing
+- installs Bun deps in `tui/` (`bun install --cwd tui`)
+- prints ready-to-run verification commands for tests and the app
+
+If your agent platform supports startup hooks, you can register:
+
+```bash
+bash scripts/startup-tooling.sh
+```
+
 After `uv sync`, you can also run `digitakt` directly if the venv is activated (`source .venv/bin/activate`).
 
 **Global isolated install (optional):** from a checkout, `uv tool install .` installs the `digitakt` console script into uv’s tool environment (no manual venv).
