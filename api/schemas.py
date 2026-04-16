@@ -108,6 +108,11 @@ class ProbRequest(BaseModel):
     value: int = Field(..., ge=0, le=100)
 
 
+class ProbTrackRequest(BaseModel):
+    track: str
+    value: int = Field(..., ge=0, le=100)
+
+
 class SwingRequest(BaseModel):
     amount: int = Field(..., ge=0, le=100)
 
@@ -115,6 +120,11 @@ class SwingRequest(BaseModel):
 class VelRequest(BaseModel):
     track: str
     step: int = Field(..., ge=1, le=32)
+    value: int = Field(..., ge=0, le=127)
+
+
+class VelTrackRequest(BaseModel):
+    track: str
     value: int = Field(..., ge=0, le=127)
 
 
@@ -135,6 +145,11 @@ class CCStepRequest(BaseModel):
 class GateRequest(BaseModel):
     track: str
     step: int = Field(..., ge=1, le=32)
+    value: int = Field(..., ge=0, le=100)
+
+
+class GateTrackRequest(BaseModel):
+    track: str
     value: int = Field(..., ge=0, le=100)
 
 

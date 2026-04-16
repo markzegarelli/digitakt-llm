@@ -7,10 +7,13 @@ from cli.commands import (
     apply_random_velocity,
     apply_random_prob,
     apply_prob_step,
+    apply_prob_track,
     apply_vel_step,
+    apply_vel_track,
     apply_swing,
     generate_random_beat,
     apply_gate_step,
+    apply_gate_track,
     apply_cond_step,
 )
 from core.state import TRACK_NAMES
@@ -122,12 +125,36 @@ def test_apply_prob_step_initializes_to_pattern_length_32():
     assert result["prob"]["kick"][31] == 88
 
 
+def test_apply_prob_track_sets_all_steps():
+    pattern = _fresh_pattern()
+    result = apply_prob_track(pattern, "kick", 42)
+    assert all(v == 42 for v in result["prob"]["kick"])
+
+
+def test_apply_prob_track_rejects_out_of_range():
+    pattern = _fresh_pattern()
+    with pytest.raises(ValueError):
+        apply_prob_track(pattern, "kick", 101)
+
+
 # ── apply_vel_step ────────────────────────────────────────────────────────────
 
 def test_apply_vel_step_sets_correct_index():
     pattern = _fresh_pattern()
     result = apply_vel_step(pattern, "kick", 5, 99)
     assert result["kick"][5] == 99
+
+
+def test_apply_vel_track_sets_all_steps():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = apply_vel_track(pattern, "snare", 80)
+    assert all(v == 80 for v in result["snare"])
+
+
+def test_apply_vel_track_rejects_out_of_range():
+    pattern = _fresh_pattern()
+    with pytest.raises(ValueError):
+        apply_vel_track(pattern, "kick", 200)
 
 
 # ── apply_swing ───────────────────────────────────────────────────────────────
@@ -155,6 +182,15 @@ def test_apply_functions_do_not_mutate_input():
 
     apply_vel_step(original, "kick", 5, 99)
     assert original["kick"][5] == snapshot["kick"][5]
+
+    apply_prob_track(original, "kick", 50)
+    assert "prob" not in original
+
+    apply_vel_track(original, "kick", 10)
+    assert original["kick"] == snapshot["kick"]
+
+    apply_gate_track(original, "kick", 50)
+    assert "gate" not in original
 
     apply_swing(original, 42)
     assert "swing" not in original
@@ -260,6 +296,18 @@ def test_apply_gate_step_rejects_out_of_range():
     pattern = {k: [0] * 16 for k in TRACK_NAMES}
     with pytest.raises(ValueError):
         apply_gate_step(pattern, "kick", 0, 101)
+
+
+def test_apply_gate_track_sets_all_steps():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = apply_gate_track(pattern, "kick", 33)
+    assert all(v == 33 for v in result["gate"]["kick"])
+
+
+def test_apply_gate_track_rejects_out_of_range():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    with pytest.raises(ValueError):
+        apply_gate_track(pattern, "kick", 101)
 
 
 # ── apply_cond_step ───────────────────────────────────────────────────────────

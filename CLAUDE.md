@@ -53,13 +53,15 @@ uv run digitakt
 
 Keyboard shortcuts (Pattern panel):
 - `m` — immediate mute toggle on selected track
-- `q` — stage selected track for queued mute (toggle; shows `[Q]` in yellow)
+- `q` — stage selected track for queued mute (toggle; **MQ** badges on SEQ/MIX: `Q` = queued, `M` = muted)
 - `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
 - `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
 - `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
 - `Tab` (in SEQ step edit) — toggle TRIG side panel for the selected step
+- `[` / `]` (SEQ step edit) — move selected step left/right (with or without TRIG open)
 - `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
 - `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields)
+- `t` (TRIG panel, not on condition row) — toggle **track-wide** edits for probability, velocity, and gate (same value on every step); note/pitch stays per-track as today; condition stays per-step only
 - `[` / `]` (TRIG panel) — move selected step left/right while keeping TRIG panel open
 - `0-9` then `Enter` (TRIG panel) — type and apply numeric value directly
 - `Esc` (TRIG panel) — close TRIG side panel
@@ -125,7 +127,7 @@ FastAPI starts automatically on `http://localhost:8000`. WebSocket at `/ws` stre
 Key endpoints:
 - `POST /generate` — send a prompt to Claude
 - `POST /randbeat` — generate a random techno beat (BPM 128-160, CC randomized)
-- `POST /bpm`, `POST /swing`, `POST /prob`, `POST /vel`
+- `POST /bpm`, `POST /swing`, `POST /prob`, `POST /prob-track`, `POST /vel`, `POST /vel-track`
 - `POST /random` — randomize velocity or prob for a track
 - `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
@@ -133,6 +135,7 @@ Key endpoints:
 - `POST /length` — set pattern step count (8, 16, 32)
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)
+- `POST /gate-track` — set gate to the same value on every step for a track
 - `POST /pitch` — set per-track MIDI note pitch (0–127)
 - `POST /cond` — set conditional trig on a step (1:2 / not:2 / fill / null)
 - `GET /traces` — return recent LLM prompt/response traces (observability)

@@ -26,6 +26,8 @@ interface TrigEditPanelProps {
   selectedField: number;
   /** Digits being typed for the selected numeric field (prob/vel/note/gate). */
   inputBuffer: string;
+  /** When true, prob/vel/gate edits apply to every step on the track (not cond). */
+  trackWide: boolean;
 }
 
 function condLabel(c: string | null): string {
@@ -47,6 +49,7 @@ export function TrigEditPanel({
   cond,
   selectedField,
   inputBuffer,
+  trackWide,
 }: TrigEditPanelProps) {
   const stored: Record<TrigFieldKey, string> = {
     prob: String(prob),
@@ -74,11 +77,14 @@ export function TrigEditPanel({
       width={width}
       flexShrink={0}
     >
-      <Text bold color={theme.accent}>
-        TRIG {track.toUpperCase()} s{stepIndex + 1}
-      </Text>
+      <Box flexDirection="row">
+        <Text bold color={theme.accent}>
+          TRIG {track.toUpperCase()} s{stepIndex + 1}
+        </Text>
+        {trackWide ? <Text bold color={theme.warn}> ALL</Text> : null}
+      </Box>
       <Text color={theme.textFaint}>
-        ↑↓ row  ←→ value  Shift+←→ ±10  [ ] step  0-9 type  Enter apply  Esc close
+        ↑↓ row  ←→ value  Shift+←→ ±10  [ ] step  t track-wide  0-9 type  Enter apply  Esc close
       </Text>
       {FIELD_KEYS.map((key, i) => {
         const active = i === selectedField;

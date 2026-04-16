@@ -17,8 +17,8 @@ const TRACK_LABELS: Record<TrackName, string> = {
 
 /** Border (2) + horizontal padding (2). */
 const BORDER_PAD = 4;
-/** Ruler + track label column (fixed so steps align). */
-const LABEL_COL_W = 6;
+/** Ruler + track label column (fixed so steps align): cursor + 2-letter + 2-char status. */
+const LABEL_COL_W = 8;
 
 interface StepGridProps {
   /** Inner width of the bordered panel — drives per-step column width on wide terminals. */
@@ -68,7 +68,10 @@ function stepColor(
   isRowSelected: boolean,
 ): string {
   if (isColCursor && isRowSelected) return theme.warn;
-  if (muted) return theme.textFaint;
+  if (muted) {
+    if (isPlayhead) return theme.accentMuted;
+    return theme.textDim;
+  }
   if (isPlayhead) return velocity > 0 ? theme.accent : theme.textDim;
   if (velocity === 0) {
     if (cond !== null || prob < 100) return theme.textDim;
@@ -129,7 +132,7 @@ export function StepGrid({
       <Box marginBottom={0} minHeight={1}>
         <Text color={theme.textFaint}>
           {stepEditMode && isFocused
-            ? "Step edit: ←→ step  Space on/off  Enter or Esc exit  Tab TRIG panel  ↑↓ other tracks"
+            ? "Step edit: ←→ or [ ] step  Space on/off  Enter or Esc exit  Tab TRIG  ↑↓ tracks  t ALL in TRIG"
             : " "}
         </Text>
       </Box>
@@ -139,14 +142,30 @@ export function StepGrid({
         const muted = trackMuted[track] ?? false;
         const isSelected = trackIdx === selectedTrack;
         const isPendingMute = pendingMuteTracks.has(track);
-        const labelColor = isPendingMute ? theme.warn : isSelected ? theme.accent : theme.textDim;
+        const labelColor = isPendingMute
+          ? theme.warn
+          : isSelected && isFocused
+            ? theme.accent
+            : isSelected
+              ? theme.accentMuted
+              : theme.textDim;
+        const showBadge = muted || isPendingMute;
+        const badgeMuted = muted ? "M" : "·";
+        const badgeQueue = isPendingMute ? "Q" : "·";
+        const badgeColor = isPendingMute ? theme.warn : theme.error;
         return (
           <Box key={track} flexDirection="row">
-            <Box width={LABEL_COL_W}>
+            <Box width={LABEL_COL_W} flexDirection="row">
               <Text bold color={labelColor}>
                 {isSelected && isFocused ? ">" : " "}
                 {label}
               </Text>
+              {showBadge ? (
+                <Text bold color={badgeColor}>
+                  {badgeMuted}
+                  {badgeQueue}
+                </Text>
+              ) : null}
             </Box>
             {Array.from({ length: patternLength }, (_, i) => {
               const velocity = steps[i] ?? 0;

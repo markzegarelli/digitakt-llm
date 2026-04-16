@@ -86,8 +86,10 @@ export interface DigitaktActions {
   stop(): Promise<void>;
   generate(prompt: string): Promise<void>;
   setProb(track: TrackName, step: number, value: number): Promise<void>;
+  setProbTrack(track: TrackName, value: number): Promise<void>;
   setSwing(amount: number): Promise<void>;
   setVel(track: TrackName, step: number, value: number): Promise<void>;
+  setVelTrack(track: TrackName, value: number): Promise<void>;
   randomize(track: string, param: string, lo: number, hi: number): Promise<void>;
   randbeat(): Promise<void>;
   ask(question: string): Promise<{ answer: string; is_implementable: boolean }>;
@@ -97,6 +99,7 @@ export interface DigitaktActions {
   addLog(msg: string): void;
   queueFill(name: string): Promise<void>;
   setGate(track: string, step: number, value: number): Promise<Response>;
+  setGateTrack(track: string, value: number): Promise<void>;
   setPitch(track: string, value: number): Promise<Response>;
   setCond(track: string, step: number, value: string | null): Promise<Response>;
   setChain(names: string[], auto?: boolean): Promise<void>;
@@ -482,12 +485,20 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       await api("POST", "/prob", { track, step, value });
     }, [api]),
 
+    setProbTrack: useCallback(async (track: TrackName, value: number) => {
+      await api("POST", "/prob-track", { track, value });
+    }, [api]),
+
     setSwing: useCallback(async (amount: number) => {
       await api("POST", "/swing", { amount });
     }, [api]),
 
     setVel: useCallback(async (track: TrackName, step: number, value: number) => {
       await api("POST", "/vel", { track, step, value });
+    }, [api]),
+
+    setVelTrack: useCallback(async (track: TrackName, value: number) => {
+      await api("POST", "/vel-track", { track, value });
     }, [api]),
 
     randomize: useCallback(async (track: string, param: string, lo: number, hi: number) => {
@@ -536,6 +547,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ track, step, value }),
       }), [baseUrl]),
+
+    setGateTrack: useCallback(async (track: string, value: number) => {
+      await api("POST", "/gate-track", { track, value });
+    }, [api]),
 
     setPitch: useCallback((track: string, value: number) => {
       setState((s) => ({ ...s, track_pitch: { ...s.track_pitch, [track]: value } }));

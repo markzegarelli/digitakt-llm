@@ -206,6 +206,21 @@ def test_post_prob_step_out_of_range_returns_422(tmp_path):
     assert resp.status_code == 422
 
 
+def test_post_prob_track_sets_all_steps(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/prob-track", json={"track": "kick", "value": 61})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "kick", "value": 61}
+    state = client.get("/state").json()
+    assert all(v == 61 for v in state["current_pattern"]["prob"]["kick"])
+
+
+def test_post_prob_track_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/prob-track", json={"track": "cowbell", "value": 50})
+    assert resp.status_code == 422
+
+
 # ── /swing ─────────────────────────────────────────────────────────────────
 
 def test_post_swing_sets_amount(tmp_path):
@@ -247,6 +262,20 @@ def test_post_vel_updates_pattern(tmp_path):
 def test_post_vel_invalid_track_returns_422(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/vel", json={"track": "cowbell", "step": 1, "value": 64})
+    assert resp.status_code == 422
+
+
+def test_post_vel_track_sets_all_steps(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/vel-track", json={"track": "snare", "value": 55})
+    assert resp.status_code == 200
+    state = client.get("/state").json()
+    assert all(v == 55 for v in state["current_pattern"]["snare"])
+
+
+def test_post_vel_track_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/vel-track", json={"track": "cowbell", "value": 64})
     assert resp.status_code == 422
 
 
@@ -482,6 +511,21 @@ def test_post_gate_sets_step_gate(tmp_path):
 def test_post_gate_invalid_track_returns_422(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/gate", json={"track": "cowbell", "step": 1, "value": 50})
+    assert resp.status_code == 422
+
+
+def test_post_gate_track_sets_all_steps(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/gate-track", json={"track": "kick", "value": 40})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "kick", "value": 40}
+    state = client.get("/state").json()
+    assert all(v == 40 for v in state["current_pattern"]["gate"]["kick"])
+
+
+def test_post_gate_track_invalid_track_returns_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/gate-track", json={"track": "cowbell", "value": 50})
     assert resp.status_code == 422
 
 
