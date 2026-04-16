@@ -269,15 +269,22 @@ export function App({ baseUrl }: AppProps) {
       }
       case "chain-next":
         actions.chainNext()
-          .then(() => actions.addLog("chain: queueing next pattern"))
+          .then(() => actions.addLog("chain: queued next candidate"))
+          .catch(dispatchError);
+        break;
+      case "chain-fire":
+        actions.chainFire()
+          .then(() => actions.addLog("chain: armed for next 1"))
           .catch(dispatchError);
         break;
       case "chain-status": {
-        const { chain, chain_index, chain_auto } = state;
+        const { chain, chain_index, chain_auto, chain_queued_index, chain_armed } = state;
         if (chain.length === 0) actions.addLog("no chain defined");
         else {
           const pos = chain_index < 0 ? "unstarted" : `${chain_index + 1}/${chain.length}`;
-          actions.addLog(`chain [${pos}]: ${chain.join(" -> ")}${chain_auto ? " (auto)" : ""}`);
+          const queued = chain_queued_index === null ? "none" : `${chain_queued_index + 1}/${chain.length}`;
+          const armed = chain_armed ? "armed@1" : "idle";
+          actions.addLog(`chain [${pos} queued:${queued} ${armed}]: ${chain.join(" -> ")}${chain_auto ? " (auto)" : ""}`);
         }
         break;
       }
@@ -614,6 +621,12 @@ export function App({ baseUrl }: AppProps) {
           actions.setMuteQueued(track, !state.track_muted[track]);
         }
       }
+      if (input === "n") {
+        actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+      }
+      if (input === "N") {
+        actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+      }
       return;
     }
 
@@ -736,7 +749,13 @@ export function App({ baseUrl }: AppProps) {
         patternLength={state.pattern_length}
         barCount={barCount}
       />
-      <ChainPanel chain={state.chain} chainIndex={state.chain_index} chainAuto={state.chain_auto} />
+      <ChainPanel
+        chain={state.chain}
+        chainIndex={state.chain_index}
+        chainAuto={state.chain_auto}
+        queuedIndex={state.chain_queued_index}
+        armed={state.chain_armed}
+      />
       <Box flexDirection="row" width={termCols}>
         <FocusRail focus={focus} showLog={showLog} />
         <Box flexDirection="row" flexGrow={1} width={centerBudget}>
@@ -800,7 +819,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  n chain-next  Shift+N chain-fire  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>

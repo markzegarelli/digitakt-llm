@@ -39,6 +39,8 @@ const DEFAULT_STATE: DigitaktState = {
   chain: [],
   chain_index: -1,
   chain_auto: false,
+  chain_queued_index: null,
+  chain_armed: false,
   generation_summary: null,
 };
 
@@ -104,6 +106,7 @@ export interface DigitaktActions {
   setCond(track: string, step: number, value: string | null): Promise<Response>;
   setChain(names: string[], auto?: boolean): Promise<void>;
   chainNext(): Promise<void>;
+  chainFire(): Promise<void>;
   chainClear(): Promise<void>;
 }
 
@@ -167,6 +170,8 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         chain: (data["chain"] as string[]) ?? prev.chain,
         chain_index: (data["chain_index"] as number) ?? prev.chain_index,
         chain_auto: (data["chain_auto"] as boolean) ?? prev.chain_auto,
+        chain_queued_index: (data["chain_queued_index"] as number | null) ?? prev.chain_queued_index,
+        chain_armed: (data["chain_armed"] as boolean) ?? prev.chain_armed,
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
@@ -389,6 +394,28 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 chain: (msg.data["chain"] as string[]) ?? [],
                 chain_index: (msg.data["chain_index"] as number) ?? -1,
                 chain_auto: (msg.data["chain_auto"] as boolean) ?? false,
+                chain_queued_index: (msg.data["chain_queued_index"] as number | null) ?? null,
+                chain_armed: (msg.data["chain_armed"] as boolean) ?? false,
+                log: newLog,
+              };
+            case "chain_queued":
+              return {
+                ...prev,
+                chain: (msg.data["chain"] as string[]) ?? prev.chain,
+                chain_index: (msg.data["chain_index"] as number) ?? prev.chain_index,
+                chain_auto: (msg.data["chain_auto"] as boolean) ?? prev.chain_auto,
+                chain_queued_index: (msg.data["chain_queued_index"] as number | null) ?? prev.chain_queued_index,
+                chain_armed: false,
+                log: newLog,
+              };
+            case "chain_armed":
+              return {
+                ...prev,
+                chain: (msg.data["chain"] as string[]) ?? prev.chain,
+                chain_index: (msg.data["chain_index"] as number) ?? prev.chain_index,
+                chain_auto: (msg.data["chain_auto"] as boolean) ?? prev.chain_auto,
+                chain_queued_index: (msg.data["chain_queued_index"] as number | null) ?? prev.chain_queued_index,
+                chain_armed: (msg.data["chain_armed"] as boolean) ?? true,
                 log: newLog,
               };
             case "chain_advanced":
@@ -396,6 +423,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 ...prev,
                 chain: (msg.data["chain"] as string[]) ?? prev.chain,
                 chain_index: (msg.data["chain_index"] as number) ?? prev.chain_index,
+                chain_auto: (msg.data["chain_auto"] as boolean) ?? prev.chain_auto,
+                chain_queued_index: (msg.data["chain_queued_index"] as number | null) ?? null,
+                chain_armed: (msg.data["chain_armed"] as boolean) ?? false,
                 log: newLog,
               };
             case "ask_complete":
@@ -574,6 +604,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     chainNext: useCallback(async () => {
       await api("POST", "/chain/next");
+    }, [api]),
+
+    chainFire: useCallback(async () => {
+      await api("POST", "/chain/fire");
     }, [api]),
 
     chainClear: useCallback(async () => {

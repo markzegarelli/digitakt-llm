@@ -437,3 +437,39 @@ def test_play_step_handles_32_step_aux_arrays_without_index_error():
     state.current_pattern["step_cc"] = {"kick": {"filter": [None] * 32}}
     player._play_step(31)
     assert port.send.called
+
+
+def test_apply_bar_boundary_queues_auto_chain_and_advances():
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    p1 = {k: [11] * 16 for k in TRACK_NAMES}
+    p2 = {k: [22] * 16 for k in TRACK_NAMES}
+    state.set_chain(["p1", "p2"], [p1, p2], auto=True)
+
+    effects = state.apply_bar_boundary()
+    assert effects["chain_armed"] is not None
+    assert effects["pattern_changed"] is True
+    assert effects["chain_advanced"] is not None
+    assert state.chain_index == 0
+    assert state.chain_queued_index is None
+    assert state.chain_armed is False
+    assert state.current_pattern["kick"][0] == 11
+
+
+def test_apply_bar_boundary_manual_chain_requires_fire():
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    p1 = {k: [33] * 16 for k in TRACK_NAMES}
+    state.set_chain(["p1"], [p1], auto=False)
+
+    state.queue_next_chain_candidate()
+    effects_without_fire = state.apply_bar_boundary()
+    assert effects_without_fire["pattern_changed"] is False
+    assert state.chain_index == -1
+
+    state.arm_chain_candidate()
+    effects_with_fire = state.apply_bar_boundary()
+    assert effects_with_fire["pattern_changed"] is True
+    assert effects_with_fire["chain_advanced"] is not None
+    assert state.chain_index == 0
+    assert state.chain_armed is False

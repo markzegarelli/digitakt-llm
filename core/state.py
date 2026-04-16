@@ -33,6 +33,13 @@ _HISTORY_MAX = 20
 class AppState:
     current_pattern: dict = field(default_factory=dict)
     pending_pattern: dict | None = None
+    chain: list[str] = field(default_factory=list)
+    chain_patterns: list[dict] = field(default_factory=list, repr=False)
+    chain_index: int = -1
+    chain_auto: bool = False
+    chain_queued_index: int | None = None
+    chain_queued_pattern: dict | None = field(default=None, repr=False)
+    chain_armed: bool = False
     bpm: float = 120.0
     is_playing: bool = False
     midi_port_name: str | None = None
@@ -210,6 +217,90 @@ class AppState:
                 self.track_velocity[track] = 127
             self.pending_mutes.clear()
             self._fill_fsm = FillFSM()
+            self.chain.clear()
+            self.chain_patterns.clear()
+            self.chain_index = -1
+            self.chain_auto = False
+            self.chain_queued_index = None
+            self.chain_queued_pattern = None
+            self.chain_armed = False
+
+    # ── Chain helpers ───────────────────────────────────────────────────────
+
+    def set_chain(self, names: list[str], patterns: list[dict], auto: bool = False) -> None:
+        with self._lock:
+            self.chain = list(names)
+            self.chain_patterns = [copy.deepcopy(p) for p in patterns]
+            self.chain_auto = auto
+            self.chain_index = -1
+            self.chain_queued_index = None
+            self.chain_queued_pattern = None
+            self.chain_armed = False
+
+    def clear_chain(self) -> None:
+        with self._lock:
+            self.chain.clear()
+            self.chain_patterns.clear()
+            self.chain_index = -1
+            self.chain_auto = False
+            self.chain_queued_index = None
+            self.chain_queued_pattern = None
+            self.chain_armed = False
+
+    def queue_next_chain_candidate(self) -> int | None:
+        with self._lock:
+            if not self.chain_patterns:
+                return None
+            anchor = self.chain_queued_index if self.chain_queued_index is not None else self.chain_index
+            next_index = 0 if anchor < 0 else (anchor + 1) % len(self.chain_patterns)
+            self.chain_queued_index = next_index
+            self.chain_queued_pattern = copy.deepcopy(self.chain_patterns[next_index])
+            return next_index
+
+    def arm_chain_candidate(self) -> int | None:
+        with self._lock:
+            if not self.chain_patterns:
+                return None
+            if self.chain_queued_index is None:
+                anchor = self.chain_index
+                next_index = 0 if anchor < 0 else (anchor + 1) % len(self.chain_patterns)
+                self.chain_queued_index = next_index
+                self.chain_queued_pattern = copy.deepcopy(self.chain_patterns[next_index])
+            if self.chain_queued_pattern is None:
+                return None
+            self.pending_pattern = copy.deepcopy(self.chain_queued_pattern)
+            self.chain_armed = True
+            return self.chain_queued_index
+
+    def _prepare_auto_chain(self) -> dict | None:
+        if not self.chain_auto or not self.chain_patterns or self.pending_pattern is not None:
+            return None
+        next_index = 0 if self.chain_index < 0 else (self.chain_index + 1) % len(self.chain_patterns)
+        self.chain_queued_index = next_index
+        self.chain_queued_pattern = copy.deepcopy(self.chain_patterns[next_index])
+        self.pending_pattern = copy.deepcopy(self.chain_queued_pattern)
+        self.chain_armed = True
+        return {
+            "chain": list(self.chain),
+            "chain_index": self.chain_index,
+            "chain_queued_index": self.chain_queued_index,
+            "chain_auto": self.chain_auto,
+        }
+
+    def _finalize_chain_advance_if_needed(self) -> dict | None:
+        if not self.chain_armed or self.chain_queued_index is None:
+            return None
+        self.chain_index = self.chain_queued_index
+        self.chain_queued_index = None
+        self.chain_queued_pattern = None
+        self.chain_armed = False
+        return {
+            "chain": list(self.chain),
+            "chain_index": self.chain_index,
+            "chain_queued_index": self.chain_queued_index,
+            "chain_auto": self.chain_auto,
+            "chain_armed": self.chain_armed,
+        }
 
     # ── Bar-boundary logic (called only by the player loop) ───────────────
 
@@ -221,10 +312,14 @@ class AppState:
                 "mute_changes":    dict | None,
                 "pattern_changed": bool,
                 "fill_event":      "fill_started" | "fill_ended" | None,
+                "chain_armed":     dict | None,
+                "chain_advanced":  dict | None,
                 "current_pattern": dict,
             }
         """
         mute_changes = self.apply_pending_mutes()
+        with self._lock:
+            chain_armed = self._prepare_auto_chain()
 
         # Pattern swap
         pattern_changed = False
@@ -233,6 +328,11 @@ class AppState:
                 self.current_pattern = self.pending_pattern
                 self.pending_pattern = None
             pattern_changed = True
+
+        chain_advanced = None
+        with self._lock:
+            if pattern_changed:
+                chain_advanced = self._finalize_chain_advance_if_needed()
 
         # Fill FSM advance (fill_fsm holds its own lock-free state;
         # only the player calls apply_bar_boundary so no race here)
@@ -250,5 +350,7 @@ class AppState:
             "mute_changes": mute_changes,
             "pattern_changed": pattern_changed,
             "fill_event": fill_event,
+            "chain_armed": chain_armed,
+            "chain_advanced": chain_advanced,
             "current_pattern": self.current_pattern,
         }
