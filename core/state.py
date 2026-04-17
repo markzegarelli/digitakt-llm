@@ -342,8 +342,14 @@ class AppState:
                 "current_pattern": dict,
             }
         """
-        mute_changes = self.apply_pending_mutes()
         with self._lock:
+            mute_changes: dict[str, bool] | None = None
+            if self.pending_mutes:
+                mute_changes = dict(self.pending_mutes)
+                for track, muted in mute_changes.items():
+                    self.track_muted[track] = muted
+                self.pending_mutes.clear()
+
             chain_armed = self._prepare_auto_chain()
 
             pattern_changed = False
@@ -352,28 +358,27 @@ class AppState:
                 self.pending_pattern = None
                 pattern_changed = True
 
-        chain_advanced = None
-        with self._lock:
             if pattern_changed:
                 chain_advanced = self._finalize_chain_advance_if_needed()
+            else:
+                chain_advanced = None
 
-        # Fill FSM advance (fill_fsm holds its own lock-free state;
-        # only the player calls apply_bar_boundary so no race here)
-        next_pattern, fill_event = self._fill_fsm.advance(self.current_pattern)
-        if fill_event == "fill_started":
-            self.current_pattern = next_pattern
-            # Keep legacy fields in sync for any code that still reads them
-            self._fill_active = True
-        elif fill_event == "fill_ended":
-            self.current_pattern = next_pattern
-            self._fill_active = False
-            self._pre_fill_pattern = None
+            # FillFSM is advanced only by the player loop at bar boundaries.
+            next_pattern, fill_event = self._fill_fsm.advance(self.current_pattern)
+            if fill_event is not None:
+                self.current_pattern = next_pattern
+                if fill_event == "fill_started":
+                    self.fill_pattern = None
+                    self._fill_active = True
+                elif fill_event == "fill_ended":
+                    self._fill_active = False
+                    self._pre_fill_pattern = None
 
-        return {
-            "mute_changes": mute_changes,
-            "pattern_changed": pattern_changed,
-            "fill_event": fill_event,
-            "chain_armed": chain_armed,
-            "chain_advanced": chain_advanced,
-            "current_pattern": self.current_pattern,
-        }
+            return {
+                "mute_changes": mute_changes,
+                "pattern_changed": pattern_changed,
+                "fill_event": fill_event,
+                "chain_armed": chain_armed,
+                "chain_advanced": chain_advanced,
+                "current_pattern": self.current_pattern,
+            }

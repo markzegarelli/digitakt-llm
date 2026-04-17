@@ -207,29 +207,28 @@ class Player:
                             self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                         )
 
-            # End of loop: apply all bar-boundary effects in one place.
-            effects = self.state.apply_bar_boundary()
-            mute_changes = effects.get("mute_changes")
+            boundary = self.state.apply_bar_boundary()
+            mute_changes = boundary.get("mute_changes")
             if mute_changes:
                 for track, muted in mute_changes.items():
                     self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
-            chain_armed = effects.get("chain_armed")
+            chain_armed = boundary.get("chain_armed")
             if chain_armed:
                 self.bus.emit("chain_armed", chain_armed)
 
-            if effects.get("pattern_changed"):
+            if boundary.get("pattern_changed"):
                 self.bus.emit(
                     "pattern_changed",
-                    {"pattern": effects["current_pattern"], "prompt": self.state.last_prompt or ""},
+                    {"pattern": boundary["current_pattern"], "prompt": self.state.last_prompt or ""},
                 )
 
-            chain_advanced = effects.get("chain_advanced")
+            chain_advanced = boundary.get("chain_advanced")
             if chain_advanced:
                 self.bus.emit("chain_advanced", chain_advanced)
 
-            fill_event = effects.get("fill_event")
+            fill_event = boundary.get("fill_event")
             if fill_event in {"fill_started", "fill_ended"}:
-                self.bus.emit(fill_event, {"pattern": effects["current_pattern"]})
+                self.bus.emit(fill_event, {"pattern": boundary["current_pattern"]})
 
             self._loop_count += 1
