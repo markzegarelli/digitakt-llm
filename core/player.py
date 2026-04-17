@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import time
 import threading
-from core.state import AppState, TRACK_NAMES
+from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
 from core.events import EventBus
 from core.logging_config import get_logger
 from core import midi_utils
@@ -35,19 +35,19 @@ class Player:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-        self.state.is_playing = True
+        self.state.set_playing(True)
         self.bus.emit("playback_started", {})
         return True
 
     def stop(self) -> None:
         self._stop_event.set()
-        self.state.is_playing = False
+        self.state.set_playing(False)
         if self.port is not None:
             midi_utils.send_stop(self.port)
         self.bus.emit("playback_stopped", {})
 
     def set_bpm(self, bpm: float) -> None:
-        self.state.bpm = bpm
+        self.state.set_bpm(bpm)
         self.bus.emit("bpm_changed", {"bpm": bpm})
 
     def queue_pattern(self, pattern: dict) -> None:
@@ -95,7 +95,7 @@ class Player:
                     continue
                 elif cond == "not:2" and self._loop_count % 2 == 0:
                     continue
-                elif cond == "fill" and not self.state._fill_active:
+                elif cond == "fill" and not self.state.is_fill_active():
                     continue
             velocity = pattern[track][step]
             if velocity > 0:
@@ -110,7 +110,7 @@ class Player:
                             extra={"error_type": "midi_disconnect"},
                             exc_info=True,
                         )
-                        self.state.is_playing = False
+                        self.state.set_playing(False)
                         self.bus.emit("playback_stopped", {})
                         self.bus.emit(
                             "midi_disconnected",
@@ -120,7 +120,7 @@ class Player:
                         return
                     # Schedule note_off if gate < 100
                     gate_track = pattern.get("gate", {}).get(track)
-                    gate_pct = gate_track[step] if gate_track is not None else 100
+                    gate_pct = gate_track[step] if gate_track is not None else DEFAULT_GATE_PCT
                     if gate_pct < 100:
                         note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
                         port_ref = self.port
@@ -149,7 +149,7 @@ class Player:
                                 extra={"error_type": "midi_disconnect"},
                                 exc_info=True,
                             )
-                            self.state.is_playing = False
+                            self.state.set_playing(False)
                             self.bus.emit("playback_stopped", {})
                             self.bus.emit(
                                 "midi_disconnected",
@@ -185,7 +185,7 @@ class Player:
                                 extra={"error_type": "midi_disconnect"},
                                 exc_info=True,
                             )
-                            self.state.is_playing = False
+                            self.state.set_playing(False)
                             self.bus.emit("playback_stopped", {})
                             self.bus.emit(
                                 "midi_disconnected",
@@ -207,33 +207,22 @@ class Player:
                             self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                         )
 
-            # End of loop: apply queued mutes at bar boundary
-            mute_changes = self.state.apply_pending_mutes()
+            boundary = self.state.apply_bar_boundary()
+            mute_changes = boundary["mute_changes"]
             if mute_changes:
                 for track, muted in mute_changes.items():
                     self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
-            # Permanent pattern swap, then fill logic
-            if self.state.pending_pattern is not None:
-                self.state.current_pattern = self.state.pending_pattern
-                self.state.pending_pattern = None
+            if boundary["pattern_changed"]:
                 self.bus.emit(
                     "pattern_changed",
-                    {"pattern": self.state.current_pattern, "prompt": self.state.last_prompt or ""},
+                    {"pattern": boundary["current_pattern"], "prompt": self.state.last_prompt or ""},
                 )
 
-            if self.state.fill_pattern is not None:
-                # Begin fill: save current, play fill next loop
-                self.state._pre_fill_pattern = self.state.current_pattern
-                self.state.current_pattern = self.state.fill_pattern
-                self.state.fill_pattern = None
-                self.state._fill_active = True
-                self.bus.emit("fill_started", {"pattern": self.state.current_pattern})
-            elif self.state._fill_active:
-                # End fill: restore pre-fill pattern
-                self.state.current_pattern = self.state._pre_fill_pattern
-                self.state._pre_fill_pattern = None
-                self.state._fill_active = False
-                self.bus.emit("fill_ended", {"pattern": self.state.current_pattern})
+            fill_event = boundary["fill_event"]
+            if fill_event == "fill_started":
+                self.bus.emit("fill_started", {"pattern": boundary["current_pattern"]})
+            elif fill_event == "fill_ended":
+                self.bus.emit("fill_ended", {"pattern": boundary["current_pattern"]})
 
             self._loop_count += 1
