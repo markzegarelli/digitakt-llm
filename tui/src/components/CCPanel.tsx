@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { DigitaktState, TrackName, CCParamDef, PatternTrigState } from "../types.js";
-import { TRACK_NAMES } from "../types.js";
+import { DEFAULT_GATE_PCT, TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
 
 interface CCPanelProps {
@@ -61,7 +61,7 @@ export function CCPanel({
   const cc = trackCC[trackName];
   const playIdx = currentStep !== null && currentStep >= 0 ? currentStep : 0;
   const probHere = patternTrig.prob[trackName]?.[playIdx] ?? 100;
-  const gateHere = patternTrig.gate[trackName]?.[playIdx] ?? 100;
+  const gateHere = patternTrig.gate[trackName]?.[playIdx] ?? DEFAULT_GATE_PCT;
   const condHere = patternTrig.cond[trackName]?.[playIdx] ?? null;
   const trigSummary =
     `s${playIdx + 1} prob ${probHere}% gate ${gateHere}%` +

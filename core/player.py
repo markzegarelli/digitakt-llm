@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import time
 import threading
-from core.state import AppState, TRACK_NAMES
+from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
 from core.events import EventBus
 from core.logging_config import get_logger
 from core import midi_utils
@@ -35,19 +35,19 @@ class Player:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-        self.state.is_playing = True
+        self.state.set_playing(True)
         self.bus.emit("playback_started", {})
         return True
 
     def stop(self) -> None:
         self._stop_event.set()
-        self.state.is_playing = False
+        self.state.set_playing(False)
         if self.port is not None:
             midi_utils.send_stop(self.port)
         self.bus.emit("playback_stopped", {})
 
     def set_bpm(self, bpm: float) -> None:
-        self.state.bpm = bpm
+        self.state.set_bpm(bpm)
         self.bus.emit("bpm_changed", {"bpm": bpm})
 
     def queue_pattern(self, pattern: dict) -> None:
@@ -95,7 +95,7 @@ class Player:
                     continue
                 elif cond == "not:2" and self._loop_count % 2 == 0:
                     continue
-                elif cond == "fill" and not self.state._fill_active:
+                elif cond == "fill" and not self.state.is_fill_active():
                     continue
             velocity = pattern[track][step]
             if velocity > 0:
@@ -110,7 +110,7 @@ class Player:
                             extra={"error_type": "midi_disconnect"},
                             exc_info=True,
                         )
-                        self.state.is_playing = False
+                        self.state.set_playing(False)
                         self.bus.emit("playback_stopped", {})
                         self.bus.emit(
                             "midi_disconnected",
@@ -120,7 +120,7 @@ class Player:
                         return
                     # Schedule note_off if gate < 100
                     gate_track = pattern.get("gate", {}).get(track)
-                    gate_pct = gate_track[step] if gate_track is not None else 100
+                    gate_pct = gate_track[step] if gate_track is not None else DEFAULT_GATE_PCT
                     if gate_pct < 100:
                         note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
                         port_ref = self.port
@@ -149,7 +149,7 @@ class Player:
                                 extra={"error_type": "midi_disconnect"},
                                 exc_info=True,
                             )
-                            self.state.is_playing = False
+                            self.state.set_playing(False)
                             self.bus.emit("playback_stopped", {})
                             self.bus.emit(
                                 "midi_disconnected",
@@ -185,7 +185,7 @@ class Player:
                                 extra={"error_type": "midi_disconnect"},
                                 exc_info=True,
                             )
-                            self.state.is_playing = False
+                            self.state.set_playing(False)
                             self.bus.emit("playback_stopped", {})
                             self.bus.emit(
                                 "midi_disconnected",
@@ -207,29 +207,28 @@ class Player:
                             self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
                         )
 
-            # End of loop: apply all bar-boundary effects in one place.
-            effects = self.state.apply_bar_boundary()
-            mute_changes = effects.get("mute_changes")
+            boundary = self.state.apply_bar_boundary()
+            mute_changes = boundary.get("mute_changes")
             if mute_changes:
                 for track, muted in mute_changes.items():
                     self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
-            chain_armed = effects.get("chain_armed")
+            chain_armed = boundary.get("chain_armed")
             if chain_armed:
                 self.bus.emit("chain_armed", chain_armed)
 
-            if effects.get("pattern_changed"):
+            if boundary.get("pattern_changed"):
                 self.bus.emit(
                     "pattern_changed",
-                    {"pattern": effects["current_pattern"], "prompt": self.state.last_prompt or ""},
+                    {"pattern": boundary["current_pattern"], "prompt": self.state.last_prompt or ""},
                 )
 
-            chain_advanced = effects.get("chain_advanced")
+            chain_advanced = boundary.get("chain_advanced")
             if chain_advanced:
                 self.bus.emit("chain_advanced", chain_advanced)
 
-            fill_event = effects.get("fill_event")
+            fill_event = boundary.get("fill_event")
             if fill_event in {"fill_started", "fill_ended"}:
-                self.bus.emit(fill_event, {"pattern": effects["current_pattern"]})
+                self.bus.emit(fill_event, {"pattern": boundary["current_pattern"]})
 
             self._loop_count += 1
