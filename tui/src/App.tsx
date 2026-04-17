@@ -12,7 +12,7 @@ import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { computePanelLayout } from "./layout.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
-import { TRACK_NAMES } from "./types.js";
+import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
 
 interface AppProps { baseUrl: string; }
@@ -444,7 +444,7 @@ export function App({ baseUrl }: AppProps) {
         const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
         const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
         const pitch = state.track_pitch[track] ?? 60;
-        const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? 100;
+        const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
         const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
         const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
 
@@ -831,7 +831,7 @@ export function App({ baseUrl }: AppProps) {
             prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
             velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
             pitch={state.track_pitch[TRACK_NAMES[patternTrack] as TrackName] ?? 60}
-            gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+            gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
             cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
             selectedField={trigField}
             inputBuffer={trigInputBuffer}

@@ -12,6 +12,9 @@ from core.fill_fsm import FillFSM
 
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
+# Default per-step gate (% of step duration before note_off). 100 = full step (no explicit off).
+DEFAULT_GATE_PCT = 50
+
 DEFAULT_PATTERN: dict = {
     "kick":    [100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0],
     "snare":   [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0],
@@ -141,6 +144,14 @@ class AppState:
         with self._lock:
             self.pattern_length = steps
 
+    def set_last_prompt(self, prompt: str | None) -> None:
+        with self._lock:
+            self.last_prompt = prompt
+
+    def is_fill_active(self) -> bool:
+        with self._lock:
+            return self._fill_active
+
     def normalize_pattern_length(self, pattern: dict, steps: int | None = None) -> dict:
         """Resize all step-indexed pattern structures to match the target length."""
         target_steps = self.pattern_length if steps is None else steps
@@ -163,7 +174,7 @@ class AppState:
 
         if "gate" in result and isinstance(result["gate"], dict):
             result["gate"] = {
-                track: (list(vals) + [100] * max(0, target_steps - len(vals)))[:target_steps]
+                track: (list(vals) + [DEFAULT_GATE_PCT] * max(0, target_steps - len(vals)))[:target_steps]
                 for track, vals in result["gate"].items()
                 if isinstance(vals, list)
             }
@@ -317,40 +328,43 @@ class AppState:
                 "current_pattern": dict,
             }
         """
-        mute_changes = self.apply_pending_mutes()
         with self._lock:
+            mute_changes: dict[str, bool] | None = None
+            if self.pending_mutes:
+                mute_changes = dict(self.pending_mutes)
+                for track, muted in mute_changes.items():
+                    self.track_muted[track] = muted
+                self.pending_mutes.clear()
+
             chain_armed = self._prepare_auto_chain()
 
-        # Pattern swap
-        pattern_changed = False
-        if self.pending_pattern is not None:
-            with self._lock:
+            pattern_changed = False
+            if self.pending_pattern is not None:
                 self.current_pattern = self.pending_pattern
                 self.pending_pattern = None
-            pattern_changed = True
+                pattern_changed = True
 
-        chain_advanced = None
-        with self._lock:
             if pattern_changed:
                 chain_advanced = self._finalize_chain_advance_if_needed()
+            else:
+                chain_advanced = None
 
-        # Fill FSM advance (fill_fsm holds its own lock-free state;
-        # only the player calls apply_bar_boundary so no race here)
-        next_pattern, fill_event = self._fill_fsm.advance(self.current_pattern)
-        if fill_event == "fill_started":
-            self.current_pattern = next_pattern
-            # Keep legacy fields in sync for any code that still reads them
-            self._fill_active = True
-        elif fill_event == "fill_ended":
-            self.current_pattern = next_pattern
-            self._fill_active = False
-            self._pre_fill_pattern = None
+            # FillFSM is advanced only by the player loop at bar boundaries.
+            next_pattern, fill_event = self._fill_fsm.advance(self.current_pattern)
+            if fill_event is not None:
+                self.current_pattern = next_pattern
+                if fill_event == "fill_started":
+                    self.fill_pattern = None
+                    self._fill_active = True
+                elif fill_event == "fill_ended":
+                    self._fill_active = False
+                    self._pre_fill_pattern = None
 
-        return {
-            "mute_changes": mute_changes,
-            "pattern_changed": pattern_changed,
-            "fill_event": fill_event,
-            "chain_armed": chain_armed,
-            "chain_advanced": chain_advanced,
-            "current_pattern": self.current_pattern,
-        }
+            return {
+                "mute_changes": mute_changes,
+                "pattern_changed": pattern_changed,
+                "fill_event": fill_event,
+                "chain_armed": chain_armed,
+                "chain_advanced": chain_advanced,
+                "current_pattern": self.current_pattern,
+            }

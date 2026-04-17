@@ -287,20 +287,43 @@ def test_gate_under_100_sends_note_off():
     assert kick_note_offs, "Expected a note_off (velocity=0) for kick with gate=50"
 
 
-def test_gate_100_does_not_send_note_off():
-    """Default gate=100 should not send any note_off (preserves original behavior)."""
+def test_default_gate_sends_note_off():
+    """With no gate map, implicit default gate schedules note_off."""
     player, state, bus, port = _make_player()
     state.bpm = 9000.0
     pattern = {k: [0] * 16 for k in TRACK_NAMES}
     pattern["kick"][0] = 100
-    state.current_pattern = pattern  # no gate key = default 100
+    state.current_pattern = pattern  # no gate key = default 50%
 
     player.start()
     time.sleep(0.15)
     player.stop()
     time.sleep(0.05)
 
-    # No note_on with velocity=0 should appear on kick channel
+    kick_note_offs = [
+        c for c in port.send.call_args_list
+        if hasattr(c[0][0], "type")
+        and c[0][0].type == "note_on"
+        and c[0][0].channel == 0
+        and c[0][0].velocity == 0
+    ]
+    assert kick_note_offs, "Expected note_off for kick with default gate=50"
+
+
+def test_explicit_gate_100_does_not_send_note_off():
+    """Explicit gate=100 on all steps should not send any note_off."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["gate"] = {k: [100] * 16 for k in TRACK_NAMES}
+    state.current_pattern = pattern
+
+    player.start()
+    time.sleep(0.15)
+    player.stop()
+    time.sleep(0.05)
+
     kick_note_offs = [
         c for c in port.send.call_args_list
         if hasattr(c[0][0], "type")

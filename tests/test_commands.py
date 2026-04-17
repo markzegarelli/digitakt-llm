@@ -289,7 +289,7 @@ def test_apply_gate_step_creates_gate_key_if_missing():
     assert "gate" in result
     assert result["gate"]["hihat"][3] == 75
     # Other steps default to 100
-    assert result["gate"]["hihat"][0] == 100
+    assert result["gate"]["hihat"][0] == 50
 
 
 def test_apply_gate_step_rejects_out_of_range():

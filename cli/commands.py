@@ -5,6 +5,8 @@ import copy
 import random
 import re
 
+from core.state import DEFAULT_GATE_PCT
+
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
 
@@ -272,7 +274,7 @@ def apply_gate_step(pattern: dict, track: str, step: int, value: int) -> dict:
     pattern = dict(pattern)
     if "gate" not in pattern:
         length = len(pattern.get("kick", [None] * 16))
-        pattern["gate"] = {t: [100] * length for t in TRACK_NAMES}
+        pattern["gate"] = {t: [DEFAULT_GATE_PCT] * length for t in TRACK_NAMES}
     pattern["gate"] = dict(pattern["gate"])
     pattern["gate"][track] = list(pattern["gate"][track])
     pattern["gate"][track][step] = value
@@ -286,14 +288,14 @@ def apply_gate_track(pattern: dict, track: str, value: int) -> dict:
     pattern = copy.deepcopy(pattern)
     if "gate" not in pattern:
         length = len(pattern.get("kick", [None] * 16))
-        pattern["gate"] = {t: [100] * length for t in TRACK_NAMES}
+        pattern["gate"] = {t: [DEFAULT_GATE_PCT] * length for t in TRACK_NAMES}
     pattern["gate"] = dict(pattern["gate"])
     length = _pattern_length(pattern)
     if track not in pattern["gate"]:
-        pattern["gate"][track] = [100] * length
+        pattern["gate"][track] = [DEFAULT_GATE_PCT] * length
     row = list(pattern["gate"][track])
     if len(row) < length:
-        row += [100] * (length - len(row))
+        row += [DEFAULT_GATE_PCT] * (length - len(row))
     elif len(row) > length:
         row = row[:length]
     for step in range(length):
