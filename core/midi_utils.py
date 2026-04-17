@@ -41,9 +41,17 @@ _CC_PARAM_DEFS: dict[str, dict] = {
 CC_MAP: dict[str, int] = {k: v["cc"] for k, v in _CC_PARAM_DEFS.items()}
 CC_DEFAULTS: dict[str, int] = {k: v["default"] for k, v in _CC_PARAM_DEFS.items()}
 
+# Reverse lookups for MIDI input decoding
+CC_NUMBER_TO_PARAM: dict[int, str] = {v["cc"]: k for k, v in _CC_PARAM_DEFS.items()}
+CHANNEL_TO_TRACK: dict[int, str] = {v: k for k, v in TRACK_CHANNELS.items()}
+
 
 def list_ports() -> list[str]:
     return mido.get_output_names()
+
+
+def list_input_ports() -> list[str]:
+    return mido.get_input_names()
 
 
 def find_digitakt(ports: list[str]) -> str | None:
@@ -53,8 +61,19 @@ def find_digitakt(ports: list[str]) -> str | None:
     return None
 
 
+def find_digitakt_input(ports: list[str]) -> str | None:
+    for port in ports:
+        if "Digitakt" in port:
+            return port
+    return None
+
+
 def open_port(name: str):
     return mido.open_output(name)
+
+
+def open_input_port(name: str):
+    return mido.open_input(name)
 
 
 def send_cc(port, channel: int, cc_num: int, value: int) -> None:
