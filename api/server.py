@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import json
 import os
 import re
@@ -42,7 +41,7 @@ from cli.commands import (
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
 from core.mutator import PatternMutator
-from core.state import AppState, TRACK_NAMES, _DEFAULT_CC_PARAMS
+from core.state import AppState, TRACK_NAMES
 from core.pattern_snapshot import (
     build_save_file_dict,
     extract_pattern_from_saved_json,
@@ -228,16 +227,7 @@ def post_stop():
 @app.post("/new")
 def post_new():
     from core.state import EMPTY_PATTERN
-    _state.pending_pattern = copy.deepcopy(EMPTY_PATTERN)
-    _state.bpm = 120.0
-    _state.last_prompt = None
-    for track in TRACK_NAMES:
-        _state.track_muted[track] = False
-    _state.pending_mutes.clear()
-    for track in TRACK_NAMES:
-        _state.track_cc[track] = dict(_DEFAULT_CC_PARAMS)
-        _state.track_velocity[track] = 127
-    _state.clear_chain()
+    _state.reset(EMPTY_PATTERN, 120.0, None)
     if _state.is_playing:
         _player.stop()
     _broadcast_event("bpm_changed", {"bpm": 120.0})
@@ -441,7 +431,7 @@ def set_gate_track(req: GateTrackRequest):
 async def set_pitch(req: PitchRequest):
     if req.track not in TRACK_NAMES:
         raise HTTPException(status_code=422, detail=f"Unknown track: {req.track}")
-    _state.track_pitch[req.track] = req.value
+    _state.update_pitch(req.track, req.value)
     _bus.emit("pitch_changed", {"track": req.track, "value": req.value})
     return PitchResponse(track=req.track, value=req.value)
 
@@ -631,7 +621,7 @@ def load_pattern(name: str):
             _bus.emit("length_changed", {"steps": _state.pattern_length})
         _send_all_track_cc_to_midi()
     pattern = _state.normalize_pattern_length(pattern, _state.pattern_length)
-    _state.last_prompt = name
+    _state.set_last_prompt(name)
     if _state.is_playing:
         _player.queue_pattern(pattern)
     else:

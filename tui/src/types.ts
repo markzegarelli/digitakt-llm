@@ -2,6 +2,9 @@ export const TRACK_NAMES = [
   "kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal",
 ] as const;
 
+/** Default gate length (% of step) when pattern omits gate or a step value. */
+export const DEFAULT_GATE_PCT = 50;
+
 export type TrackName = typeof TRACK_NAMES[number];
 
 export interface CCParamDef {
@@ -22,7 +25,7 @@ export interface PatternTrigState {
 export function emptyTrigState(length: number): PatternTrigState {
   const row = () => new Array(length).fill(null) as (string | null)[];
   const probRow = () => new Array(length).fill(100);
-  const gateRow = () => new Array(length).fill(100);
+  const gateRow = () => new Array(length).fill(DEFAULT_GATE_PCT);
   return {
     prob: Object.fromEntries(TRACK_NAMES.map((t) => [t, probRow()])) as Record<TrackName, number[]>,
     gate: Object.fromEntries(TRACK_NAMES.map((t) => [t, gateRow()])) as Record<TrackName, number[]>,
@@ -59,7 +62,7 @@ export function parsePatternFromApi(
   };
 
   mergeNumMap("prob", 100);
-  mergeNumMap("gate", 100);
+  mergeNumMap("gate", DEFAULT_GATE_PCT);
 
   const condBlock = raw?.["cond"];
   if (condBlock && typeof condBlock === "object") {
