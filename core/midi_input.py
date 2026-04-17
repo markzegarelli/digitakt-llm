@@ -5,7 +5,11 @@ import time
 from typing import TYPE_CHECKING
 
 from core.logging_config import get_logger
-from core.midi_utils import CC_NUMBER_TO_PARAM, CHANNEL_TO_TRACK
+from core.midi_utils import (
+    CC_NUMBER_TO_PARAM,
+    CHANNEL_TO_TRACK,
+    consume_recent_outbound_cc_echo,
+)
 
 if TYPE_CHECKING:
     from core.state import AppState
@@ -86,6 +90,12 @@ class MidiInputListener:
                 "MIDI CC with unmapped number (ignored) — ch=%d CC#%d val=%d",
                 msg.channel, msg.control, msg.value,
             )
+            return
+
+        # Ignore one-shot echoes of CC messages this app sent outbound.
+        if consume_recent_outbound_cc_echo(
+            channel=msg.channel, cc_num=msg.control, value=msg.value
+        ):
             return
 
         # Suppress echo: if state already holds this value, it was set by the app

@@ -12,6 +12,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+_midi_listener = None
+
 
 def _port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -25,6 +27,7 @@ def _start_server(api_port: int) -> None:
     from core.generator import Generator
     from core import midi_utils
     import api.server as server_module
+    global _midi_listener
 
     state = AppState()
     bus = EventBus()
@@ -53,7 +56,7 @@ def _start_server(api_port: int) -> None:
         player.start()
 
     from core.midi_input import MidiInputListener
-    import logging as _logging
+    _midi_listener = None
     input_ports = midi_utils.list_input_ports()
     input_port_name = midi_utils.find_digitakt_input(input_ports)
     if not input_port_name:
@@ -61,8 +64,8 @@ def _start_server(api_port: int) -> None:
     else:
         try:
             input_port = midi_utils.open_input_port(input_port_name)
-            midi_listener = MidiInputListener(input_port, state, bus)
-            midi_listener.start()
+            _midi_listener = MidiInputListener(input_port, state, bus)
+            _midi_listener.start()
             print(f"MIDI input: listening on '{input_port_name}' (hardware→TUI sync enabled)")
         except Exception as e:
             print(f"MIDI input: could not open '{input_port_name}': {e}")
@@ -95,17 +98,23 @@ def main() -> None:
         )
         sys.exit(1)
 
-    _start_server(api_port)
+    return_code = 1
+    try:
+        _start_server(api_port)
 
-    if not _wait_for_server(f"http://localhost:{api_port}/state"):
-        print(f"Error: API server did not start on port {api_port}. Check for errors above.")
-        sys.exit(1)
+        if not _wait_for_server(f"http://localhost:{api_port}/state"):
+            print(f"Error: API server did not start on port {api_port}. Check for errors above.")
+            sys.exit(1)
 
-    print(f"API server ready at http://localhost:{api_port}")
+        print(f"API server ready at http://localhost:{api_port}")
 
-    result = subprocess.run(
-        ["bun", "run", "src/index.tsx"],
-        cwd=str(tui_dir),
-        env={**os.environ, "DIGITAKT_URL": url},
-    )
-    sys.exit(result.returncode)
+        result = subprocess.run(
+            ["bun", "run", "src/index.tsx"],
+            cwd=str(tui_dir),
+            env={**os.environ, "DIGITAKT_URL": url},
+        )
+        return_code = result.returncode
+    finally:
+        if _midi_listener is not None:
+            _midi_listener.stop()
+    sys.exit(return_code)
