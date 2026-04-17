@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 from core.state import AppState
 from core.events import EventBus
 from core.midi_input import MidiInputListener
-from core.midi_utils import CC_NUMBER_TO_PARAM, CHANNEL_TO_TRACK
+from core.midi_utils import (
+    CC_NUMBER_TO_PARAM,
+    CHANNEL_TO_TRACK,
+    _reset_outbound_cc_echo_tracker_for_tests,
+    mark_outbound_cc,
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,6 +38,10 @@ def _non_cc(msg_type: str = "clock") -> MagicMock:
     msg = MagicMock()
     msg.type = msg_type
     return msg
+
+
+def setup_function(_func):
+    _reset_outbound_cc_echo_tracker_for_tests()
 
 
 # ── _handle: valid CC ────────────────────────────────────────────────────────
@@ -109,6 +118,33 @@ def test_handle_different_value_not_suppressed():
     listener._handle(_cc(channel=0, control=74, value=81))
     assert len(events) == 1
     assert events[0]["value"] == 81
+
+
+def test_handle_recent_outbound_echo_suppressed_without_state_mutation():
+    listener, state, bus, _ = _make_listener([])
+    state.update_cc("kick", "filter", 80)
+    events = []
+    bus.subscribe("cc_changed", events.append)
+    mark_outbound_cc(channel=0, cc_num=74, value=64)
+
+    listener._handle(_cc(channel=0, control=74, value=64))
+
+    assert events == []
+    assert state.track_cc["kick"]["filter"] == 80
+
+
+def test_outbound_echo_token_consumed_once():
+    listener, state, bus, _ = _make_listener([])
+    state.update_cc("kick", "filter", 20)
+    events = []
+    bus.subscribe("cc_changed", events.append)
+    mark_outbound_cc(channel=0, cc_num=74, value=30)
+
+    listener._handle(_cc(channel=0, control=74, value=30))
+    listener._handle(_cc(channel=0, control=74, value=30))
+
+    assert len(events) == 1
+    assert state.track_cc["kick"]["filter"] == 30
 
 
 # ── Thread lifecycle ─────────────────────────────────────────────────────────
@@ -223,3 +259,25 @@ def test_launcher_graceful_when_input_port_open_fails():
     ):
         from cli import tui_launcher
         tui_launcher._start_server(api_port=9997)
+
+
+def test_main_stops_listener_on_exit():
+    with (
+        patch("cli.tui_launcher._port_in_use", return_value=False),
+        patch("cli.tui_launcher._wait_for_server", return_value=True),
+        patch("cli.tui_launcher._start_server"),
+        patch("pathlib.Path.exists", return_value=True),
+        patch("subprocess.run", return_value=MagicMock(returncode=0)),
+        patch("sys.exit", side_effect=SystemExit),
+    ):
+        from cli import tui_launcher
+
+        fake_listener = MagicMock()
+        tui_launcher._midi_listener = fake_listener
+
+        try:
+            tui_launcher.main()
+        except SystemExit:
+            pass
+
+        fake_listener.stop.assert_called_once()

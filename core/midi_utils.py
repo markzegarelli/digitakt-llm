@@ -1,6 +1,10 @@
 # core/midi_utils.py
 from __future__ import annotations
 
+from collections import defaultdict, deque
+import threading
+import time
+
 import mido
 
 NOTE_MAP: dict[str, int] = {
@@ -45,6 +49,50 @@ CC_DEFAULTS: dict[str, int] = {k: v["default"] for k, v in _CC_PARAM_DEFS.items(
 CC_NUMBER_TO_PARAM: dict[int, str] = {v["cc"]: k for k, v in _CC_PARAM_DEFS.items()}
 CHANNEL_TO_TRACK: dict[int, str] = {v: k for k, v in TRACK_CHANNELS.items()}
 
+# Keep a short-lived history of outbound CC messages so the MIDI input listener
+# can suppress device echoes without mutating global state.
+_OUTBOUND_CC_ECHO_WINDOW_SEC = 0.35
+_outbound_cc_echoes: dict[tuple[int, int, int], deque[float]] = defaultdict(deque)
+_outbound_cc_lock = threading.Lock()
+
+
+def _prune_outbound_cc_echoes_locked(now: float) -> None:
+    cutoff = now - _OUTBOUND_CC_ECHO_WINDOW_SEC
+    stale_keys: list[tuple[int, int, int]] = []
+    for key, sent_times in _outbound_cc_echoes.items():
+        while sent_times and sent_times[0] < cutoff:
+            sent_times.popleft()
+        if not sent_times:
+            stale_keys.append(key)
+    for key in stale_keys:
+        _outbound_cc_echoes.pop(key, None)
+
+
+def mark_outbound_cc(channel: int, cc_num: int, value: int) -> None:
+    now = time.monotonic()
+    with _outbound_cc_lock:
+        _prune_outbound_cc_echoes_locked(now)
+        _outbound_cc_echoes[(channel, cc_num, value)].append(now)
+
+
+def consume_recent_outbound_cc_echo(channel: int, cc_num: int, value: int) -> bool:
+    now = time.monotonic()
+    key = (channel, cc_num, value)
+    with _outbound_cc_lock:
+        _prune_outbound_cc_echoes_locked(now)
+        sent_times = _outbound_cc_echoes.get(key)
+        if not sent_times:
+            return False
+        sent_times.popleft()
+        if not sent_times:
+            _outbound_cc_echoes.pop(key, None)
+        return True
+
+
+def _reset_outbound_cc_echo_tracker_for_tests() -> None:
+    with _outbound_cc_lock:
+        _outbound_cc_echoes.clear()
+
 
 def list_ports() -> list[str]:
     return mido.get_output_names()
@@ -78,6 +126,7 @@ def open_input_port(name: str):
 
 def send_cc(port, channel: int, cc_num: int, value: int) -> None:
     port.send(mido.Message("control_change", channel=channel, control=cc_num, value=value))
+    mark_outbound_cc(channel=channel, cc_num=cc_num, value=value)
 
 
 def send_note(port, note: int, velocity: int, channel: int = 0) -> None:
