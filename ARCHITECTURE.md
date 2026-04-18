@@ -17,7 +17,7 @@ Generator._run(prompt)          ← runs in daemon thread
     │
     ▼
 Anthropic API → JSON → validate
-    │  emits: generation_complete  {pattern, prompt, bpm, cc_changes}
+    │  emits: generation_complete  {pattern, prompt, bpm, cc_changes, summary, producer_notes?}
     │
     ├──► AppState.update_pattern()   (history, last_prompt)
     ├──► AppState.pending_pattern    (queued for next loop)
@@ -47,7 +47,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | Event | Emitter | Payload |
 |-------|---------|---------|
 | `generation_started` | Generator | `{prompt}` |
-| `generation_complete` | Generator | `{pattern, prompt, bpm, cc_changes}` |
+| `generation_complete` | Generator | `{pattern, prompt, bpm, cc_changes, summary, producer_notes?}` — `producer_notes` is plain text from the model (not stored in `current_pattern`) |
 | `generation_failed` | Generator | `{prompt, error}` |
 | `pattern_changed` | Player / Server | `{pattern, prompt}` |
 | `bpm_changed` | Player / Server | `{bpm}` |
@@ -277,15 +277,18 @@ Claude produces (and the API accepts) this JSON structure:
   "cymbal":  [<16 integers, 0–127>],
   "prob":    {"<track>": [<16 integers, 0–100>], ...},   // optional
   "swing":   <integer, 0–100>,                           // optional
-  "cc":      {"<track>": {"<param>": <0–127>, ...}, ...} // optional
+  "cc":      {"<track>": {"<param>": <0–127>, ...}, ...}, // optional
+  "producer_notes": "<string>"                            // optional; modular/arrangement tips, max ~1200 chars; stripped from pattern before `AppState.update_pattern`
 }
 ```
 
 The optional `"cc"` key lets Claude include sound design changes alongside the pattern. Valid params: `tune`, `filter`, `resonance`, `attack`, `decay`, `volume`, `reverb`, `delay`, `velocity`. These are applied to `AppState.track_cc` / `AppState.track_velocity` immediately after the pattern is queued.
 
+The optional `"producer_notes"` key is returned to the TUI in `generation_complete.summary` and as a top-level `producer_notes` field; it is **not** written into `current_pattern` (playback, saves, and history stay drum-only).
+
 ## LLM System Prompt — Genre & Sound Design Knowledge
 
-The system prompt (`_build_system_prompt()`) encodes two categories of domain knowledge:
+The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 
 **Subgenre BPM ranges** — the model selects a BPM from the matching range:
 
@@ -301,6 +304,12 @@ The system prompt (`_build_system_prompt()`) encodes two categories of domain kn
 | Jungle / DnB | 160–180 |
 | Ambient / downtempo | 70–110 |
 | EBM / darkwave | 110–130 |
+
+**Classic machine character (TR-808 vs TR-909)** — concise timbre stereotypes mapped to Digitakt sample playback via CC and velocity (e.g. 808 long sub kick vs 909 punch/rumble kick).
+
+**Hypnotic / minimal techno** — sparse kicks, polyrhythmic implication on a 16-step grid, optional `prob` for drift, BPM note for “minimal hypnotic” vs peak-time.
+
+**Optional `producer_notes`** — when the user prompt implies arrangement beyond drums, the model may add short Eurorack/modular pairing advice in JSON.
 
 **Digitakt CC parameter guidance** — the model uses these to make musically appropriate CC suggestions:
 

@@ -15,6 +15,8 @@ from core.tracing import tracer
 
 logger = get_logger("generator")
 
+_PRODUCER_NOTES_MAX_LEN = 1200
+
 _TRACK_ALIASES: dict[str, list[str]] = {
     "kick":    ["kick", "bass drum", "bassdrum", "bd"],
     "snare":   ["snare", "snare drum", "sd"],
@@ -50,7 +52,24 @@ def _detect_target_tracks(prompt: str) -> set[str]:
     return found
 
 
-def _compute_generation_summary(prompt: str, pattern: dict, latency_ms: int) -> dict:
+def _normalize_producer_notes(raw: str) -> str | None:
+    """Strip control chars and cap length; return None if empty after normalize."""
+    cleaned: list[str] = []
+    for ch in raw.strip():
+        o = ord(ch)
+        if ch in "\n\r\t" or o >= 32:
+            cleaned.append(ch)
+        else:
+            cleaned.append(" ")
+    text = "".join(cleaned).strip()
+    if len(text) > _PRODUCER_NOTES_MAX_LEN:
+        text = text[:_PRODUCER_NOTES_MAX_LEN].rstrip()
+    return text if text else None
+
+
+def _compute_generation_summary(
+    prompt: str, pattern: dict, latency_ms: int, producer_notes: str | None = None
+) -> dict:
     """Return compact generation telemetry for the TUI."""
     abbreviations = {
         "kick": "BD",
@@ -68,11 +87,14 @@ def _compute_generation_summary(prompt: str, pattern: dict, latency_ms: int) -> 
         active = sum(1 for v in steps if isinstance(v, int) and v > 0)
         if active > 0:
             parts.append(f"{abbreviations.get(track, track[:2].upper())}x{active}")
-    return {
+    summary: dict = {
         "prompt": prompt,
         "track_summary": "  ".join(parts) if parts else "empty",
         "latency_ms": latency_ms,
     }
+    if producer_notes:
+        summary["producer_notes"] = producer_notes
+    return summary
 
 @functools.lru_cache(maxsize=3)
 def _build_system_prompt(steps: int = 16) -> str:
@@ -95,14 +117,16 @@ def _build_system_prompt(steps: int = 16) -> str:
         "  jungle / drum & bass:     160–180\n"
         "  ambient / downtempo:      70–110\n"
         "  EBM / darkwave:           110–130\n"
-        "  generic / unspecified:    133–140\n\n"
+        "  generic / unspecified:    133–140\n"
+        "  If the user asks for minimal hypnotic techno specifically: prefer 130–138 BPM unless they want peak-time energy (then use hypnotic/trance techno range).\n\n"
         "GENRE-SPECIFIC PATTERN CONVENTIONS:\n"
         "  - Dub techno: sparse, delayed elements, heavy reverb feel, minimal kick patterns\n"
         "  - Breakbeat: broken kick patterns (NOT four-on-the-floor), syncopated snare\n"
         "  - DnB/jungle: double-time feel, rapid hi-hats, breakbeat-style kick/snare\n"
         "  - House: four-on-the-floor kick, off-beat hi-hat (steps 3,7,11,15), clap on 5,13\n"
         "  - EBM: driving 8th-note kick patterns, heavy snare, minimal hi-hat\n"
-        "  - Electro: TR-808 style, booming kicks, crisp claps, cowbell-heavy\n\n"
+        "  - Electro: TR-808 style, booming kicks, crisp claps, cowbell-heavy\n"
+        "  - Minimal / hypnotic techno: sparse kicks (four-on-the-floor or near it), long evolving loops, subtle velocity drift, hi-hat/metallic cells that imply polyrhythm on the 16-step grid (e.g. 3- or 5-step repeating accents, offset open hats, odd-step percussion), optional prob on ghosts/hats for organic variation; tom/bell/cymbal as rare markers not constant fills; straight or light swing depending on sub-style\n\n"
         "GROOVE RULES:\n"
         "  - Kick: four-on-the-floor (steps 1,5,9,13) is the techno foundation; vary velocity 90–127 for feel\n"
         "  - Snare/clap: anchor on beats 2 and 4 (steps 5 and 13); ghost notes on steps 3,7,11,15 add groove\n"
@@ -128,6 +152,9 @@ def _build_system_prompt(steps: int = 16) -> str:
         "  - reverb (CC 83): send amount. 0=dry, 127=full reverb. Use 10–40 for space, 60+ for wash.\n"
         "  - delay (CC 82): send amount. Creates rhythmic echoes. 10–30 subtle, 50+ pronounced.\n"
         "  - volume (CC 7): track level. Usually 90–110. Use to balance the mix.\n\n"
+        "CLASSIC MACHINE CHARACTER (samples on Digitakt — emulate with CC + velocity, not analog modeling):\n"
+        "  TR-808: kicks = long sub-heavy tail, soft attack, pitch-droopy weight; use attack 0–5, decay longer for weight (often 70–110), tune lower (50–62), filter moderate-high to keep body (85–115), resonance low (0–25). Snare/clap roomier/softer than 909; hats smoother/duller — filter lower, decay moderate. Ghost kicks via low velocity, not always shorter decay.\n"
+        "  TR-909: kicks = short punchy transient, strong mid knock, tighter low end; attack 0–5, decay shorter for punch (35–55) or longer for rumble/tuned-kick tail (75–100). Rumble 909 kick: lower tune (52–60), longer decay, filter not fully bright (70–100) or click dominates, subtle delay/reverb (10–35) for tail glue, velocity ghosts for pump. 909 snare = bright noisy body; 808 snare = more tonal thud + noise. 909 hats = metallic, sharp open/closed contrast; 808 hats = rounder/smoother — tune/filter accordingly.\n\n"
         "OPTIONAL CC ADJUSTMENTS:\n"
         "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
         "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
@@ -144,6 +171,7 @@ def _build_system_prompt(steps: int = 16) -> str:
         f'  "openhat": [{steps} integers 0-127],\n'
         f'  "cymbal":  [{steps} integers 0-127],\n'
         '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
+        '  "producer_notes": "<plain text, no markdown; optional>"  (optional)\n'
         "}"
         "\n\nOPTIONAL: Per-step probability (prob):\n"
         f"- Add a \"prob\" key containing a dict of track → {steps}-element list of integers (0–100).\n"
@@ -158,6 +186,9 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
         "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
         "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno).\n\n"
+        "OPTIONAL: producer_notes (string, plain text, no markdown, max ~1200 chars):\n"
+        "- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), include producer_notes with 4–8 short sentences of Eurorack/modular guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.\n"
+        "- For simple drum-only tweaks (e.g. denser hats, more kick), omit producer_notes to save tokens.\n\n"
         "TARGETED UPDATES:\n"
         "When the user prompt contains a TARGETED UPDATE block:\n"
         "- Copy the PRESERVE tracks verbatim, step-for-step, from the previous pattern\n"
@@ -199,7 +230,10 @@ _HELP_SYSTEM_PROMPT = (
     "PROB: per-step probability 0–100 that a step fires. 100 = always, 50 = half the time, 0 = never.\n\n"
     "VELOCITY: 0–127 intensity of each hit. 0 = silent. Per-step velocity is scaled by the track's global velocity.\n\n"
     "PER-STEP CC: use cc-step to set CC values that apply only on a specific step. "
-    "At the end of each 16-step loop, global CC values are restored automatically."
+    "At the end of each 16-step loop, global CC values are restored automatically.\n\n"
+    "SOUND / ARRANGEMENT: TR-808 is long subby kicks and rounder hats; TR-909 is punchy kicks, bright snare, metallic hats — "
+    "beat mode encodes these as Digitakt CC + velocity. For modular/Eurorack bass and melody ideas with a beat, use beat mode: "
+    "the JSON may include producer_notes (shown in the UI after generation). This tool only drives Digitakt drums via MIDI."
 )
 
 _CLASSIFY_SYSTEM_PROMPT = (
@@ -319,7 +353,9 @@ class Generator:
             return f"Current state:\n{state_ctx}\n\n{prompt}"
         return prompt
 
-    def _parse_pattern(self, text: str, steps: int = 16) -> tuple[dict, int | None, dict] | None:
+    def _parse_pattern(
+        self, text: str, steps: int = 16
+    ) -> tuple[dict, int | None, dict, str | None] | None:
         stripped = text.strip()
         if stripped.startswith("```"):
             stripped = stripped.split("\n", 1)[-1]   # drop opening ```json line
@@ -341,6 +377,12 @@ class Generator:
             for v in data[k]
         ):
             return None
+        producer_notes: str | None = None
+        if "producer_notes" in data:
+            pn = data["producer_notes"]
+            if not isinstance(pn, str):
+                return None
+            producer_notes = _normalize_producer_notes(pn)
         if "prob" in data:
             prob = data["prob"]
             if not isinstance(prob, dict):
@@ -379,7 +421,7 @@ class Generator:
                         continue
                     cc_changes.setdefault(track, {})[param] = value
 
-        return pattern, bpm, cc_changes
+        return pattern, bpm, cc_changes, producer_notes
 
     def _call_api(self, user_prompt: str, retry: bool = False) -> str:
         content = user_prompt
@@ -443,7 +485,7 @@ class Generator:
                 )
                 return
 
-            pattern, bpm, cc_changes = result
+            pattern, bpm, cc_changes, producer_notes = result
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
 
@@ -461,7 +503,9 @@ class Generator:
             self._add_to_history("user", f"[beat generation] {prompt}")
             self._add_to_history("assistant", f"[generated pattern at {bpm or self.state.bpm} BPM]")
             latency_ms = int((time.monotonic() - t0) * 1000)
-            summary = _compute_generation_summary(prompt, pattern, latency_ms)
+            summary = _compute_generation_summary(
+                prompt, pattern, latency_ms, producer_notes
+            )
             self.bus.emit(
                 "generation_complete",
                 {
@@ -470,6 +514,7 @@ class Generator:
                     "bpm": bpm,
                     "cc_changes": cc_changes,
                     "summary": summary,
+                    "producer_notes": producer_notes,
                 },
             )
 

@@ -3,7 +3,7 @@ import json
 from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
-from core.generator import Generator, _compute_generation_summary, _detect_target_tracks
+from core.generator import Generator, _compute_generation_summary, _detect_target_tracks, _normalize_producer_notes
 
 VALID_PATTERN = {k: [0] * 16 for k in TRACK_NAMES}
 VALID_PATTERN["kick"][0] = 100
@@ -34,6 +34,25 @@ def test_valid_json_emits_generation_complete():
     assert events[1][1]["prompt"] == "heavy kick"
     assert events[1][1]["summary"]["prompt"] == "heavy kick"
     assert "latency_ms" in events[1][1]["summary"]
+    assert events[1][1].get("producer_notes") is None
+    assert "producer_notes" not in events[1][1]["summary"]
+
+
+def test_generation_complete_includes_producer_notes_from_json():
+    state = AppState()
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+
+    payload = {**VALID_PATTERN, "producer_notes": "  Tip: sub-osc.  "}
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client(json.dumps(payload))
+    gen._run("hypnotic techno")
+
+    assert len(events) == 1
+    assert events[0]["producer_notes"] == "Tip: sub-osc."
+    assert events[0]["summary"]["producer_notes"] == "Tip: sub-osc."
+    assert "producer_notes" not in state.current_pattern
 
 
 def test_compute_generation_summary_counts_tracks():
@@ -45,6 +64,28 @@ def test_compute_generation_summary_counts_tracks():
     assert summary["latency_ms"] == 123
     assert "BDx1" in summary["track_summary"]
     assert "SDx1" in summary["track_summary"]
+
+
+def test_compute_generation_summary_includes_producer_notes_when_set():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    summary = _compute_generation_summary("p", pattern, 50, "Clock divide /4.")
+    assert summary["producer_notes"] == "Clock divide /4."
+
+
+def test_compute_generation_summary_omits_producer_notes_when_none():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    summary = _compute_generation_summary("p", pattern, 50, None)
+    assert "producer_notes" not in summary
+
+
+def test_normalize_producer_notes_truncates():
+    long_text = "a" * 1300
+    out = _normalize_producer_notes(long_text)
+    assert len(out) == 1200
+
+
+def test_normalize_producer_notes_empty_returns_none():
+    assert _normalize_producer_notes("  \n\t ") is None
 
 
 def test_valid_json_updates_state():
@@ -141,6 +182,7 @@ def test_valid_prob_is_accepted():
     result = gen._parse_pattern(json.dumps(pattern))
     assert result is not None
     assert result[0]["prob"]["kick"] == [100] * 16
+    assert result[3] is None
 
 
 def test_prob_with_unknown_track_is_rejected():
@@ -209,6 +251,24 @@ def test_swing_is_optional():
     result = gen._parse_pattern(json.dumps(pattern))
     assert result is not None
     assert "swing" not in result[0]
+    assert result[3] is None
+
+
+def test_parse_pattern_accepts_producer_notes():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["producer_notes"] = "Keep bass below kick fundamental."
+    result = gen._parse_pattern(json.dumps(pattern))
+    assert result is not None
+    assert result[3] == "Keep bass below kick fundamental."
+    assert "producer_notes" not in result[0]
+
+
+def test_parse_pattern_rejects_non_string_producer_notes():
+    gen = Generator(AppState(), EventBus())
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["producer_notes"] = ["not", "a", "string"]
+    assert gen._parse_pattern(json.dumps(pattern)) is None
 
 
 # ── P1-6: State context in prompts ─────────────────────────────────────────
@@ -454,10 +514,22 @@ def test_system_prompt_includes_genre_conventions():
 
 def test_system_prompt_includes_sound_design_guidance():
     from core.generator import _build_system_prompt
+    _build_system_prompt.cache_clear()
     prompt = _build_system_prompt(16)
     assert "SOUND DESIGN GUIDANCE" in prompt
     assert "lowpass cutoff" in prompt
     assert "sample pitch" in prompt
+
+
+def test_system_prompt_includes_808_909_hypnotic_and_producer_notes():
+    from core.generator import _build_system_prompt
+    _build_system_prompt.cache_clear()
+    prompt = _build_system_prompt(16)
+    assert "TR-808" in prompt
+    assert "TR-909" in prompt
+    assert "polyrhythm" in prompt
+    assert "CLASSIC MACHINE CHARACTER" in prompt
+    assert "producer_notes" in prompt
 
 
 # ── Targeted track detection ──────────────────────────────────────────────────
