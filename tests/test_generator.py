@@ -3,7 +3,7 @@ import json
 from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
-from core.generator import Generator, _compute_generation_summary
+from core.generator import Generator, _compute_generation_summary, _detect_target_tracks
 
 VALID_PATTERN = {k: [0] * 16 for k in TRACK_NAMES}
 VALID_PATTERN["kick"][0] = 100
@@ -458,4 +458,92 @@ def test_system_prompt_includes_sound_design_guidance():
     assert "SOUND DESIGN GUIDANCE" in prompt
     assert "lowpass cutoff" in prompt
     assert "sample pitch" in prompt
+
+
+# ── Targeted track detection ──────────────────────────────────────────────────
+
+def test_detect_target_tracks_exact():
+    assert _detect_target_tracks("update the kick") == {"kick"}
+
+
+def test_detect_target_tracks_alias_hats():
+    assert _detect_target_tracks("make the hats brighter") == {"hihat"}
+
+
+def test_detect_target_tracks_alias_bass_drum():
+    assert _detect_target_tracks("tighten the bass drum") == {"kick"}
+
+
+def test_detect_target_tracks_multi():
+    assert _detect_target_tracks("kick and hihat only") == {"kick", "hihat"}
+
+
+def test_detect_target_tracks_no_match():
+    assert _detect_target_tracks("dark minimal techno") == set()
+
+
+def test_detect_target_tracks_case_insensitive():
+    assert _detect_target_tracks("Update The KICK") == {"kick"}
+
+
+# ── Constraint injection in _build_user_prompt ───────────────────────────────
+
+def test_build_user_prompt_targeted_injects_constraint():
+    state = AppState()
+    state.last_prompt = "original prompt"
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("apply randomization to the kick", variation=True)
+
+    assert "TARGETED UPDATE" in prompt
+    assert "MODIFY" in prompt
+    assert "kick" in prompt
+    assert "PRESERVE" in prompt
+
+
+def test_build_user_prompt_targeted_preserves_other_tracks():
+    state = AppState()
+    state.last_prompt = "original prompt"
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("update the hihat only", variation=True)
+
+    assert "PRESERVE" in prompt
+    assert "hihat" not in prompt.split("PRESERVE")[1].split("\n")[0]
+
+
+def test_build_user_prompt_no_target_no_constraint():
+    state = AppState()
+    state.last_prompt = "original prompt"
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("make it darker", variation=True)
+
+    assert "TARGETED UPDATE" not in prompt
+    assert "PRESERVE" not in prompt
+
+
+def test_build_user_prompt_fresh_no_constraint():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("update the kick", variation=False)
+
+    assert "TARGETED UPDATE" not in prompt
+    assert "PRESERVE" not in prompt
+
+
+def test_system_prompt_includes_targeted_update_guidance():
+    from core.generator import _build_system_prompt
+    _build_system_prompt.cache_clear()
+    prompt = _build_system_prompt(16)
+    assert "TARGETED UPDATES" in prompt
+    assert "PRESERVE" in prompt
     assert "amp envelope" in prompt
