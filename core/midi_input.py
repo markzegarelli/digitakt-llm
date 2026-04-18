@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 logger = get_logger("midi_input")
 
 _POLL_INTERVAL = 0.005   # 5 ms between port polls
-_EMIT_INTERVAL = 0.050   # 50 ms min between WebSocket broadcasts per parameter (20/sec max)
+_EMIT_INTERVAL = 0.080   # 80 ms min between WebSocket broadcasts per parameter (~12/sec max)
 
 
 class MidiInputListener:
