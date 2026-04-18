@@ -15,6 +15,40 @@ from core.tracing import tracer
 
 logger = get_logger("generator")
 
+_TRACK_ALIASES: dict[str, list[str]] = {
+    "kick":    ["kick", "bass drum", "bassdrum", "bd"],
+    "snare":   ["snare", "snare drum", "sd"],
+    "hihat":   ["hihat", "hi-hat", "hi hat", "hat", "hats", "closed hat", "ch"],
+    "openhat": ["open hat", "openhat", "open hi-hat", "open hihat"],
+    "clap":    ["clap", "cl"],
+    "tom":     ["tom", "toms", "lt"],
+    "bell":    ["bell", "cowbell", "bl"],
+    "cymbal":  ["cymbal", "cymbals", "crash", "cy"],
+}
+
+
+def _detect_target_tracks(prompt: str) -> set[str]:
+    """Return canonical track names mentioned (directly or by alias) in prompt."""
+    lowered = prompt.lower()
+    matches: list[tuple[int, int, str]] = []
+    found: set[str] = set()
+
+    for track, aliases in _TRACK_ALIASES.items():
+        for alias in aliases:
+            for m in re.finditer(r"\b" + re.escape(alias) + r"\b", lowered):
+                matches.append((m.start(), m.end(), track))
+
+    # Prefer longer alias matches first and avoid overlapping spans.
+    # This prevents "open hihat" from matching both openhat and hihat.
+    occupied: list[tuple[int, int]] = []
+    for start, end, track in sorted(matches, key=lambda m: (-(m[1] - m[0]), m[0])):
+        if any(not (end <= span_start or start >= span_end) for span_start, span_end in occupied):
+            continue
+        occupied.append((start, end))
+        found.add(track)
+
+    return found
+
 
 def _compute_generation_summary(prompt: str, pattern: dict, latency_ms: int) -> dict:
     """Return compact generation telemetry for the TUI."""
@@ -124,6 +158,11 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
         "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
         "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno).\n\n"
+        "TARGETED UPDATES:\n"
+        "When the user prompt contains a TARGETED UPDATE block:\n"
+        "- Copy the PRESERVE tracks verbatim, step-for-step, from the previous pattern\n"
+        "- Only generate new content for the MODIFY tracks\n"
+        "- CC changes still apply to any track mentioned in the request\n\n"
         "IMPORTANT: Output ONLY the JSON object. No text before, no text after, no markdown fences."
     )
 
@@ -257,7 +296,19 @@ class Generator:
                 k: v for k, v in self.state.current_pattern.items()
                 if isinstance(v, list) and len(v) == steps
             }
+            target_tracks = _detect_target_tracks(prompt)
+            if target_tracks:
+                preserve = [t for t in TRACK_NAMES if t not in target_tracks]
+                modify = [t for t in TRACK_NAMES if t in target_tracks]
+                constraint = (
+                    f"TARGETED UPDATE — only modify the listed tracks:\n"
+                    f"  MODIFY: {', '.join(modify)}\n"
+                    f"  PRESERVE EXACTLY (copy steps verbatim from previous pattern): {', '.join(preserve)}\n\n"
+                )
+            else:
+                constraint = ""
             return (
+                f"{constraint}"
                 f"Current state:\n{state_ctx}\n\n"
                 f"Previous prompt: {self.state.last_prompt}\n"
                 f"Previous pattern: {json.dumps(all_tracks)}\n\n"

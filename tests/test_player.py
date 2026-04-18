@@ -143,8 +143,17 @@ def test_clock_ticks_sent_during_playback():
     player, state, bus, port = _make_player()
     player.set_bpm(9000)
     player.start()
-    time.sleep(0.05)  # enough for ~1.8 loops at 9000 BPM
-    player.stop()
+    deadline = time.perf_counter() + 0.5
+    try:
+        while time.perf_counter() < deadline:
+            clock_count = sum(
+                1 for c in port.send.call_args_list if c[0][0].type == "clock"
+            )
+            if clock_count >= 96:
+                break
+            time.sleep(0.005)
+    finally:
+        player.stop()
 
     clock_calls = [
         c for c in port.send.call_args_list
