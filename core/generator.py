@@ -19,23 +19,34 @@ _TRACK_ALIASES: dict[str, list[str]] = {
     "kick":    ["kick", "bass drum", "bassdrum", "bd"],
     "snare":   ["snare", "snare drum", "sd"],
     "hihat":   ["hihat", "hi-hat", "hi hat", "hat", "hats", "closed hat", "ch"],
-    "openhat": ["open hat", "openhat", "open hi-hat", "open hihat", "oh"],
+    "openhat": ["open hat", "openhat", "open hi-hat", "open hihat"],
     "clap":    ["clap", "cl"],
     "tom":     ["tom", "toms", "lt"],
     "bell":    ["bell", "cowbell", "bl"],
-    "cymbal":  ["cymbal", "cymbals", "crash", "ride", "cy"],
+    "cymbal":  ["cymbal", "cymbals", "crash", "cy"],
 }
 
 
 def _detect_target_tracks(prompt: str) -> set[str]:
     """Return canonical track names mentioned (directly or by alias) in prompt."""
     lowered = prompt.lower()
+    matches: list[tuple[int, int, str]] = []
     found: set[str] = set()
+
     for track, aliases in _TRACK_ALIASES.items():
         for alias in aliases:
-            if re.search(r"\b" + re.escape(alias) + r"\b", lowered):
-                found.add(track)
-                break
+            for m in re.finditer(r"\b" + re.escape(alias) + r"\b", lowered):
+                matches.append((m.start(), m.end(), track))
+
+    # Prefer longer alias matches first and avoid overlapping spans.
+    # This prevents "open hihat" from matching both openhat and hihat.
+    occupied: list[tuple[int, int]] = []
+    for start, end, track in sorted(matches, key=lambda m: (-(m[1] - m[0]), m[0])):
+        if any(not (end <= span_start or start >= span_end) for span_start, span_end in occupied):
+            continue
+        occupied.append((start, end))
+        found.add(track)
+
     return found
 
 

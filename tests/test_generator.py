@@ -478,12 +478,24 @@ def test_detect_target_tracks_multi():
     assert _detect_target_tracks("kick and hihat only") == {"kick", "hihat"}
 
 
+def test_detect_target_tracks_open_hihat_does_not_match_closed_hihat():
+    assert _detect_target_tracks("update the open hihat only") == {"openhat"}
+
+
 def test_detect_target_tracks_no_match():
     assert _detect_target_tracks("dark minimal techno") == set()
 
 
 def test_detect_target_tracks_case_insensitive():
     assert _detect_target_tracks("Update The KICK") == {"kick"}
+
+
+def test_detect_target_tracks_ride_verb_not_cymbal_alias():
+    assert _detect_target_tracks("ride the filter down for a darker mix") == set()
+
+
+def test_detect_target_tracks_oh_interjection_not_openhat_alias():
+    assert _detect_target_tracks("oh make it darker and more minimal") == set()
 
 
 # ── Constraint injection in _build_user_prompt ───────────────────────────────
