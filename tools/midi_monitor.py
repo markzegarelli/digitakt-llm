@@ -65,7 +65,7 @@ def main() -> None:
         with mido.open_input(port_name) as port:
             while True:
                 msg = port.poll()
-                if msg is not None:
+                if msg is not None and msg.type not in ("clock", "active_sensing"):
                     t = time.strftime("%H:%M:%S")
                     if msg.type == "control_change":
                         key = (msg.channel, msg.control)
