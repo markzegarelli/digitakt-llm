@@ -75,14 +75,14 @@ class MidiInputListener:
         if track is None:
             # Auto channel: apply to whichever track the CC panel has focused
             track = self._state.get_cc_focused_track()
-            logger.info(
+            logger.debug(
                 "MIDI CC on auto channel ch=%d → applying to focused track '%s' CC#%d val=%d",
                 msg.channel, track, msg.control, msg.value,
             )
 
         param = CC_NUMBER_TO_PARAM.get(msg.control)
         if param is None:
-            logger.info(
+            logger.debug(
                 "MIDI CC with unmapped number (ignored) — ch=%d CC#%d val=%d",
                 msg.channel, msg.control, msg.value,
             )
@@ -103,7 +103,7 @@ class MidiInputListener:
             self._last_emit[key] = now
             self._pending.pop(key, None)
             self._bus.emit("cc_changed", payload)
-            logger.info("hardware CC → %s/%s = %d", track, param, msg.value)
+            logger.debug("hardware CC → %s/%s = %d", track, param, msg.value)
         else:
             self._pending[key] = payload
 
@@ -117,4 +117,4 @@ class MidiInputListener:
                 self._last_emit[key] = now
                 del self._pending[key]
                 self._bus.emit("cc_changed", payload)
-                logger.info("hardware CC (flush) → %s/%s = %d", payload["track"], payload["param"], payload["value"])
+                logger.debug("hardware CC (flush) → %s/%s = %d", payload["track"], payload["param"], payload["value"])
