@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import TYPE_CHECKING
 
 from core.logging_config import get_logger
@@ -12,7 +13,8 @@ if TYPE_CHECKING:
 
 logger = get_logger("midi_input")
 
-_POLL_INTERVAL = 0.005  # 5 ms poll — imperceptible latency for knob feedback
+_POLL_INTERVAL = 0.005   # 5 ms between port polls
+_EMIT_INTERVAL = 0.050   # 50 ms min between WebSocket broadcasts per parameter (20/sec max)
 
 
 class MidiInputListener:
@@ -26,6 +28,8 @@ class MidiInputListener:
         self._bus = bus
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._last_emit: dict[tuple[str, str], float] = {}   # (track, param) → last broadcast time
+        self._pending: dict[tuple[str, str], dict] = {}       # (track, param) → payload to flush
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -60,6 +64,7 @@ class MidiInputListener:
             if msg is not None:
                 self._handle(msg)
             else:
+                self._flush_pending()
                 self._stop_event.wait(_POLL_INTERVAL)
 
     def _handle(self, msg) -> None:
@@ -88,5 +93,28 @@ class MidiInputListener:
             return
 
         self._state.update_cc(track, param, msg.value)
-        self._bus.emit("cc_changed", {"track": track, "param": param, "value": msg.value, "source": "hardware"})
-        logger.info("hardware CC → %s/%s = %d", track, param, msg.value)
+
+        # Throttle WebSocket broadcasts to avoid flooding the TUI with redraws.
+        # Suppressed messages are kept as pending and flushed when the port goes quiet.
+        now = time.monotonic()
+        key = (track, param)
+        payload = {"track": track, "param": param, "value": msg.value, "source": "hardware"}
+        if now - self._last_emit.get(key, 0.0) >= _EMIT_INTERVAL:
+            self._last_emit[key] = now
+            self._pending.pop(key, None)
+            self._bus.emit("cc_changed", payload)
+            logger.info("hardware CC → %s/%s = %d", track, param, msg.value)
+        else:
+            self._pending[key] = payload
+
+    def _flush_pending(self) -> None:
+        """Emit any throttled CC values that haven't been broadcast yet."""
+        if not self._pending:
+            return
+        now = time.monotonic()
+        for key, payload in list(self._pending.items()):
+            if now - self._last_emit.get(key, 0.0) >= _EMIT_INTERVAL:
+                self._last_emit[key] = now
+                del self._pending[key]
+                self._bus.emit("cc_changed", payload)
+                logger.info("hardware CC (flush) → %s/%s = %d", payload["track"], payload["param"], payload["value"])
