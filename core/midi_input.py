@@ -68,11 +68,12 @@ class MidiInputListener:
 
         track = CHANNEL_TO_TRACK.get(msg.channel)
         if track is None:
+            # Auto channel: apply to whichever track the CC panel has focused
+            track = self._state.get_cc_focused_track()
             logger.info(
-                "MIDI CC on unmapped channel (ignored) — ch=%d CC#%d val=%d",
-                msg.channel, msg.control, msg.value,
+                "MIDI CC on auto channel ch=%d → applying to focused track '%s' CC#%d val=%d",
+                msg.channel, track, msg.control, msg.value,
             )
-            return
 
         param = CC_NUMBER_TO_PARAM.get(msg.control)
         if param is None:

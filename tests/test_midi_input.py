@@ -65,12 +65,17 @@ def test_handle_all_mapped_params_accepted():
 
 # ── _handle: ignored messages ────────────────────────────────────────────────
 
-def test_handle_unknown_channel_ignored():
+def test_handle_unknown_channel_routes_to_focused_track():
+    """CC on an unmapped channel (Digitakt auto channel) applies to the focused track."""
     listener, state, bus, _ = _make_listener([])
+    state.set_cc_focused_track("snare")
     events = []
     bus.subscribe("cc_changed", events.append)
     listener._handle(_cc(channel=8, control=74, value=100))
-    assert events == []
+    assert len(events) == 1
+    assert events[0]["track"] == "snare"
+    assert events[0]["param"] == "filter"
+    assert events[0]["value"] == 100
 
 
 def test_handle_unknown_cc_number_ignored():

@@ -706,8 +706,8 @@ export function App({ baseUrl }: AppProps) {
       if (key.upArrow)   setCCParam((p) => clamp(p - 1, 0, Math.max(0, state.ccParams.length - 1)));
       if (key.downArrow) setCCParam((p) => clamp(p + 1, 0, Math.max(0, state.ccParams.length - 1)));
 
-      if (input === "[") { setCCTrack((t) => clamp(t - 1, 0, 7)); return; }
-      if (input === "]") { setCCTrack((t) => clamp(t + 1, 0, 7)); return; }
+      if (input === "[") { const next = clamp(ccTrack - 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
+      if (input === "]") { const next = clamp(ccTrack + 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
 
       // Enter step-edit mode for the selected CC param
       if ((input === "e" || key.return) && state.ccParams.length > 0) {

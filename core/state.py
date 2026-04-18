@@ -75,6 +75,8 @@ class AppState:
             self.fill_pattern = pattern  # legacy field kept for compat
             self._fill_fsm.queue(pattern)
 
+    cc_focused_track: str = "kick"
+
     def update_cc(self, track: str, param: str, value: int) -> None:
         with self._lock:
             self.track_cc[track][param] = value
@@ -82,6 +84,14 @@ class AppState:
     def get_cc(self, track: str, param: str) -> int | None:
         with self._lock:
             return self.track_cc.get(track, {}).get(param)
+
+    def set_cc_focused_track(self, track: str) -> None:
+        with self._lock:
+            self.cc_focused_track = track
+
+    def get_cc_focused_track(self) -> str:
+        with self._lock:
+            return self.cc_focused_track
 
     def update_velocity(self, track: str, value: int) -> None:
         with self._lock:

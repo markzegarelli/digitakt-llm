@@ -108,6 +108,7 @@ export interface DigitaktActions {
   chainNext(): Promise<void>;
   chainFire(): Promise<void>;
   chainClear(): Promise<void>;
+  setCCFocusedTrack(track: TrackName): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -612,6 +613,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     chainClear: useCallback(async () => {
       await api("DELETE", "/chain");
+    }, [api]),
+
+    setCCFocusedTrack: useCallback(async (track: TrackName) => {
+      await api("POST", "/cc-focused-track", { track });
     }, [api]),
   };
 
