@@ -368,12 +368,14 @@ export function App({ baseUrl }: AppProps) {
           }
           return;
         }
-        setFocus((f) => {
-          if (f === "pattern") return "cc";
-          if (f === "cc") return showLog ? "log" : "prompt";
-          if (f === "log") return "prompt";
-          return "pattern";
-        });
+        const nextFocus: FocusPanel =
+          focus === "pattern" ? "cc" :
+          focus === "cc" ? (showLog ? "log" : "prompt") :
+          focus === "log" ? "prompt" : "pattern";
+        setFocus(nextFocus);
+        if (nextFocus === "cc") {
+          void actions.setCCFocusedTrack(TRACK_NAMES[ccTrack]);
+        }
       }
       return;
     }
