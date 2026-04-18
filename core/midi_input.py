@@ -39,13 +39,13 @@ class MidiInputListener:
 
     def stop(self) -> None:
         self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
         if self._port is not None:
             try:
                 self._port.close()
             except Exception:
                 pass
-        if self._thread is not None:
-            self._thread.join(timeout=1.0)
         logger.info("MIDI input listener stopped")
 
     def _loop(self) -> None:
@@ -75,7 +75,7 @@ class MidiInputListener:
             return
 
         # Suppress echo: if state already holds this value, it was set by the app
-        if self._state.track_cc.get(track, {}).get(param) == msg.value:
+        if self._state.get_cc(track, param) == msg.value:
             return
 
         self._state.update_cc(track, param, msg.value)

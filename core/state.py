@@ -79,6 +79,10 @@ class AppState:
         with self._lock:
             self.track_cc[track][param] = value
 
+    def get_cc(self, track: str, param: str) -> int | None:
+        with self._lock:
+            return self.track_cc.get(track, {}).get(param)
+
     def update_velocity(self, track: str, value: int) -> None:
         with self._lock:
             self.track_velocity[track] = value

@@ -33,20 +33,6 @@ def _start_server(api_port: int) -> None:
     port = midi_utils.open_port(port_name) if port_name else None
     state.midi_port_name = port_name
 
-    from core.midi_input import MidiInputListener
-    import logging as _logging
-    input_port_name = midi_utils.find_digitakt_input(midi_utils.list_input_ports())
-    if input_port_name:
-        try:
-            input_port = midi_utils.open_input_port(input_port_name)
-            midi_listener = MidiInputListener(input_port, state, bus)
-            midi_listener.start()
-        except Exception:
-            _logging.getLogger("digitakt.tui_launcher").warning(
-                "Could not open MIDI input port '%s'; hardware→app sync disabled",
-                input_port_name,
-            )
-
     player = Player(state, bus, port)
     generator = Generator(state, bus)
 
@@ -65,6 +51,21 @@ def _start_server(api_port: int) -> None:
 
     if port:
         player.start()
+
+    from core.midi_input import MidiInputListener
+    import logging as _logging
+    input_ports = midi_utils.list_input_ports()
+    input_port_name = midi_utils.find_digitakt_input(input_ports)
+    if not input_port_name:
+        print(f"MIDI input: no Digitakt found. Available ports: {input_ports or '(none)'}")
+    else:
+        try:
+            input_port = midi_utils.open_input_port(input_port_name)
+            midi_listener = MidiInputListener(input_port, state, bus)
+            midi_listener.start()
+            print(f"MIDI input: listening on '{input_port_name}' (hardware→TUI sync enabled)")
+        except Exception as e:
+            print(f"MIDI input: could not open '{input_port_name}': {e}")
 
 
 def _wait_for_server(url: str, timeout: float = 15.0) -> bool:
