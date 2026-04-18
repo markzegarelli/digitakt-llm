@@ -114,6 +114,7 @@ export interface DigitaktState {
     prompt: string;
     track_summary: string;
     latency_ms: number;
+    producer_notes?: string;
   } | null;
 }
 
