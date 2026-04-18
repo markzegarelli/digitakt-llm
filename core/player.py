@@ -208,21 +208,27 @@ class Player:
                         )
 
             boundary = self.state.apply_bar_boundary()
-            mute_changes = boundary["mute_changes"]
+            mute_changes = boundary.get("mute_changes")
             if mute_changes:
                 for track, muted in mute_changes.items():
                     self.bus.emit("mute_changed", {"track": track, "muted": muted})
 
-            if boundary["pattern_changed"]:
+            chain_armed = boundary.get("chain_armed")
+            if chain_armed:
+                self.bus.emit("chain_armed", chain_armed)
+
+            if boundary.get("pattern_changed"):
                 self.bus.emit(
                     "pattern_changed",
                     {"pattern": boundary["current_pattern"], "prompt": self.state.last_prompt or ""},
                 )
 
-            fill_event = boundary["fill_event"]
-            if fill_event == "fill_started":
-                self.bus.emit("fill_started", {"pattern": boundary["current_pattern"]})
-            elif fill_event == "fill_ended":
-                self.bus.emit("fill_ended", {"pattern": boundary["current_pattern"]})
+            chain_advanced = boundary.get("chain_advanced")
+            if chain_advanced:
+                self.bus.emit("chain_advanced", chain_advanced)
+
+            fill_event = boundary.get("fill_event")
+            if fill_event in {"fill_started", "fill_ended"}:
+                self.bus.emit(fill_event, {"pattern": boundary["current_pattern"]})
 
             self._loop_count += 1

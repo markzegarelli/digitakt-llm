@@ -108,6 +108,8 @@ export interface DigitaktState {
   chain: string[];
   chain_index: number;
   chain_auto: boolean;
+  chain_queued_index: number | null;
+  chain_armed: boolean;
   generation_summary: {
     prompt: string;
     track_summary: string;

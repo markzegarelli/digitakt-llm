@@ -72,6 +72,10 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `cond_changed` | Server | `{track, step, value}` |
 | `state_reset` | Server | `{}` |
 | `pattern_loaded` | Server | `{}` — TUI refetches `/state` after a named pattern load |
+| `chain_updated` | Server | `{chain, chain_index, chain_auto, chain_queued_index, chain_armed}` |
+| `chain_queued` | Server | `{chain, chain_index, chain_auto, chain_queued_index, chain_armed}` |
+| `chain_armed` | Server / Player | `{chain, chain_index, chain_auto, chain_queued_index, chain_armed}` |
+| `chain_advanced` | Player | `{chain, chain_index, chain_auto, chain_queued_index, chain_armed}` |
 
 All events are forwarded via WebSocket to the Bun/Ink TUI as `{"event": "<name>", "data": {...}}`.
 
@@ -107,6 +111,26 @@ yellow). Pressing `Q` (Shift+Q) fires all staged tracks via `/mute-queued` and c
 `POST /fill/<name>` loads a saved pattern and calls `AppState.queue_fill()`. At the next loop
 boundary the player: saves `current_pattern` to `_pre_fill_pattern`, swaps in the fill, plays it
 once, then restores the original. Emits `fill_started` and `fill_ended` events.
+
+## Chain Queue + Manual Fire (Bar-Synced)
+
+Chain sequencing is split into two performer-friendly phases:
+
+1. **Queue candidate** (`POST /chain/next`) selects the next chain slot and stores it as
+   `chain_queued_index` (no immediate pattern swap).
+2. **Fire on 1** (`POST /chain/fire`) arms the queued candidate by writing it to `pending_pattern`
+   and setting `chain_armed=True`.
+
+At the next bar boundary (`Player._loop()` end-of-loop call to `AppState.apply_bar_boundary()`),
+the pending pattern is swapped atomically; then chain state is finalized:
+
+- `chain_index` moves to the queued slot
+- queued state clears
+- `chain_armed` resets to `False`
+- `chain_advanced` event is emitted
+
+Auto chain mode (`POST /chain` with `auto=true`) uses the same internals: it auto-arms the next
+slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
@@ -327,5 +351,9 @@ The system prompt (`_build_system_prompt()`) encodes two categories of domain kn
 | `POST` | `/patterns/{name}` | Save pattern + session snapshot (`version: 2` JSON) with optional tags |
 | `GET` | `/patterns/{name}` | Load pattern; restore BPM/CC/pitch/velocity/mutes/length when snapshot present |
 | `POST` | `/fill/{name}` | Queue saved pattern as one-shot fill |
+| `POST` | `/chain` | Define chain names and auto mode |
+| `POST` | `/chain/next` | Queue next chain candidate (no immediate swap) |
+| `POST` | `/chain/fire` | Arm queued chain candidate for next bar downbeat |
+| `DELETE` | `/chain` | Clear chain state |
 | `GET` | `/traces` | Return recent LLM prompt/response traces |
 | `WS` | `/ws` | WebSocket stream of all EventBus events |

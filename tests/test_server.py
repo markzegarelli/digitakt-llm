@@ -448,6 +448,78 @@ def test_post_fill_missing_pattern_returns_404(tmp_path):
     assert resp.status_code == 404
 
 
+def _write_saved_pattern(path: Path, value: int) -> None:
+    pattern = {track: [0] * 16 for track in TRACK_NAMES}
+    pattern["kick"][0] = value
+    payload = {"version": 2, "pattern": pattern, "saved_at": "2026-01-01T00:00:00Z"}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_post_chain_sets_chain_and_state_fields(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    _write_saved_pattern(tmp_path / "b.json", 22)
+    client = _make_test_client(tmp_path)
+    resp = client.post("/chain", json={"names": ["a", "b"], "auto": False})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chain"] == ["a", "b"]
+    assert data["chain_index"] == -1
+    assert data["chain_queued_index"] is None
+    assert data["chain_armed"] is False
+    state = client.get("/state").json()
+    assert state["chain"] == ["a", "b"]
+    assert state["chain_auto"] is False
+
+
+def test_post_chain_next_queues_candidate(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    _write_saved_pattern(tmp_path / "b.json", 22)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a", "b"], "auto": False})
+    resp = client.post("/chain/next")
+    assert resp.status_code == 200
+    assert resp.json()["chain_queued_index"] == 0
+    state = client.get("/state").json()
+    assert state["chain_queued_index"] == 0
+    assert state["chain_armed"] is False
+
+
+def test_post_chain_fire_arms_for_next_bar(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a"], "auto": False})
+    resp = client.post("/chain/fire")
+    assert resp.status_code == 200
+    assert resp.json()["chain_queued_index"] == 0
+    assert resp.json()["chain_armed"] is True
+    state = client.get("/state").json()
+    assert state["chain_queued_index"] == 0
+    assert state["chain_armed"] is True
+    assert server_module._state.pending_pattern is not None
+
+
+def test_delete_chain_clears_state(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a"], "auto": True})
+    client.post("/chain/next")
+    client.post("/chain/fire")
+    resp = client.delete("/chain")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chain"] == []
+    assert data["chain_index"] == -1
+    assert data["chain_queued_index"] is None
+    assert data["chain_armed"] is False
+    assert data["chain_auto"] is False
+
+
+def test_chain_endpoints_require_defined_chain(tmp_path):
+    client = _make_test_client(tmp_path)
+    assert client.post("/chain/next").status_code == 404
+    assert client.post("/chain/fire").status_code == 404
+
+
 def test_pattern_name_path_traversal_rejected(tmp_path):
     _make_test_client(tmp_path)
     from fastapi import HTTPException

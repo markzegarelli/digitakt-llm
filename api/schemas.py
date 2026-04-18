@@ -67,6 +67,11 @@ class StateResponse(BaseModel):
     track_pitch: dict
     swing: int = 0
     pattern_length: int = 16
+    chain: list[str] = []
+    chain_index: int = -1
+    chain_auto: bool = False
+    chain_queued_index: int | None = None
+    chain_armed: bool = False
 
 
 class SavePatternRequest(BaseModel):
@@ -205,3 +210,8 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     is_implementable: bool = False
+
+
+class ChainRequest(BaseModel):
+    names: list[str] = Field(min_length=1)
+    auto: bool = False
