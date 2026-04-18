@@ -108,6 +108,7 @@ export interface DigitaktActions {
   chainNext(): Promise<void>;
   chainFire(): Promise<void>;
   chainClear(): Promise<void>;
+  setCCFocusedTrack(track: TrackName): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -180,6 +181,25 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     }
   }, [api]);
 
+  // Batch hardware CC updates into a single setState per flush interval to
+  // prevent rapid successive Ink redraws when a knob is being turned.
+  const hardwareCCQueue = useRef<Record<string, Record<string, number>>>({});
+  const ccFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushHardwareCC = useCallback(() => {
+    ccFlushTimer.current = null;
+    const updates = hardwareCCQueue.current;
+    hardwareCCQueue.current = {};
+    if (Object.keys(updates).length === 0) return;
+    setState((prev) => {
+      const newCC = { ...prev.track_cc };
+      for (const [track, params] of Object.entries(updates)) {
+        newCC[track as TrackName] = { ...newCC[track as TrackName], ...params };
+      }
+      return { ...prev, track_cc: newCC };
+    });
+  }, []);
+
   const connect = useCallback(() => {
     const wsUrl = baseUrl.replace(/^http/, "ws") + "/ws";
     const ws = new WebSocket(wsUrl);
@@ -197,6 +217,19 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         // Re-fetch full state for bulk pattern changes
         if (msg.event === "random_applied" || msg.event === "randbeat_applied") {
           fetchState();
+        }
+
+        // Hardware CC: batch into a single flush to prevent rapid Ink redraws
+        if (msg.event === "cc_changed" && msg.data["source"] === "hardware") {
+          const track = msg.data["track"] as string;
+          const param = msg.data["param"] as string;
+          const value = msg.data["value"] as number;
+          if (!hardwareCCQueue.current[track]) hardwareCCQueue.current[track] = {};
+          hardwareCCQueue.current[track][param] = value;
+          if (!ccFlushTimer.current) {
+            ccFlushTimer.current = setTimeout(flushHardwareCC, 80);
+          }
+          return;
         }
 
         const logEntry = formatLogEntry(msg.event, msg.data);
@@ -612,6 +645,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     chainClear: useCallback(async () => {
       await api("DELETE", "/chain");
+    }, [api]),
+
+    setCCFocusedTrack: useCallback(async (track: TrackName) => {
+      await api("POST", "/cc-focused-track", { track });
     }, [api]),
   };
 

@@ -26,6 +26,10 @@ class BpmRequest(BaseModel):
         return v
 
 
+class CCFocusedTrackRequest(BaseModel):
+    track: str
+
+
 class CCRequest(BaseModel):
     track: str
     param: str

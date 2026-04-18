@@ -19,7 +19,7 @@ from core.logging_config import get_logger
 logger = get_logger("server")
 
 from api.schemas import (
-    BpmRequest, CCRequest, CCResponse, CCStepRequest, GenerateRequest,
+    BpmRequest, CCRequest, CCResponse, CCStepRequest, CCFocusedTrackRequest, GenerateRequest,
     MuteRequest, MuteResponse, PatternListResponse, StateResponse,
     VelocityRequest, VelocityResponse,
     ProbRequest, ProbTrackRequest, SwingRequest, VelRequest, VelTrackRequest, RandomRequest,
@@ -256,6 +256,14 @@ def set_cc(req: CCRequest):
         send_cc(_player.port, TRACK_CHANNELS[req.track], CC_MAP[req.param], req.value)
     _bus.emit("cc_changed", {"track": req.track, "param": req.param, "value": req.value})
     return CCResponse(track=req.track, param=req.param, value=req.value)
+
+
+@app.post("/cc-focused-track")
+def set_cc_focused_track(req: CCFocusedTrackRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(422, f"Unknown track: {req.track}")
+    _state.set_cc_focused_track(req.track)
+    return {"track": req.track}
 
 
 @app.get("/cc-params", response_model=CCParamsResponse)
