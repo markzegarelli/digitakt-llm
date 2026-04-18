@@ -68,10 +68,18 @@ class MidiInputListener:
 
         track = CHANNEL_TO_TRACK.get(msg.channel)
         if track is None:
+            logger.info(
+                "MIDI CC on unmapped channel (ignored) — ch=%d CC#%d val=%d",
+                msg.channel, msg.control, msg.value,
+            )
             return
 
         param = CC_NUMBER_TO_PARAM.get(msg.control)
         if param is None:
+            logger.info(
+                "MIDI CC with unmapped number (ignored) — ch=%d CC#%d val=%d",
+                msg.channel, msg.control, msg.value,
+            )
             return
 
         # Suppress echo: if state already holds this value, it was set by the app
@@ -80,4 +88,4 @@ class MidiInputListener:
 
         self._state.update_cc(track, param, msg.value)
         self._bus.emit("cc_changed", {"track": track, "param": param, "value": msg.value, "source": "hardware"})
-        logger.debug("hardware CC received", extra={"track": track, "param": param, "value": msg.value})
+        logger.info("hardware CC → %s/%s = %d", track, param, msg.value)
