@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { theme } from "../theme.js";
+import type { PatternModalState } from "../types.js";
 
 const HELP_LINES = [
   "── Playback & Pattern ─────────────────────────────────────────",
@@ -18,7 +19,8 @@ const HELP_LINES = [
   "  cc <track> <param> <value>           CC 0–127 globally",
   "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
   "  save <name> [#tag1 #tag2]            save pattern with optional tags",
-  "  load <name>                          queue saved pattern for next loop",
+  "  load [name]                          pick saved pattern (↑↓ Enter) or queue by name for next loop",
+  "  delete [name]                        delete a saved pattern (confirmation)",
   "  patterns [#tag]                      list saved patterns (filter by tag)",
   "  fill <name>                          one-shot fill (plays once, reverts)",
   "  chain <p1> <p2> ... [--auto]         define setlist",
@@ -91,7 +93,7 @@ const HELP_LINES = [
 
 // All slash commands for autocomplete
 const COMMANDS = [
-  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "fresh", "gate",
+  "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "fill", "fresh", "gate",
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
@@ -117,6 +119,11 @@ interface PromptProps {
   generationStatus: "idle" | "generating" | "failed";
   generationError: string | null;
   onCommand(cmd: string): void;
+  patternModal: PatternModalState | null;
+  onPatternModalClose(): void;
+  onPatternModalNav(dir: number): void;
+  onPatternModalPick(): void;
+  onDeleteConfirmYes(): void;
   showHelp: boolean;
   onClearHelp(): void;
   answerText: string | null;
@@ -136,6 +143,11 @@ export function Prompt({
   generationStatus,
   generationError,
   onCommand,
+  patternModal,
+  onPatternModalClose,
+  onPatternModalNav,
+  onPatternModalPick,
+  onDeleteConfirmYes,
   showHelp,
   onClearHelp,
   answerText,
@@ -201,6 +213,39 @@ export function Prompt({
 
   useInput((input, key) => {
     if (!isFocused) return;
+
+    if (patternModal) {
+      if (patternModal.phase === "pick") {
+        if (key.escape) {
+          onPatternModalClose();
+          return;
+        }
+        if (key.upArrow) {
+          onPatternModalNav(-1);
+          return;
+        }
+        if (key.downArrow) {
+          onPatternModalNav(1);
+          return;
+        }
+        if (key.return) {
+          onPatternModalPick();
+          return;
+        }
+        return;
+      }
+      if (patternModal.phase === "delete-confirm") {
+        if (key.escape || input === "n" || input === "N") {
+          onPatternModalClose();
+          return;
+        }
+        if (input === "y" || input === "Y") {
+          onDeleteConfirmYes();
+          return;
+        }
+        return;
+      }
+    }
 
     if (answerText !== null) {
       onClearAnswer();
@@ -305,6 +350,31 @@ export function Prompt({
     }
     if (input && !key.ctrl && !key.meta) { updateText(text + input); return; }
   }, { isActive: isFocused });
+
+  if (patternModal) {
+    if (patternModal.phase === "delete-confirm") {
+      return (
+        <Box flexDirection="column" borderStyle="single" borderColor={theme.error} paddingX={1}>
+          <Text bold color={theme.error}>DELETE PATTERN</Text>
+          <Text color={theme.text}>{`Permanently delete "${patternModal.name}"?`}</Text>
+          <Text color={theme.textDim}>Y confirm  N or Esc cancel</Text>
+        </Box>
+      );
+    }
+    const title = patternModal.intent === "load" ? "LOAD PATTERN" : "DELETE PATTERN";
+    const enterHint = patternModal.intent === "load" ? "load selected" : "confirm selection (then Y/N)";
+    return (
+      <Box flexDirection="column" borderStyle="single" borderColor={theme.borderActive} paddingX={1}>
+        <Text bold color={theme.accent}>{title}</Text>
+        <Text color={theme.textDim}>{`↑↓ select · Enter ${enterHint} · Esc cancel`}</Text>
+        {patternModal.names.map((name, i) => (
+          <Text key={`${name}-${i}`} color={i === patternModal.idx ? theme.accent : theme.text}>
+            {(i === patternModal.idx ? "> " : "  ") + name}
+          </Text>
+        ))}
+      </Box>
+    );
+  }
 
   if (answerText !== null) {
     const lines = answerText.split("\n");

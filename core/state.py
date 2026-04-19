@@ -214,6 +214,24 @@ class AppState:
                     )[:target_steps]
             result["step_cc"] = new_step_cc
 
+        if "note" in result and isinstance(result["note"], dict):
+            new_note: dict[str, list] = {}
+            for track, vals in result["note"].items():
+                if track not in TRACK_NAMES or not isinstance(vals, list):
+                    continue
+                cells: list[int | None] = []
+                for v in vals[:target_steps]:
+                    if v is None:
+                        cells.append(None)
+                    elif isinstance(v, (int, float)) and 0 <= int(v) <= 127:
+                        cells.append(int(v))
+                    else:
+                        cells.append(None)
+                while len(cells) < target_steps:
+                    cells.append(None)
+                new_note[track] = cells[:target_steps]
+            result["note"] = new_note
+
         return result
 
     def update_pitch(self, track: str, value: int) -> None:

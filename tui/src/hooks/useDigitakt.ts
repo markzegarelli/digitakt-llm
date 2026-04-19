@@ -68,6 +68,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "randbeat_applied":     return `randbeat: ${data["bpm"]} BPM, swing ${data["swing"]}`;
     case "state_reset":          return "state reset";
     case "pattern_loaded":       return "pattern loaded";
+    case "note_changed":         return `note: ${data["track"]} step ${data["step"]} = ${data["value"] ?? "inherit"}`;
     case "ask_complete": {
       const ans = (data["answer"] as string) ?? "";
       const preview = ans.length > 80 ? ans.slice(0, 80) + "…" : ans;
@@ -103,6 +104,7 @@ export interface DigitaktActions {
   setGate(track: string, step: number, value: number): Promise<Response>;
   setGateTrack(track: string, value: number): Promise<void>;
   setPitch(track: string, value: number): Promise<Response>;
+  setNote(track: string, step: number, value: number | null): Promise<void>;
   setCond(track: string, step: number, value: string | null): Promise<Response>;
   setChain(names: string[], auto?: boolean): Promise<void>;
   chainNext(): Promise<void>;
@@ -232,10 +234,11 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
           return;
         }
 
-        const logEntry = formatLogEntry(msg.event, msg.data);
-
         setState((prev) => {
-          const newLog = [...prev.log, logEntry].slice(-50);
+          const newLog =
+            msg.event === "step_changed"
+              ? prev.log
+              : [...prev.log, formatLogEntry(msg.event, msg.data)].slice(-50);
           switch (msg.event) {
             case "pattern_changed": {
               const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
@@ -377,6 +380,19 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return {
                 ...prev,
                 pattern_trig: { ...pt, gate: { ...pt.gate, [gTrack]: row } },
+                log: newLog,
+              };
+            }
+            case "note_changed": {
+              const nTrack = msg.data["track"] as TrackName;
+              const nStep = (msg.data["step"] as number) - 1;
+              const nVal = (msg.data["value"] ?? null) as number | null;
+              const pt = prev.pattern_trig;
+              const row = [...pt.note[nTrack]];
+              row[nStep] = nVal;
+              return {
+                ...prev,
+                pattern_trig: { ...pt, note: { ...pt.note, [nTrack]: row } },
                 log: newLog,
               };
             }
@@ -627,6 +643,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         body: JSON.stringify({ track, value }),
       });
     }, [baseUrl]),
+
+    setNote: useCallback(async (track: string, step: number, value: number | null) => {
+      await api("POST", "/note", { track, step, value });
+    }, [api]),
 
     setCond: useCallback((track: string, step: number, value: string | null) =>
       fetch(`${baseUrl}/cond`, {

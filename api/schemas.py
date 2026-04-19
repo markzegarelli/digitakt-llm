@@ -182,6 +182,30 @@ class PitchResponse(BaseModel):
     value: int
 
 
+class NoteRequest(BaseModel):
+    track: str
+    step: int = Field(..., ge=1, le=32)
+    value: int | None = Field(
+        default=None,
+        description="MIDI note 0–127 for this step, or null to inherit track pitch",
+    )
+
+    @field_validator("value")
+    @classmethod
+    def note_range(cls, v: int | None) -> int | None:
+        if v is None:
+            return None
+        if not (0 <= v <= 127):
+            raise ValueError("value must be between 0 and 127 when set")
+        return v
+
+
+class NoteResponse(BaseModel):
+    track: str
+    step: int
+    value: int | None
+
+
 class CondRequest(BaseModel):
     track: str
     step: int = Field(..., ge=1, le=32)

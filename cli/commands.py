@@ -307,6 +307,29 @@ def apply_gate_track(pattern: dict, track: str, value: int) -> dict:
 _VALID_CONDITIONS = frozenset({"1:2", "not:2", "fill"})
 
 
+def apply_note_step(pattern: dict, track: str, step: int, value: int | None) -> dict:
+    """Set per-step MIDI note (0–127), or None to inherit from track_pitch when playing."""
+    if value is not None and not (0 <= value <= 127):
+        raise ValueError(f"Note must be 0–127 or None, got {value!r}")
+    result = copy.deepcopy(pattern)
+    length = _pattern_length(result)
+    if "note" not in result:
+        result["note"] = {}
+    if track not in result["note"] or not isinstance(result["note"][track], list):
+        result["note"][track] = [None] * length
+    else:
+        row = list(result["note"][track])
+        if len(row) < length:
+            row += [None] * (length - len(row))
+        elif len(row) > length:
+            row = row[:length]
+        result["note"][track] = row
+    row = list(result["note"][track])
+    row[step] = value
+    result["note"][track] = row
+    return result
+
+
 def apply_cond_step(pattern: dict, track: str, step: int, value: "str | None") -> dict:
     """Set or clear a conditional trig on a step. value must be '1:2', 'not:2', 'fill', or None."""
     if value is not None and value not in _VALID_CONDITIONS:

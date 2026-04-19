@@ -4,7 +4,7 @@ type ChainSubcommand = (typeof CHAIN_SUBCOMMANDS)[number];
 const KNOWN_SLASH_COMMANDS = new Set([
   "play", "stop", "new", "undo", "randbeat", "fresh", "bpm", "swing", "length",
   "prob", "vel", "gate", "pitch", "cc", "cc-step", "cond", "random", "mute",
-  "save", "load", "fill", "chain", "patterns", "quit", "q", "help", "log",
+  "save", "load", "delete", "fill", "chain", "patterns", "quit", "q", "help", "log",
   "clear", "history", "mode", "gen", "ask",
 ]);
 

@@ -116,6 +116,20 @@ def test_save_and_load_pattern(tmp_path):
     assert load_resp.status_code == 200
 
 
+def test_delete_pattern_removes_file(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/patterns/to-zap")
+    assert (tmp_path / "to-zap.json").exists()
+    resp = client.delete("/patterns/to-zap")
+    assert resp.status_code == 200
+    assert not (tmp_path / "to-zap.json").exists()
+
+
+def test_delete_missing_pattern_returns_404(tmp_path):
+    client = _make_test_client(tmp_path)
+    assert client.delete("/patterns/nope").status_code == 404
+
+
 def test_save_load_round_trip_preserves_bpm_and_cc(tmp_path):
     client = _make_test_client(tmp_path)
     client.post("/bpm", json={"bpm": 145.0})
@@ -629,6 +643,25 @@ def test_post_pitch_sets_track_pitch(tmp_path):
     assert resp.json()["value"] == 48
     state_resp = client.get("/state")
     assert state_resp.json()["track_pitch"]["kick"] == 48
+
+
+def test_post_note_sets_per_step_override(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/note", json={"track": "kick", "step": 1, "value": 40})
+    assert resp.status_code == 200
+    assert resp.json() == {"track": "kick", "step": 1, "value": 40}
+    pat = client.get("/state").json()["current_pattern"]
+    assert pat["note"]["kick"][0] == 40
+
+
+def test_post_note_clear_inherits(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post("/note", json={"track": "snare", "step": 2, "value": 50})
+    resp = client.post("/note", json={"track": "snare", "step": 2, "value": None})
+    assert resp.status_code == 200
+    assert resp.json()["value"] is None
+    pat = client.get("/state").json()["current_pattern"]
+    assert pat["note"]["snare"][1] is None
 
 
 # ── /cond ──────────────────────────────────────────────────────────────────

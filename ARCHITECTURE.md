@@ -69,6 +69,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `fill_ended` | Player | `{}` |
 | `gate_changed` | Server | `{track, step, value}` |
 | `pitch_changed` | Server | `{track, value}` |
+| `note_changed` | Server | `{track, step, value}` — `value` may be `null` when inheriting track pitch |
 | `cond_changed` | Server | `{track, step, value}` |
 | `state_reset` | Server | `{}` |
 | `pattern_loaded` | Server | `{}` — TUI refetches `/state` after a named pattern load |
@@ -134,7 +135,9 @@ slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
-`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+
+Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `null` to inherit `track_pitch` for that step) is edited from the TRIG panel or `POST /note`; playback uses the step override when set, otherwise `track_pitch` (or the default note map).
 
 ## Pattern Length
 
@@ -358,7 +361,9 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | `POST` | `/cond` | Set/clear conditional trig on a step |
 | `GET` | `/patterns` | List saved patterns (with tags) |
 | `POST` | `/patterns/{name}` | Save pattern + session snapshot (`version: 2` JSON) with optional tags |
+| `DELETE` | `/patterns/{name}` | Delete a saved pattern file |
 | `GET` | `/patterns/{name}` | Load pattern; restore BPM/CC/pitch/velocity/mutes/length when snapshot present |
+| `POST` | `/note` | Per-step MIDI note override (`value` null = inherit `track_pitch`); emits `note_changed` |
 | `POST` | `/fill/{name}` | Queue saved pattern as one-shot fill |
 | `POST` | `/chain` | Define chain names and auto mode |
 | `POST` | `/chain/next` | Queue next chain candidate (no immediate swap) |

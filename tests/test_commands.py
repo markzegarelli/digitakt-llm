@@ -14,6 +14,7 @@ from cli.commands import (
     generate_random_beat,
     apply_gate_step,
     apply_gate_track,
+    apply_note_step,
     apply_cond_step,
 )
 from core.state import TRACK_NAMES
@@ -308,6 +309,28 @@ def test_apply_gate_track_rejects_out_of_range():
     pattern = {k: [0] * 16 for k in TRACK_NAMES}
     with pytest.raises(ValueError):
         apply_gate_track(pattern, "kick", 101)
+
+
+# ── apply_note_step ───────────────────────────────────────────────────────────
+
+def test_apply_note_step_sets_single_step():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    result = apply_note_step(pattern, "kick", 3, 48)
+    assert result["note"]["kick"][3] == 48
+    assert result["note"]["kick"][0] is None
+
+
+def test_apply_note_step_clears_to_inherit():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    r1 = apply_note_step(pattern, "snare", 0, 55)
+    r2 = apply_note_step(r1, "snare", 0, None)
+    assert r2["note"]["snare"][0] is None
+
+
+def test_apply_note_step_rejects_out_of_range():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    with pytest.raises(ValueError):
+        apply_note_step(pattern, "kick", 0, 200)
 
 
 # ── apply_cond_step ───────────────────────────────────────────────────────────
