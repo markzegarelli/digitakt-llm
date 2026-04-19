@@ -481,7 +481,7 @@ export function App({ baseUrl }: AppProps) {
       }
       return;
     }
-    if (input === "?" && !key.ctrl && !key.meta) {
+    if (focus !== "prompt" && input === "?" && !key.ctrl && !key.meta) {
       setShowHelp(true);
       setFocus("prompt");
       return;
