@@ -11,6 +11,11 @@ import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { computePanelLayout } from "./layout.js";
+import {
+  isKnownSlashCommand,
+  parseChainCommand,
+  validateTrackValueArity,
+} from "./commandParsing.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
@@ -187,12 +192,33 @@ export function App({ baseUrl }: AppProps) {
         }).then(async r => { if (!r.ok) { const b = await r.json().catch(() => ({})) as { detail?: unknown }; actions.addLog(`✗ ${b.detail ?? r.status}`); } });
         break;
       case "prob":
+        {
+          const arityError = validateTrackValueArity("prob", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setProbTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "vel":
+        {
+          const arityError = validateTrackValueArity("vel", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setVelTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "gate":
+        {
+          const arityError = validateTrackValueArity("gate", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setGateTrack(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "pitch":
@@ -257,9 +283,9 @@ export function App({ baseUrl }: AppProps) {
         if (parts[1]) actions.queueFill(parts[1]).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
         break;
       case "chain": {
-        const CHAIN_SUBS = new Set(["next", "fire", "status", "clear"]);
-        const sub = parts[1]?.toLowerCase();
-        if (sub && CHAIN_SUBS.has(sub)) {
+        const chainCommand = parseChainCommand(parts);
+        if (chainCommand.kind === "subcommand") {
+          const sub = chainCommand.subcommand;
           if (sub === "next") {
             actions.chainNext()
               .then(() => actions.addLog("chain: queued next candidate"))
@@ -282,19 +308,12 @@ export function App({ baseUrl }: AppProps) {
           }
           break;
         }
-        const autoFlag = parts.includes("--auto");
-        const names = parts.slice(1).filter((p) => p !== "--auto");
-        if (names.length === 0) {
-          actions.addLog("usage: /chain <p1> <p2> ... [--auto]  or  /chain <next|fire|status|clear>");
+        if (chainCommand.kind === "error") {
+          actions.addLog(chainCommand.message);
           break;
         }
-        const reserved = names.filter((n) => CHAIN_SUBS.has(n.toLowerCase()));
-        if (reserved.length > 0) {
-          actions.addLog(`✗ "${reserved.join('", "')}" is a reserved chain subcommand — rename the pattern`);
-          break;
-        }
-        actions.setChain(names, autoFlag)
-          .then(() => actions.addLog(`chain set: ${names.join(" -> ")}${autoFlag ? " (auto)" : ""}`))
+        actions.setChain(chainCommand.names, chainCommand.autoFlag)
+          .then(() => actions.addLog(`chain set: ${chainCommand.names.join(" -> ")}${chainCommand.autoFlag ? " (auto)" : ""}`))
           .catch(dispatchError);
         break;
       }
@@ -332,7 +351,11 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       default:
-        if (cmd.startsWith("/")) { actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`); return; }
+        if (cmd.startsWith("/") && !isKnownSlashCommand(verb)) {
+          actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);
+          return;
+        }
+        if (cmd.startsWith("/")) return;
         if (stripped.trim()) {
           if (inputMode === "chat") {
             setAskPending(true); setFocus("prompt");
