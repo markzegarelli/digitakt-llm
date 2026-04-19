@@ -88,7 +88,10 @@ class SavePatternRequest(BaseModel):
 
 class PatternEntry(BaseModel):
     name: str
-    tags: list[str]
+    tags: list[str] = []
+    bpm: float | None = None
+    pattern_length: int | None = None
+    swing: int | None = None
 
 
 class PatternListResponse(BaseModel):

@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { computePanelLayout } from "./layout.js";
+import { computePanelLayout, computeSplitStackLayout } from "./layout.js";
 
 test("layout main-only uses full center budget", () => {
   const out = computePanelLayout({ termCols: 120, showLog: false, showTrig: false });
@@ -39,5 +39,31 @@ test("layout remains stable for narrow windows (no negative widths)", () => {
   expect(out.trigWidth).toBeGreaterThanOrEqual(0);
   expect(out.logWidth).toBeGreaterThanOrEqual(0);
   expect(out.mainWidth + out.logWidth + out.trigWidth).toBe(out.centerBudget);
+});
+
+test("split stack uses full center budget; log is bottom full width (logWidth 0)", () => {
+  const out = computeSplitStackLayout({ termCols: 120, showLog: true, showTrig: true });
+  expect(out.stackWidth).toBe(out.centerBudget);
+  expect(out.logWidth).toBe(0);
+  expect(out.seqGridWidth + out.trigWidth).toBe(out.stackWidth);
+  expect(out.mixWidth).toBe(out.stackWidth);
+});
+
+test("split stack without trig uses full stack for mix", () => {
+  const out = computeSplitStackLayout({ termCols: 100, showLog: false, showTrig: false });
+  expect(out.logWidth).toBe(0);
+  expect(out.trigWidth).toBe(0);
+  expect(out.seqGridWidth).toBe(out.stackWidth);
+  expect(out.mixWidth).toBe(out.stackWidth);
+});
+
+test("split stack with trig stays bounded on very narrow windows", () => {
+  const out = computeSplitStackLayout({ termCols: 24, showLog: false, showTrig: true });
+  expect(out.seqGridWidth).toBeGreaterThanOrEqual(0);
+  expect(out.trigWidth).toBeGreaterThanOrEqual(0);
+  expect(out.seqGridWidth).toBeLessThanOrEqual(out.stackWidth);
+  expect(out.trigWidth).toBeLessThanOrEqual(out.stackWidth);
+  expect(out.seqGridWidth + out.trigWidth).toBe(out.stackWidth);
+  expect(out.mixWidth).toBe(out.stackWidth);
 });
 

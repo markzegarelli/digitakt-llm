@@ -36,16 +36,8 @@ interface StepGridProps {
   isFocused: boolean;
 }
 
-function condSuffix(cond: string | null): string {
-  if (cond === "1:2") return "₁";
-  if (cond === "not:2") return "ⁿ";
-  if (cond === "fill") return "f";
-  return "";
-}
-
-/** Core step marker (playhead uses triangles; otherwise ·/○/● by velocity). */
-function stepBaseGlyph(velocity: number, isPlayhead: boolean): string {
-  if (isPlayhead) return velocity > 0 ? "\u25BA" : "\u25B9";
+/** Velocity as dots (· off, ○ low, ● high). Playhead is only in the ruler row above. */
+function velDot(velocity: number): string {
   if (velocity === 0) return "\u00B7";
   if (velocity < 64) return "\u25CB";
   return "\u25CF";
@@ -60,7 +52,6 @@ function velColor(velocity: number): string {
 
 function stepColor(
   velocity: number,
-  isPlayhead: boolean,
   muted: boolean,
   prob: number,
   cond: string | null,
@@ -68,11 +59,7 @@ function stepColor(
   isRowSelected: boolean,
 ): string {
   if (isColCursor && isRowSelected) return theme.warn;
-  if (muted) {
-    if (isPlayhead) return theme.accentMuted;
-    return theme.textDim;
-  }
-  if (isPlayhead) return velocity > 0 ? theme.accent : theme.textDim;
+  if (muted) return theme.textDim;
   if (velocity === 0) {
     if (cond !== null || prob < 100) return theme.textDim;
     return theme.textFaint;
@@ -128,11 +115,25 @@ export function StepGrid({
           );
         })}
       </Box>
-      {/* Fixed slot so entering step-edit mode does not reflow the grid below. */}
+      <Box marginBottom={0} flexDirection="row">
+        <Box width={LABEL_COL_W}>
+          <Text color={theme.textGhost}> </Text>
+        </Box>
+        {Array.from({ length: patternLength }, (_, i) => {
+          const isHead = currentStep === i;
+          return (
+            <Box key={i} width={colWidth} justifyContent="center">
+              <Text bold color={isHead ? theme.accent : theme.textGhost}>
+                {isHead ? "\u25BC" : " "}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
       <Box marginBottom={0} minHeight={1}>
         <Text color={theme.textFaint}>
           {stepEditMode && isFocused
-            ? "Step edit: ←→ [ ] step  Space  Enter/Esc  Tab|t TRIG  Shift+T ALL  ↑↓ tracks"
+            ? "Step edit: ←→ [ ] step  Space  Enter/Esc  Tab step↔TRIG keys  t TRIG keys  Shift+T ALL  ↑↓ tracks"
             : " "}
         </Text>
       </Box>
@@ -169,19 +170,14 @@ export function StepGrid({
             </Box>
             {Array.from({ length: patternLength }, (_, i) => {
               const velocity = steps[i] ?? 0;
-              const isPlayhead = currentStep === i;
               const prob = patternTrig.prob[track]?.[i] ?? 100;
               const cond = patternTrig.cond[track]?.[i] ?? null;
-              const suf = condSuffix(cond);
-              const base = stepBaseGlyph(velocity, isPlayhead);
+              const glyph = cond !== null ? "\u25C6" : velDot(velocity);
               const isColCursor = stepEditMode && isFocused && isSelected && i === selectedStep;
-              const c = stepColor(velocity, isPlayhead, muted, prob, cond, isColCursor, isSelected);
+              const c = stepColor(velocity, muted, prob, cond, isColCursor, isSelected);
               return (
                 <Box key={`${track}-${i}`} width={colWidth} justifyContent="center">
-                  <Text color={c}>
-                    {base}
-                    {suf ? <Text color={isPlayhead ? c : theme.accentMuted}>{suf}</Text> : ""}
-                  </Text>
+                  <Text color={c}>{glyph}</Text>
                 </Box>
               );
             })}

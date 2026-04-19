@@ -10,7 +10,7 @@ import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
-import { computePanelLayout } from "./layout.js";
+import { computeSplitStackLayout } from "./layout.js";
 import {
   isKnownSlashCommand,
   parseChainCommand,
@@ -21,7 +21,7 @@ import {
   shouldClearNoteOverrideOnCommit,
   shouldClearNoteOverrideOnDelete,
 } from "./trigEditing.js";
-import type { FocusPanel, TrackName, CCParam, PatternModalState } from "./types.js";
+import type { FocusPanel, TrackName, CCParam, PatternModalState, PatternListEntry } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
 
@@ -65,17 +65,28 @@ export function App({ baseUrl }: AppProps) {
   const [barCount, setBarCount] = useState(0);
   const acActiveRef = useRef(false);
   const [patternModal, setPatternModal] = useState<PatternModalState | null>(null);
+  const [chainStripFocused, setChainStripFocused] = useState(false);
+  const [chainSlotIdx, setChainSlotIdx] = useState(0);
 
   const [patternStepEdit, setPatternStepEdit] = useState(false);
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
-  const [showTrigPanel, setShowTrigPanel] = useState(false);
+  /** When step edit is on, arrows/digits go to TRIG fields instead of the step column (TRIG panel is always visible). */
+  const [trigKeysActive, setTrigKeysActive] = useState(false);
   const [trigField, setTrigField] = useState(0);
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
 
+  /** TRIG keyplane while step edit: runs for SEQ or MIX focus so arrows still hit TRIG, not MIX bars. */
+  const consumeTrigKeysRef = useRef<(input: string, key: Record<string, boolean | undefined>) => boolean>(() => false);
+
   useEffect(() => {
     setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
   }, [state.pattern_length]);
+
+  useEffect(() => {
+    const max = Math.max(0, state.chain.length - 1);
+    setChainSlotIdx((i) => clamp(i, 0, max));
+  }, [state.chain.length]);
 
   /** Option B: keep SEQ selected track and MIX selected track in lockstep. */
   useEffect(() => {
@@ -95,17 +106,18 @@ export function App({ baseUrl }: AppProps) {
     setCCParam((p) => clamp(p, 0, maxParam));
   }, [state.ccParams.length]);
 
+  /** Leaving SEQ/MIX for CMD clears step edit; tab between SEQ and MIX keeps it. */
   useEffect(() => {
-    if (focus !== "pattern") {
+    if (focus === "prompt") {
       setPatternStepEdit(false);
-      setShowTrigPanel(false);
+      setTrigKeysActive(false);
       setTrigTrackWide(false);
     }
   }, [focus]);
 
   useEffect(() => {
     setTrigInputBuffer("");
-  }, [showTrigPanel, patternSelectedStep, patternTrack]);
+  }, [trigKeysActive, patternSelectedStep, patternTrack]);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
@@ -142,18 +154,30 @@ export function App({ baseUrl }: AppProps) {
           actions.addLog(
             typeof d === "string" ? `✗ ${d}` : `✗ /patterns: HTTP ${r.status}`,
           );
-          return null as { patterns?: Array<{ name: string }> } | null;
+          return null as { patterns?: unknown[] } | null;
         }
-        return r.json() as Promise<{ patterns?: Array<{ name: string }> }>;
+        return r.json() as Promise<{ patterns?: unknown[] }>;
       })
       .then((d) => {
         if (!d) return;
-        const names = (Array.isArray(d.patterns) ? d.patterns : []).map((p) => p.name);
-        if (names.length === 0) {
+        const raw = Array.isArray(d.patterns) ? d.patterns : [];
+        const entries: PatternListEntry[] = raw.map((p) => {
+          if (!p || typeof p !== "object") {
+            return { name: "?", tags: [], bpm: null, pattern_length: null, swing: null };
+          }
+          const o = p as Record<string, unknown>;
+          const name = typeof o.name === "string" ? o.name : "?";
+          const tags = Array.isArray(o.tags) ? o.tags.map((t) => String(t)) : [];
+          const bpm = typeof o.bpm === "number" ? o.bpm : null;
+          const pattern_length = typeof o.pattern_length === "number" ? o.pattern_length : null;
+          const swing = typeof o.swing === "number" ? o.swing : null;
+          return { name, tags, bpm, pattern_length, swing };
+        });
+        if (entries.length === 0) {
           actions.addLog("No saved patterns.");
           return;
         }
-        setPatternModal({ phase: "pick", intent, names, idx: 0 });
+        setPatternModal({ phase: "pick", intent, entries, idx: 0 });
         setFocus("prompt");
       })
       .catch((err: Error) => actions.addLog(`✗ /patterns: ${err.message}`));
@@ -448,6 +472,145 @@ export function App({ baseUrl }: AppProps) {
     state.chain_auto,
   ]);
 
+  consumeTrigKeysRef.current = (input, key) => {
+    if (!patternStepEdit || !trigKeysActive) return false;
+
+    const plen = state.pattern_length;
+    const maxStep = Math.max(0, plen - 1);
+    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const stepIdx = patternSelectedStep;
+    const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
+    const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
+    const noteOv = state.pattern_trig.note[track]?.[stepIdx];
+    const resolvedPitch = noteOv != null ? noteOv : (state.track_pitch[track] ?? 60);
+    const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
+    const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
+    const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
+
+    const commitTrigBuffer = (buf: string) => {
+      if (trigField === 4) return;
+      if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
+        actions.setNote(track, stepIdx + 1, null).catch(() => {});
+        return;
+      }
+      if (buf.length === 0) return;
+      const raw = parseInt(buf, 10);
+      if (Number.isNaN(raw)) return;
+      if (trigField === 0) {
+        if (trigTrackWide) {
+          actions.setProbTrack(track, clamp(raw, 0, 100)).catch(err);
+        } else {
+          actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+        }
+      } else if (trigField === 1) {
+        if (trigTrackWide) {
+          actions.setVelTrack(track, clamp(raw, 0, 127)).catch(err);
+        } else {
+          actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
+        }
+      } else if (trigField === 2) {
+        actions.setNote(track, stepIdx + 1, clamp(raw, 0, 127)).catch(() => {});
+      } else if (trigField === 3) {
+        if (trigTrackWide) {
+          actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
+        } else {
+          actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+        }
+      }
+    };
+
+    if (key.escape) {
+      setTrigInputBuffer("");
+      setTrigKeysActive(false);
+      setTrigTrackWide(false);
+      return true;
+    }
+
+    if (key.return) {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      return true;
+    }
+
+    if (key.upArrow || key.downArrow) {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      setTrigField((f) => clamp(f + (key.downArrow ? 1 : -1), 0, 4));
+      return true;
+    }
+
+    if (trigField === 4 && (key.leftArrow || key.rightArrow)) {
+      const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
+      const curI = Math.max(0, order.indexOf(cond));
+      const nextI = (curI + (key.rightArrow ? 1 : -1) + order.length) % order.length;
+      actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
+      return true;
+    }
+
+    if (input === "[" || input === "]") {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+      return true;
+    }
+
+    if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
+      if (trigInputBuffer.length > 0) {
+        commitTrigBuffer(trigInputBuffer);
+        setTrigInputBuffer("");
+      }
+      const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
+      if (trigField === 0) {
+        if (trigTrackWide) {
+          actions.setProbTrack(track, clamp(prob + delta, 0, 100)).catch(err);
+        } else {
+          actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
+        }
+      } else if (trigField === 1) {
+        if (trigTrackWide) {
+          actions.setVelTrack(track, clamp(vel + delta, 0, 127)).catch(err);
+        } else {
+          actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
+        }
+      } else if (trigField === 2) {
+        actions.setNote(track, stepIdx + 1, clamp(resolvedPitch + delta, 0, 127)).catch(() => {});
+      } else if (trigField === 3) {
+        if (trigTrackWide) {
+          actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
+        } else {
+          actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(err);
+        }
+      }
+      return true;
+    }
+
+    if (trigField !== 4 && (key.backspace || key.delete)) {
+      if (trigInputBuffer.length > 0) {
+        setTrigInputBuffer((b) => b.slice(0, -1));
+      } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
+        actions.setNote(track, stepIdx + 1, null).catch(() => {});
+      }
+      return true;
+    }
+
+    if (trigField !== 4 && /^\d$/.test(input)) {
+      const hi = trigField === 0 || trigField === 3 ? 100 : 127;
+      const newBuf = trigInputBuffer + input;
+      const n = parseInt(newBuf, 10);
+      if (n <= hi) {
+        setTrigInputBuffer(newBuf);
+        const maxDigits = hi >= 100 ? 3 : 2;
+        if (newBuf.length >= maxDigits) {
+          commitTrigBuffer(newBuf);
+          setTrigInputBuffer("");
+        }
+      }
+      return true;
+    }
+
+    return true;
+  };
+
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       exit();
@@ -462,24 +625,65 @@ export function App({ baseUrl }: AppProps) {
       }
       return;
     }
+    if (focus !== "prompt" && input === "?" && !key.ctrl && !key.meta) {
+      setShowHelp(true);
+      setFocus("prompt");
+      return;
+    }
+
+    if (patternModal && key.escape) {
+      setPatternModal(null);
+      return;
+    }
+
+    if (chainStripFocused) {
+      if (key.escape) {
+        setChainStripFocused(false);
+        setFocus("pattern");
+        return;
+      }
+      if (input === "c" && !key.ctrl && !key.meta) {
+        setChainStripFocused(false);
+        return;
+      }
+      if (key.leftArrow) {
+        setChainSlotIdx((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setChainSlotIdx((i) => Math.min(Math.max(0, state.chain.length - 1), i + 1));
+        return;
+      }
+      if (input === "n" && !key.ctrl && !key.meta) {
+        actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+      if (input === "N" && !key.ctrl && !key.meta) {
+        actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+    }
+
+    if (!chainStripFocused && focus !== "prompt" && input === "c" && !key.ctrl && !key.meta && state.chain.length > 0) {
+      setChainStripFocused(true);
+      setChainSlotIdx(state.chain_index >= 0 ? state.chain_index : 0);
+      return;
+    }
+
     if (key.tab) {
       if (acActiveRef.current) return;  // let Prompt handle Tab for autocomplete
+      if (chainStripFocused) setChainStripFocused(false);
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
         if (focus === "pattern" && patternStepEdit) {
-          if (showTrigPanel) {
-            setShowTrigPanel(false);
-            setTrigTrackWide(false);
-          } else {
-            setShowTrigPanel(true);
-          }
+          setTrigKeysActive((a) => !a);
           return;
         }
         const nextFocus: FocusPanel =
           focus === "pattern" ? "cc" :
-          focus === "cc" ? (showLog ? "log" : "prompt") :
-          focus === "log" ? "prompt" : "pattern";
+          focus === "cc" ? "prompt" :
+          "pattern";
         setFocus(nextFocus);
         if (nextFocus === "cc") {
           void actions.setCCFocusedTrack(TRACK_NAMES[ccTrack]);
@@ -503,15 +707,15 @@ export function App({ baseUrl }: AppProps) {
               play !== null && play >= 0 ? clamp(play, 0, maxStep) : 0;
             setPatternStepEdit(true);
             setPatternSelectedStep(step);
-            setShowTrigPanel(true);
+            setTrigKeysActive(true);
             setTrigTrackWide(true);
             setTrigField(0);
             setTrigInputBuffer("");
             return;
           }
         } else if (patternStepEdit) {
-          if (!showTrigPanel) {
-            setShowTrigPanel(true);
+          if (!trigKeysActive) {
+            setTrigKeysActive(true);
             setTrigTrackWide(!!shiftT && canFieldUseTrackWide(trigField));
             return;
           }
@@ -519,7 +723,7 @@ export function App({ baseUrl }: AppProps) {
             if (canFieldUseTrackWide(trigField)) setTrigTrackWide((w) => !w);
             return;
           }
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
@@ -544,154 +748,22 @@ export function App({ baseUrl }: AppProps) {
     if (input === "+") { actions.setBpm(Math.min(400, state.bpm + 1)); return; }
     if (input === "-") { actions.setBpm(Math.max(20,  state.bpm - 1)); return; }
 
+    if (consumeTrigKeysRef.current(input, key as Record<string, boolean | undefined>)) return;
+
     if (focus === "pattern") {
       const plen = state.pattern_length;
       const maxStep = Math.max(0, plen - 1);
 
-      if (showTrigPanel) {
-        const track = TRACK_NAMES[patternTrack] as TrackName;
-        const stepIdx = patternSelectedStep;
-        const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
-        const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
-        const noteOv = state.pattern_trig.note[track]?.[stepIdx];
-        const resolvedPitch = noteOv != null ? noteOv : (state.track_pitch[track] ?? 60);
-        const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
-        const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
-        const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
-
-        const commitTrigBuffer = (buf: string) => {
-          if (trigField === 4) return;
-          if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
-            actions.setNote(track, stepIdx + 1, null).catch(() => {});
-            return;
-          }
-          if (buf.length === 0) return;
-          const raw = parseInt(buf, 10);
-          if (Number.isNaN(raw)) return;
-          if (trigField === 0) {
-            if (trigTrackWide) {
-              actions.setProbTrack(track, clamp(raw, 0, 100)).catch(err);
-            } else {
-              actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
-            }
-          } else if (trigField === 1) {
-            if (trigTrackWide) {
-              actions.setVelTrack(track, clamp(raw, 0, 127)).catch(err);
-            } else {
-              actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
-            }
-          } else if (trigField === 2) {
-            actions.setNote(track, stepIdx + 1, clamp(raw, 0, 127)).catch(() => {});
-          } else if (trigField === 3) {
-            if (trigTrackWide) {
-              actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
-            } else {
-              actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(() => {});
-            }
-          }
-        };
-
-        if (key.escape) {
-          setTrigInputBuffer("");
-          setShowTrigPanel(false);
-          setTrigTrackWide(false);
-          return;
-        }
-
-        if (key.return) {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          return;
-        }
-
-        if (key.upArrow || key.downArrow) {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          setTrigField((f) => clamp(f + (key.downArrow ? 1 : -1), 0, 4));
-          return;
-        }
-
-        if (trigField === 4 && (key.leftArrow || key.rightArrow)) {
-          const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
-          const curI = Math.max(0, order.indexOf(cond));
-          const nextI = (curI + (key.rightArrow ? 1 : -1) + order.length) % order.length;
-          actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
-          return;
-        }
-
-        if (input === "[" || input === "]") {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
-          return;
-        }
-
-        if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
-          if (trigInputBuffer.length > 0) {
-            commitTrigBuffer(trigInputBuffer);
-            setTrigInputBuffer("");
-          }
-          const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
-          if (trigField === 0) {
-            if (trigTrackWide) {
-              actions.setProbTrack(track, clamp(prob + delta, 0, 100)).catch(err);
-            } else {
-              actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
-            }
-          } else if (trigField === 1) {
-            if (trigTrackWide) {
-              actions.setVelTrack(track, clamp(vel + delta, 0, 127)).catch(err);
-            } else {
-              actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
-            }
-          } else if (trigField === 2) {
-            actions.setNote(track, stepIdx + 1, clamp(resolvedPitch + delta, 0, 127)).catch(() => {});
-          } else if (trigField === 3) {
-            if (trigTrackWide) {
-              actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
-            } else {
-              actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
-            }
-          }
-          return;
-        }
-
-        if (trigField !== 4 && (key.backspace || key.delete)) {
-          if (trigInputBuffer.length > 0) {
-            setTrigInputBuffer((b) => b.slice(0, -1));
-          } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
-            actions.setNote(track, stepIdx + 1, null).catch(() => {});
-          }
-          return;
-        }
-
-        if (trigField !== 4 && /^\d$/.test(input)) {
-          const hi = trigField === 0 || trigField === 3 ? 100 : 127;
-          const newBuf = trigInputBuffer + input;
-          const n = parseInt(newBuf, 10);
-          if (n <= hi) {
-            setTrigInputBuffer(newBuf);
-            const maxDigits = hi >= 100 ? 3 : 2;
-            if (newBuf.length >= maxDigits) {
-              commitTrigBuffer(newBuf);
-              setTrigInputBuffer("");
-            }
-          }
-          return;
-        }
-        return;
-      }
-
       if (patternStepEdit) {
         if (key.escape) {
           setPatternStepEdit(false);
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
         if (key.return) {
           setPatternStepEdit(false);
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
@@ -713,7 +785,7 @@ export function App({ baseUrl }: AppProps) {
       if (key.return) {
         setPatternStepEdit(true);
         setPatternSelectedStep(0);
-        setShowTrigPanel(false);
+        setTrigKeysActive(false);
         setTrigField(0);
         setTrigTrackWide(false);
         return;
@@ -860,12 +932,14 @@ export function App({ baseUrl }: AppProps) {
   });
 
   const termCols = stdout?.columns ?? 120;
-  const trigOpen = patternStepEdit && showTrigPanel;
-  const { centerBudget, mainWidth: mainContentWidth, trigWidth: trigPanelW, logWidth: logPanelW } = computePanelLayout({
+  const termRows = stdout?.rows ?? 28;
+  const helpMaxVisibleRows = Math.max(10, Math.min(22, termRows - 20));
+  const { centerBudget, stackWidth, seqGridWidth, mixWidth, trigWidth: trigRowW } = computeSplitStackLayout({
     termCols,
     showLog,
-    showTrig: trigOpen,
+    showTrig: true,
   });
+  const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
   return (
     <Box flexDirection="column" width={termCols}>
@@ -874,9 +948,15 @@ export function App({ baseUrl }: AppProps) {
         swing={state.swing}
         isPlaying={state.is_playing}
         midiConnected={state.midi_connected}
+        midiPortName={state.midi_port_name}
         patternName={state.last_prompt}
         patternLength={state.pattern_length}
+        currentStep={state.current_step}
         barCount={barCount}
+        generationStatus={state.generation_status}
+        fillActive={state.fill_active}
+        fillQueued={state.fill_queued}
+        muteCount={muteCount}
       />
       <ChainPanel
         chain={state.chain}
@@ -884,130 +964,138 @@ export function App({ baseUrl }: AppProps) {
         chainAuto={state.chain_auto}
         queuedIndex={state.chain_queued_index}
         armed={state.chain_armed}
+        stripFocused={chainStripFocused}
+        selectedSlotIdx={chainSlotIdx}
       />
       <Box flexDirection="row" width={termCols}>
-        <FocusRail focus={focus} showLog={showLog} />
+        <FocusRail focus={focus} />
         <Box flexDirection="row" flexGrow={1} width={centerBudget}>
-        <Box flexDirection="column" width={mainContentWidth}>
-          <StepGrid
-            contentWidth={mainContentWidth}
-            pattern={state.current_pattern}
-            patternTrig={state.pattern_trig}
-            patternLength={state.pattern_length}
-            currentStep={state.current_step}
-            trackMuted={state.track_muted}
-            selectedTrack={patternTrack}
-            pendingMuteTracks={pendingMuteTracks}
-            stepEditMode={patternStepEdit}
-            selectedStep={patternSelectedStep}
-            isFocused={focus === "pattern"}
-          />
-          <CCPanel
-            contentWidth={mainContentWidth}
-            ccParams={state.ccParams}
-            trackCC={state.track_cc}
-            stepCC={state.step_cc}
-            patternTrig={state.pattern_trig}
-            patternLength={state.pattern_length}
-            currentStep={state.current_step}
-            selectedTrack={ccTrack}
-            trackMuted={state.track_muted}
-            pendingMuteTracks={pendingMuteTracks}
-            selectedParam={ccParam}
-            isFocused={focus === "cc"}
-            stepMode={ccStepMode}
-            selectedStep={ccSelectedStep}
-            stepInputBuffer={ccStepInputBuffer}
-          />
-          <GenerationSummary
-            summary={state.generation_summary}
-            generationStatus={state.generation_status}
-            lastPrompt={state.last_prompt}
-          />
-          <Prompt
-            isFocused={focus === "prompt"}
-            generationStatus={state.generation_status}
-            generationError={state.generation_error}
-            onCommand={handleCommand}
-            patternModal={patternModal}
-            onPatternModalClose={() => setPatternModal(null)}
-            onPatternModalNav={(dir) => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "pick") return m;
-                const ni = clamp(m.idx + dir, 0, m.names.length - 1);
-                return { ...m, idx: ni };
-              });
-            }}
-            onPatternModalPick={() => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "pick") return m;
-                if (m.intent === "load") {
-                  queueMicrotask(() => runPatternLoadByName(m.names[m.idx]!));
+          <Box flexDirection="column" width={stackWidth}>
+            <Box flexDirection="row" width={stackWidth}>
+              <StepGrid
+                contentWidth={seqGridWidth}
+                pattern={state.current_pattern}
+                patternTrig={state.pattern_trig}
+                patternLength={state.pattern_length}
+                currentStep={state.current_step}
+                trackMuted={state.track_muted}
+                selectedTrack={patternTrack}
+                pendingMuteTracks={pendingMuteTracks}
+                stepEditMode={patternStepEdit}
+                selectedStep={patternSelectedStep}
+                isFocused={focus === "pattern"}
+              />
+              <TrigEditPanel
+                width={trigRowW}
+                keysActive={trigKeysActive}
+                track={TRACK_NAMES[patternTrack] as TrackName}
+                stepIndex={patternSelectedStep}
+                prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+                velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+                pitch={(() => {
+                  const tr = TRACK_NAMES[patternTrack] as TrackName;
+                  const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+                  return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+                })()}
+                gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
+                cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+                selectedField={trigField}
+                inputBuffer={trigInputBuffer}
+                trackWide={trigTrackWide}
+              />
+            </Box>
+            <Box flexDirection="row" width={stackWidth}>
+              <CCPanel
+                contentWidth={mixWidth}
+                ccParams={state.ccParams}
+                trackCC={state.track_cc}
+                stepCC={state.step_cc}
+                patternTrig={state.pattern_trig}
+                patternLength={state.pattern_length}
+                currentStep={state.current_step}
+                selectedTrack={ccTrack}
+                trackMuted={state.track_muted}
+                pendingMuteTracks={pendingMuteTracks}
+                selectedParam={ccParam}
+                isFocused={focus === "cc"}
+                stepMode={ccStepMode}
+                selectedStep={ccSelectedStep}
+                stepInputBuffer={ccStepInputBuffer}
+              />
+            </Box>
+            <GenerationSummary
+              summary={state.generation_summary}
+              generationStatus={state.generation_status}
+              lastPrompt={state.last_prompt}
+            />
+            <Prompt
+              isFocused={focus === "prompt"}
+              generationStatus={state.generation_status}
+              generationError={state.generation_error}
+              onCommand={handleCommand}
+              patternModal={patternModal}
+              onPatternModalClose={() => setPatternModal(null)}
+              onPatternModalNav={(dir) => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "pick") return m;
+                  const ni = clamp(m.idx + dir, 0, m.entries.length - 1);
+                  return { ...m, idx: ni };
+                });
+              }}
+              onPatternModalPick={() => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "pick") return m;
+                  const picked = m.entries[m.idx]?.name;
+                  if (!picked) return null;
+                  if (m.intent === "load") {
+                    queueMicrotask(() => runPatternLoadByName(picked));
+                    return null;
+                  }
+                  return { phase: "delete-confirm", name: picked };
+                });
+              }}
+              onDeleteConfirmYes={() => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "delete-confirm") return m;
+                  const n = m.name;
+                  queueMicrotask(() => runPatternDeleteByName(n));
                   return null;
-                }
-                return { phase: "delete-confirm", name: m.names[m.idx]! };
-              });
-            }}
-            onDeleteConfirmYes={() => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "delete-confirm") return m;
-                const n = m.name;
-                queueMicrotask(() => runPatternDeleteByName(n));
-                return null;
-              });
-            }}
-            showHelp={showHelp}
+                });
+              }}
+              showHelp={showHelp}
+              helpMaxVisibleRows={helpMaxVisibleRows}
             onClearHelp={() => {
               setShowHelp(false);
               stdout?.write("\x1b[2J\x1b[3J\x1b[H");
               setTimeout(() => forceRedraw(), 0);
             }}
-            answerText={answerText}
-            askPending={askPending}
-            onClearAnswer={() => setAnswerText(null)}
-            inputMode={inputMode}
-            showHistory={showHistory}
-            historyItems={state.pattern_history ?? []}
-            onClearHistory={() => setShowHistory(false)}
-            implementableHint={implementableHint}
-            onDismissHint={() => setImplementableHint(false)}
-            acActiveRef={acActiveRef}
-          />
-          <Box paddingX={1}>
-            <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  n chain next  N chain fire  +/- BPM  Ctrl+C quit"}
-            </Text>
+            onOpenHelp={() => setShowHelp(true)}
+              answerText={answerText}
+              askPending={askPending}
+              onClearAnswer={() => setAnswerText(null)}
+              inputMode={inputMode}
+              showHistory={showHistory}
+              historyItems={state.pattern_history ?? []}
+              onClearHistory={() => setShowHistory(false)}
+              implementableHint={implementableHint}
+              onDismissHint={() => setImplementableHint(false)}
+              acActiveRef={acActiveRef}
+            />
+            <Box paddingX={1}>
+              <Text color={theme.textFaint}>
+                {"? help  /help  Tab panels  Shift+Tab mode  c chain strip  n/N chain  Space transport  Ctrl+C quit"}
+              </Text>
+            </Box>
           </Box>
         </Box>
-        {trigPanelW > 0 && (
-          <TrigEditPanel
-            width={trigPanelW}
-            track={TRACK_NAMES[patternTrack] as TrackName}
-            stepIndex={patternSelectedStep}
-            prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
-            velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
-            pitch={(() => {
-              const tr = TRACK_NAMES[patternTrack] as TrackName;
-              const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
-              return ov != null ? ov : (state.track_pitch[tr] ?? 60);
-            })()}
-            gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
-            cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
-            selectedField={trigField}
-            inputBuffer={trigInputBuffer}
-            trackWide={trigTrackWide}
-          />
-        )}
-        {showLog && logPanelW > 0 && (
-          <ActivityLog
-            log={state.log}
-            isFocused={focus === "log"}
-            maxVisible={Math.max(8, 17 + state.ccParams.length)}
-            width={logPanelW}
-          />
-        )}
-        </Box>
       </Box>
+      {showLog && (
+        <ActivityLog
+          log={state.log}
+          maxVisible={Math.max(10, Math.min(24, Math.max(8, (stdout?.rows ?? 28) - 14)))}
+          width={termCols}
+        />
+      )}
     </Box>
   );
 }

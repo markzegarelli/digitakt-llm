@@ -5,7 +5,6 @@ import type { FocusPanel } from "../types.js";
 
 interface FocusRailProps {
   focus: FocusPanel;
-  showLog: boolean;
 }
 
 function NavLine({ active, label }: { active: boolean; label: string }) {
@@ -16,7 +15,7 @@ function NavLine({ active, label }: { active: boolean; label: string }) {
   );
 }
 
-export function FocusRail({ focus, showLog }: FocusRailProps) {
+export function FocusRail({ focus }: FocusRailProps) {
   return (
     <Box
       flexDirection="column"
@@ -30,7 +29,6 @@ export function FocusRail({ focus, showLog }: FocusRailProps) {
       <Text color={theme.textFaint}>{"\u2500".repeat(8)}</Text>
       <NavLine active={focus === "pattern"} label="SEQ" />
       <NavLine active={focus === "cc"} label="MIX" />
-      {showLog && <NavLine active={focus === "log"} label="LOG" />}
       <NavLine active={focus === "prompt"} label="CMD" />
     </Box>
   );

@@ -506,6 +506,25 @@ def post_randbeat():
     return {"bpm": bpm, "swing": swing}
 
 
+def _pattern_list_meta_from_saved(data: object) -> tuple[list[str], float | None, int | None, int | None]:
+    """Extract tags and optional session metadata from a saved pattern JSON object."""
+    if not isinstance(data, dict):
+        return [], None, None, None
+    tags = data.get("tags", []) if isinstance(data.get("tags"), list) else []
+    tags = [str(t) for t in tags]
+    bpm = data.get("bpm")
+    bpm_f = float(bpm) if isinstance(bpm, (int, float)) else None
+    pl = data.get("pattern_length")
+    pl_i = int(pl) if isinstance(pl, int) else None
+    swing = data.get("swing")
+    swing_i = int(swing) if isinstance(swing, (int, float)) else None
+    if swing_i is None and isinstance(data.get("pattern"), dict):
+        inner = data["pattern"].get("swing")
+        if isinstance(inner, (int, float)):
+            swing_i = int(inner)
+    return tags, bpm_f, pl_i, swing_i
+
+
 @app.get("/patterns", response_model=PatternListResponse)
 def get_patterns():
     entries = []
@@ -516,10 +535,18 @@ def get_patterns():
         try:
             with open(os.path.join(_patterns_dir, fname)) as f:
                 data = json.load(f)
-            tags = data.get("tags", []) if isinstance(data, dict) and isinstance(data.get("tags"), list) else []
+            tags, bpm_f, pl_i, swing_i = _pattern_list_meta_from_saved(data)
         except Exception:
-            tags = []
-        entries.append(PatternEntry(name=name, tags=tags))
+            tags, bpm_f, pl_i, swing_i = [], None, None, None
+        entries.append(
+            PatternEntry(
+                name=name,
+                tags=tags,
+                bpm=bpm_f,
+                pattern_length=pl_i,
+                swing=swing_i,
+            )
+        )
     return PatternListResponse(patterns=entries)
 
 
