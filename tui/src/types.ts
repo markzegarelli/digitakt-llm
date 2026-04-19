@@ -150,4 +150,4 @@ export interface DigitaktState {
   } | null;
 }
 
-export type FocusPanel = "pattern" | "cc" | "log" | "prompt";
+export type FocusPanel = "pattern" | "cc" | "prompt";

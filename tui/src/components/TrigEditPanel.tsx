@@ -28,6 +28,8 @@ interface TrigEditPanelProps {
   inputBuffer: string;
   /** When true, prob/vel/gate edits apply to every step on the track (not cond). */
   trackWide: boolean;
+  /** True while TRIG keys are active (Tab in step edit); inactive uses dim border. */
+  keysActive: boolean;
 }
 
 function condLabel(c: string | null): string {
@@ -50,6 +52,7 @@ export function TrigEditPanel({
   selectedField,
   inputBuffer,
   trackWide,
+  keysActive,
 }: TrigEditPanelProps) {
   const stored: Record<TrigFieldKey, string> = {
     prob: String(prob),
@@ -72,7 +75,7 @@ export function TrigEditPanel({
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor={theme.borderActive}
+      borderColor={keysActive ? theme.borderActive : theme.border}
       paddingX={1}
       width={width}
       flexShrink={0}

@@ -76,6 +76,9 @@ export function App({ baseUrl }: AppProps) {
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
 
+  /** TRIG keyplane while step edit: runs for SEQ or MIX focus so arrows still hit TRIG, not MIX bars. */
+  const consumeTrigKeysRef = useRef<(input: string, key: Record<string, boolean | undefined>) => boolean>(() => false);
+
   useEffect(() => {
     setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
   }, [state.pattern_length]);
@@ -103,8 +106,9 @@ export function App({ baseUrl }: AppProps) {
     setCCParam((p) => clamp(p, 0, maxParam));
   }, [state.ccParams.length]);
 
+  /** Leaving SEQ/MIX for CMD clears step edit; tab between SEQ and MIX keeps it. */
   useEffect(() => {
-    if (focus !== "pattern") {
+    if (focus === "prompt") {
       setPatternStepEdit(false);
       setTrigKeysActive(false);
       setTrigTrackWide(false);
@@ -468,6 +472,145 @@ export function App({ baseUrl }: AppProps) {
     state.chain_auto,
   ]);
 
+  consumeTrigKeysRef.current = (input, key) => {
+    if (!patternStepEdit || !trigKeysActive) return false;
+
+    const plen = state.pattern_length;
+    const maxStep = Math.max(0, plen - 1);
+    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const stepIdx = patternSelectedStep;
+    const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
+    const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
+    const noteOv = state.pattern_trig.note[track]?.[stepIdx];
+    const resolvedPitch = noteOv != null ? noteOv : (state.track_pitch[track] ?? 60);
+    const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
+    const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
+    const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
+
+    const commitTrigBuffer = (buf: string) => {
+      if (trigField === 4) return;
+      if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
+        actions.setNote(track, stepIdx + 1, null).catch(() => {});
+        return;
+      }
+      if (buf.length === 0) return;
+      const raw = parseInt(buf, 10);
+      if (Number.isNaN(raw)) return;
+      if (trigField === 0) {
+        if (trigTrackWide) {
+          actions.setProbTrack(track, clamp(raw, 0, 100)).catch(err);
+        } else {
+          actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+        }
+      } else if (trigField === 1) {
+        if (trigTrackWide) {
+          actions.setVelTrack(track, clamp(raw, 0, 127)).catch(err);
+        } else {
+          actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
+        }
+      } else if (trigField === 2) {
+        actions.setNote(track, stepIdx + 1, clamp(raw, 0, 127)).catch(() => {});
+      } else if (trigField === 3) {
+        if (trigTrackWide) {
+          actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
+        } else {
+          actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
+        }
+      }
+    };
+
+    if (key.escape) {
+      setTrigInputBuffer("");
+      setTrigKeysActive(false);
+      setTrigTrackWide(false);
+      return true;
+    }
+
+    if (key.return) {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      return true;
+    }
+
+    if (key.upArrow || key.downArrow) {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      setTrigField((f) => clamp(f + (key.downArrow ? 1 : -1), 0, 4));
+      return true;
+    }
+
+    if (trigField === 4 && (key.leftArrow || key.rightArrow)) {
+      const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
+      const curI = Math.max(0, order.indexOf(cond));
+      const nextI = (curI + (key.rightArrow ? 1 : -1) + order.length) % order.length;
+      actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
+      return true;
+    }
+
+    if (input === "[" || input === "]") {
+      commitTrigBuffer(trigInputBuffer);
+      setTrigInputBuffer("");
+      setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+      return true;
+    }
+
+    if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
+      if (trigInputBuffer.length > 0) {
+        commitTrigBuffer(trigInputBuffer);
+        setTrigInputBuffer("");
+      }
+      const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
+      if (trigField === 0) {
+        if (trigTrackWide) {
+          actions.setProbTrack(track, clamp(prob + delta, 0, 100)).catch(err);
+        } else {
+          actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
+        }
+      } else if (trigField === 1) {
+        if (trigTrackWide) {
+          actions.setVelTrack(track, clamp(vel + delta, 0, 127)).catch(err);
+        } else {
+          actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
+        }
+      } else if (trigField === 2) {
+        actions.setNote(track, stepIdx + 1, clamp(resolvedPitch + delta, 0, 127)).catch(() => {});
+      } else if (trigField === 3) {
+        if (trigTrackWide) {
+          actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
+        } else {
+          actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(err);
+        }
+      }
+      return true;
+    }
+
+    if (trigField !== 4 && (key.backspace || key.delete)) {
+      if (trigInputBuffer.length > 0) {
+        setTrigInputBuffer((b) => b.slice(0, -1));
+      } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
+        actions.setNote(track, stepIdx + 1, null).catch(() => {});
+      }
+      return true;
+    }
+
+    if (trigField !== 4 && /^\d$/.test(input)) {
+      const hi = trigField === 0 || trigField === 3 ? 100 : 127;
+      const newBuf = trigInputBuffer + input;
+      const n = parseInt(newBuf, 10);
+      if (n <= hi) {
+        setTrigInputBuffer(newBuf);
+        const maxDigits = hi >= 100 ? 3 : 2;
+        if (newBuf.length >= maxDigits) {
+          commitTrigBuffer(newBuf);
+          setTrigInputBuffer("");
+        }
+      }
+      return true;
+    }
+
+    return true;
+  };
+
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       exit();
@@ -485,6 +628,11 @@ export function App({ baseUrl }: AppProps) {
     if (focus !== "prompt" && input === "?" && !key.ctrl && !key.meta) {
       setShowHelp(true);
       setFocus("prompt");
+      return;
+    }
+
+    if (patternModal && key.escape) {
+      setPatternModal(null);
       return;
     }
 
@@ -534,8 +682,8 @@ export function App({ baseUrl }: AppProps) {
         }
         const nextFocus: FocusPanel =
           focus === "pattern" ? "cc" :
-          focus === "cc" ? (showLog ? "log" : "prompt") :
-          focus === "log" ? "prompt" : "pattern";
+          focus === "cc" ? "prompt" :
+          "pattern";
         setFocus(nextFocus);
         if (nextFocus === "cc") {
           void actions.setCCFocusedTrack(TRACK_NAMES[ccTrack]);
@@ -600,143 +748,11 @@ export function App({ baseUrl }: AppProps) {
     if (input === "+") { actions.setBpm(Math.min(400, state.bpm + 1)); return; }
     if (input === "-") { actions.setBpm(Math.max(20,  state.bpm - 1)); return; }
 
+    if (consumeTrigKeysRef.current(input, key as Record<string, boolean | undefined>)) return;
+
     if (focus === "pattern") {
       const plen = state.pattern_length;
       const maxStep = Math.max(0, plen - 1);
-
-      if (patternStepEdit && trigKeysActive) {
-        const track = TRACK_NAMES[patternTrack] as TrackName;
-        const stepIdx = patternSelectedStep;
-        const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
-        const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
-        const noteOv = state.pattern_trig.note[track]?.[stepIdx];
-        const resolvedPitch = noteOv != null ? noteOv : (state.track_pitch[track] ?? 60);
-        const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
-        const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
-        const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
-
-        const commitTrigBuffer = (buf: string) => {
-          if (trigField === 4) return;
-          if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
-            actions.setNote(track, stepIdx + 1, null).catch(() => {});
-            return;
-          }
-          if (buf.length === 0) return;
-          const raw = parseInt(buf, 10);
-          if (Number.isNaN(raw)) return;
-          if (trigField === 0) {
-            if (trigTrackWide) {
-              actions.setProbTrack(track, clamp(raw, 0, 100)).catch(err);
-            } else {
-              actions.setProb(track, stepIdx + 1, clamp(raw, 0, 100)).catch(err);
-            }
-          } else if (trigField === 1) {
-            if (trigTrackWide) {
-              actions.setVelTrack(track, clamp(raw, 0, 127)).catch(err);
-            } else {
-              actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
-            }
-          } else if (trigField === 2) {
-            actions.setNote(track, stepIdx + 1, clamp(raw, 0, 127)).catch(() => {});
-          } else if (trigField === 3) {
-            if (trigTrackWide) {
-              actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
-            } else {
-              actions.setGate(track, stepIdx + 1, clamp(raw, 0, 100)).catch(() => {});
-            }
-          }
-        };
-
-        if (key.escape) {
-          setTrigInputBuffer("");
-          setTrigKeysActive(false);
-          setTrigTrackWide(false);
-          return;
-        }
-
-        if (key.return) {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          return;
-        }
-
-        if (key.upArrow || key.downArrow) {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          setTrigField((f) => clamp(f + (key.downArrow ? 1 : -1), 0, 4));
-          return;
-        }
-
-        if (trigField === 4 && (key.leftArrow || key.rightArrow)) {
-          const order: (string | null)[] = [null, "1:2", "not:2", "fill"];
-          const curI = Math.max(0, order.indexOf(cond));
-          const nextI = (curI + (key.rightArrow ? 1 : -1) + order.length) % order.length;
-          actions.setCond(track, stepIdx + 1, order[nextI] ?? null).catch(() => {});
-          return;
-        }
-
-        if (input === "[" || input === "]") {
-          commitTrigBuffer(trigInputBuffer);
-          setTrigInputBuffer("");
-          setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
-          return;
-        }
-
-        if (trigField !== 4 && (key.leftArrow || key.rightArrow)) {
-          if (trigInputBuffer.length > 0) {
-            commitTrigBuffer(trigInputBuffer);
-            setTrigInputBuffer("");
-          }
-          const delta = (key.rightArrow ? 1 : -1) * (key.shift ? 10 : 1);
-          if (trigField === 0) {
-            if (trigTrackWide) {
-              actions.setProbTrack(track, clamp(prob + delta, 0, 100)).catch(err);
-            } else {
-              actions.setProb(track, stepIdx + 1, clamp(prob + delta, 0, 100)).catch(err);
-            }
-          } else if (trigField === 1) {
-            if (trigTrackWide) {
-              actions.setVelTrack(track, clamp(vel + delta, 0, 127)).catch(err);
-            } else {
-              actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
-            }
-          } else if (trigField === 2) {
-            actions.setNote(track, stepIdx + 1, clamp(resolvedPitch + delta, 0, 127)).catch(() => {});
-          } else if (trigField === 3) {
-            if (trigTrackWide) {
-              actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
-            } else {
-              actions.setGate(track, stepIdx + 1, clamp(gate + delta, 0, 100)).catch(() => {});
-            }
-          }
-          return;
-        }
-
-        if (trigField !== 4 && (key.backspace || key.delete)) {
-          if (trigInputBuffer.length > 0) {
-            setTrigInputBuffer((b) => b.slice(0, -1));
-          } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
-            actions.setNote(track, stepIdx + 1, null).catch(() => {});
-          }
-          return;
-        }
-
-        if (trigField !== 4 && /^\d$/.test(input)) {
-          const hi = trigField === 0 || trigField === 3 ? 100 : 127;
-          const newBuf = trigInputBuffer + input;
-          const n = parseInt(newBuf, 10);
-          if (n <= hi) {
-            setTrigInputBuffer(newBuf);
-            const maxDigits = hi >= 100 ? 3 : 2;
-            if (newBuf.length >= maxDigits) {
-              commitTrigBuffer(newBuf);
-              setTrigInputBuffer("");
-            }
-          }
-          return;
-        }
-        return;
-      }
 
       if (patternStepEdit) {
         if (key.escape) {
@@ -916,7 +932,9 @@ export function App({ baseUrl }: AppProps) {
   });
 
   const termCols = stdout?.columns ?? 120;
-  const { centerBudget, stackWidth, mixWidth, trigWidth: trigRowW } = computeSplitStackLayout({
+  const termRows = stdout?.rows ?? 28;
+  const helpMaxVisibleRows = Math.max(10, Math.min(22, termRows - 20));
+  const { centerBudget, stackWidth, seqGridWidth, mixWidth, trigWidth: trigRowW } = computeSplitStackLayout({
     termCols,
     showLog,
     showTrig: true,
@@ -950,22 +968,42 @@ export function App({ baseUrl }: AppProps) {
         selectedSlotIdx={chainSlotIdx}
       />
       <Box flexDirection="row" width={termCols}>
-        <FocusRail focus={focus} showLog={showLog} />
+        <FocusRail focus={focus} />
         <Box flexDirection="row" flexGrow={1} width={centerBudget}>
           <Box flexDirection="column" width={stackWidth}>
-            <StepGrid
-              contentWidth={stackWidth}
-              pattern={state.current_pattern}
-              patternTrig={state.pattern_trig}
-              patternLength={state.pattern_length}
-              currentStep={state.current_step}
-              trackMuted={state.track_muted}
-              selectedTrack={patternTrack}
-              pendingMuteTracks={pendingMuteTracks}
-              stepEditMode={patternStepEdit}
-              selectedStep={patternSelectedStep}
-              isFocused={focus === "pattern"}
-            />
+            <Box flexDirection="row" width={stackWidth}>
+              <StepGrid
+                contentWidth={seqGridWidth}
+                pattern={state.current_pattern}
+                patternTrig={state.pattern_trig}
+                patternLength={state.pattern_length}
+                currentStep={state.current_step}
+                trackMuted={state.track_muted}
+                selectedTrack={patternTrack}
+                pendingMuteTracks={pendingMuteTracks}
+                stepEditMode={patternStepEdit}
+                selectedStep={patternSelectedStep}
+                isFocused={focus === "pattern"}
+              />
+              <TrigEditPanel
+                width={trigRowW}
+                keysActive={trigKeysActive}
+                track={TRACK_NAMES[patternTrack] as TrackName}
+                stepIndex={patternSelectedStep}
+                prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+                velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+                pitch={(() => {
+                  const tr = TRACK_NAMES[patternTrack] as TrackName;
+                  const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+                  return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+                })()}
+                gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
+                cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+                selectedField={trigField}
+                inputBuffer={trigInputBuffer}
+                trackWide={trigTrackWide}
+              />
+            </Box>
             <Box flexDirection="row" width={stackWidth}>
               <CCPanel
                 contentWidth={mixWidth}
@@ -984,23 +1022,6 @@ export function App({ baseUrl }: AppProps) {
                 selectedStep={ccSelectedStep}
                 stepInputBuffer={ccStepInputBuffer}
               />
-              <TrigEditPanel
-                  width={trigRowW}
-                  track={TRACK_NAMES[patternTrack] as TrackName}
-                  stepIndex={patternSelectedStep}
-                  prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
-                  velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
-                  pitch={(() => {
-                    const tr = TRACK_NAMES[patternTrack] as TrackName;
-                    const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
-                    return ov != null ? ov : (state.track_pitch[tr] ?? 60);
-                  })()}
-                  gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
-                  cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
-                  selectedField={trigField}
-                  inputBuffer={trigInputBuffer}
-                  trackWide={trigTrackWide}
-                />
             </Box>
             <GenerationSummary
               summary={state.generation_summary}
@@ -1042,6 +1063,7 @@ export function App({ baseUrl }: AppProps) {
                 });
               }}
               showHelp={showHelp}
+              helpMaxVisibleRows={helpMaxVisibleRows}
             onClearHelp={() => {
               setShowHelp(false);
               stdout?.write("\x1b[2J\x1b[3J\x1b[H");
@@ -1070,7 +1092,6 @@ export function App({ baseUrl }: AppProps) {
       {showLog && (
         <ActivityLog
           log={state.log}
-          isFocused={focus === "log"}
           maxVisible={Math.max(10, Math.min(24, Math.max(8, (stdout?.rows ?? 28) - 14)))}
           width={termCols}
         />

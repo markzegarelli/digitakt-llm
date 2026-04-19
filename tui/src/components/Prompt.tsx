@@ -49,9 +49,9 @@ const HELP_LINES = [
   "",
   "── App ────────────────────────────────────────────────────────",
   "  help                                 show this help",
-  "  ?                                    open help (SEQ/MIX/LOG) or empty CMD line",
+  "  ?                                    open help (SEQ/MIX) or empty CMD line",
   "  quit / q                             exit",
-  "  Tab                                  focus rail: SEQ → MIX → CMD (+ LOG if log is on)",
+  "  Tab                                  focus rail: SEQ → MIX → CMD",
   "  Shift+Tab                            toggle Chat/Beat mode",
   "  m (Pattern panel)                    toggle mute on selected track",
   "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
@@ -67,8 +67,8 @@ const HELP_LINES = [
   "  Space (SEQ step edit)                toggle selected step on/off",
   "  ←/→ or [ / ] (SEQ step edit)         move selected step",
   "  ↑/↓ (SEQ)                            move selected track",
-  "  Tab (while SEQ step edit)            switch keyboard: step column ↔ TRIG fields (TRIG panel always visible)",
-  "  SEQ / MIX                            selected track stays in sync between panels",
+  "  Tab (while SEQ step edit)            switch keyboard: step column ↔ TRIG fields (TRIG panel beside SEQ)",
+  "  SEQ / MIX                            selected track stays in sync; TRIG keys work from SEQ or MIX focus",
   "",
   "TRIG side panel (from SEQ step edit):",
   "  t (SEQ step edit)                    toggle TRIG key focus off/on (panel stays visible)",
@@ -79,13 +79,11 @@ const HELP_LINES = [
   "  Shift+←/→                            adjust selected numeric value by ±10",
   "  [ / ]                                move step (TRIG open or closed in step edit)",
   "  0-9 then Enter                       type/apply numeric value directly",
-  "  Esc                                  close TRIG side panel",
+  "  Esc                                  leave TRIG key focus (panel stays visible)",
   "",
-  "LOG panel:",
-  "  /log                                 toggle activity log",
-  "  ↑/↓ (when LOG focused)               scroll log entries",
-  "  Layout: rail + column: SEQ full width; MIX and TRIG share one row below;",
-  "          LOG is full width under the main block when /log is on.",
+  "Activity log (view-only):",
+  "  /log                                 show or hide log below the main layout",
+  "  Layout: SEQ + TRIG one row; MIX full width below; LOG full width when /log is on.",
   "",
   "Per-step settings visible/editable from generation output:",
   "  probability (prob), velocity (vel), note/pitch, length (gate), condition (cond)",
@@ -150,6 +148,8 @@ interface PromptProps {
   onPatternModalPick(): void;
   onDeleteConfirmYes(): void;
   showHelp: boolean;
+  /** Max visible help lines (viewport); keeps help inside the live layout without growing the terminal. */
+  helpMaxVisibleRows?: number;
   onClearHelp(): void;
   onOpenHelp(): void;
   answerText: string | null;
@@ -175,6 +175,7 @@ export function Prompt({
   onPatternModalPick,
   onDeleteConfirmYes,
   showHelp,
+  helpMaxVisibleRows,
   onClearHelp,
   onOpenHelp,
   answerText,
@@ -199,7 +200,10 @@ export function Prompt({
   const genStartRef = useRef<number | null>(null);
 
   const termRows = stdout?.rows ?? 24;
-  const panelBudget = Math.max(8, termRows - 8);
+  const panelBudget =
+    helpMaxVisibleRows != null
+      ? Math.max(6, helpMaxVisibleRows)
+      : Math.max(8, termRows - 8);
   const totalHelpRows = helpTotalRows();
   const helpNeedsScroll = totalHelpRows > panelBudget;
   const helpChromeLines = helpNeedsScroll ? 1 : 0;
@@ -532,8 +536,7 @@ export function Prompt({
             <Text>{"  "}</Text>
             <Text color={theme.textDim}>{"\u00B7\u25CB\u25CF "}</Text><Text color={theme.text}>{"muted: dimmer dots   "}</Text>
             <Text color={theme.accent}>{"\u25BC "}</Text><Text color={theme.text}>{"ruler = playhead   "}</Text>
-            <Text color={theme.warn}>{"\u25C6 "}</Text><Text color={theme.text}>{"cond  "}</Text>
-            <Text color={theme.accentMuted}>{"\u25C7 "}</Text><Text color={theme.text}>{"prob <100%"}</Text>
+            <Text color={theme.warn}>{"\u25C6 "}</Text><Text color={theme.text}>{"replaces step dot when cond set"}</Text>
           </Box>,
         );
       }

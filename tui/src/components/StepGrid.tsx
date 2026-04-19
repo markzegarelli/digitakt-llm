@@ -36,13 +36,6 @@ interface StepGridProps {
   isFocused: boolean;
 }
 
-/** Second glyph: filled diamond = conditional trig; hollow = reduced probability. */
-function trigMarker(cond: string | null, prob: number): string {
-  if (cond !== null) return "\u25C6"; // ◆
-  if (prob < 100) return "\u25C7"; // ◇
-  return "";
-}
-
 /** Velocity as dots (· off, ○ low, ● high). Playhead is only in the ruler row above. */
 function velDot(velocity: number): string {
   if (velocity === 0) return "\u00B7";
@@ -179,18 +172,12 @@ export function StepGrid({
               const velocity = steps[i] ?? 0;
               const prob = patternTrig.prob[track]?.[i] ?? 100;
               const cond = patternTrig.cond[track]?.[i] ?? null;
-              const marker = trigMarker(cond, prob);
-              const base = velDot(velocity);
+              const glyph = cond !== null ? "\u25C6" : velDot(velocity);
               const isColCursor = stepEditMode && isFocused && isSelected && i === selectedStep;
               const c = stepColor(velocity, muted, prob, cond, isColCursor, isSelected);
-              const markColor =
-                cond !== null ? theme.warn : prob < 100 ? theme.accentMuted : c;
               return (
                 <Box key={`${track}-${i}`} width={colWidth} justifyContent="center">
-                  <Text color={c}>
-                    {base}
-                    {marker ? <Text color={markColor}>{marker}</Text> : ""}
-                  </Text>
+                  <Text color={c}>{glyph}</Text>
                 </Box>
               );
             })}

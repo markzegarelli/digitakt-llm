@@ -12,12 +12,18 @@ export interface PanelLayout {
   logWidth: number;
 }
 
-/** Split layout: SEQ uses full `stackWidth`; MIX + TRIG share one row below (`mixWidth` + `trigWidth`). */
+/**
+ * Split layout: SEQ and TRIG share the top row (`seqGridWidth` + `trigWidth` = `stackWidth`);
+ * MIX uses the full `stackWidth` on the row below. Activity log is outside this budget.
+ */
 export interface SplitStackLayout {
   centerBudget: number;
   stackWidth: number;
-  mixWidth: number;
+  /** Inner width for the step grid (stack minus TRIG column). */
+  seqGridWidth: number;
   trigWidth: number;
+  /** Full stack width for the MIX row. */
+  mixWidth: number;
   logWidth: number;
 }
 
@@ -122,7 +128,7 @@ const RAIL_OUTER = 14;
 
 /**
  * Widths for the split layout: rail row uses full `centerBudget` for the main stack
- * (SEQ + MIX/TRIG). Activity log is rendered **below** the rail row at full terminal width,
+ * (SEQ+TRIG row, then MIX). Activity log is rendered **below** the rail row at full terminal width,
  * so `showLog` does not reduce `stackWidth`. `logWidth` is always 0 (reserved for callers).
  */
 export function computeSplitStackLayout({
@@ -134,18 +140,37 @@ export function computeSplitStackLayout({
   const centerBudget = Math.max(0, termCols - focusRailOuter);
   const stackWidth = centerBudget;
   const logWidth = 0;
-  let mixWidth = stackWidth;
+  if (!showTrig) {
+    return {
+      centerBudget,
+      stackWidth: Math.max(0, stackWidth),
+      seqGridWidth: Math.max(0, stackWidth),
+      trigWidth: 0,
+      mixWidth: Math.max(0, stackWidth),
+      logWidth,
+    };
+  }
+  const MIN_SEQ_WIDTH = 24;
+  const MIN_TRIG_WIDTH = 22;
+  let seqGridWidth = stackWidth;
   let trigWidth = 0;
-  if (showTrig) {
-    trigWidth = Math.round(stackWidth * 0.42);
-    trigWidth = Math.min(Math.max(22, trigWidth), stackWidth - 24);
-    mixWidth = Math.max(22, stackWidth - trigWidth);
+
+  if (stackWidth > MIN_SEQ_WIDTH) {
+    if (stackWidth < MIN_SEQ_WIDTH + MIN_TRIG_WIDTH) {
+      seqGridWidth = MIN_SEQ_WIDTH;
+      trigWidth = stackWidth - seqGridWidth;
+    } else {
+      trigWidth = Math.round(stackWidth * 0.42);
+      trigWidth = Math.min(Math.max(MIN_TRIG_WIDTH, trigWidth), stackWidth - MIN_SEQ_WIDTH);
+      seqGridWidth = stackWidth - trigWidth;
+    }
   }
   return {
     centerBudget,
     stackWidth: Math.max(0, stackWidth),
-    mixWidth: Math.max(0, mixWidth),
+    seqGridWidth: Math.max(0, seqGridWidth),
     trigWidth: Math.max(0, trigWidth),
+    mixWidth: Math.max(0, stackWidth),
     logWidth,
   };
 }
