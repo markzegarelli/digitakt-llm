@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "digitakt-llm"
-version = "0.1.0"
+version = "0.6.0"
 description = "Natural language drum pattern generation for the Elektron Digitakt via USB MIDI"
 readme = "README.md"
 license = { text = "MIT" }
