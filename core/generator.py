@@ -1,13 +1,14 @@
 # core/generator.py
 from __future__ import annotations
 
+import copy
 import functools
 import json
 import re
 import threading
 import time
 import anthropic
-from core.state import AppState, TRACK_NAMES
+from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
 from core.events import EventBus
 from core.logging_config import get_logger
 from core.midi_utils import CC_MAP
@@ -16,6 +17,136 @@ from core.tracing import tracer
 logger = get_logger("generator")
 
 _PRODUCER_NOTES_MAX_LEN = 1200
+
+# Opus output budget: TTFT is not meaningfully improved by lowering max_tokens; a low ceiling
+# truncates JSON (especially 32-step + prob + cc + producer_notes). Scale with pattern length.
+def _opus_max_output_tokens(steps: int) -> int:
+    """Minimum 2048; add headroom for longer grids and optional prob/cc/notes."""
+    return max(2048, 400 + steps * 90)
+
+
+def _serialize_pattern_for_llm(pattern: dict, steps: int) -> str:
+    """JSON snapshot for variation prompts: 8 tracks + prob/gate/cond/step_cc/swing when present."""
+    st = AppState()
+    st.pattern_length = steps
+    norm = st.normalize_pattern_length(copy.deepcopy(pattern))
+    blob: dict = {t: norm[t] for t in TRACK_NAMES}
+    for key in ("prob", "gate", "cond", "step_cc"):
+        v = norm.get(key)
+        if isinstance(v, dict) and v:
+            blob[key] = v
+    sw = norm.get("swing", 0)
+    if isinstance(sw, (int, float)) and sw != 0:
+        blob["swing"] = int(sw)
+    return json.dumps(blob, separators=(",", ":"), default=str)
+
+
+def _parse_ask_response(raw: str) -> tuple[str, bool]:
+    """Split assistant reply body from trailing IMPLEMENTABLE: YES|NO. Fail closed to NO."""
+    raw_stripped = raw.rstrip()
+    lines = raw_stripped.split("\n")
+    implementable = False
+    if lines:
+        last = lines[-1].strip()
+        m = re.match(r"(?i)^IMPLEMENTABLE:\s*(YES|NO)\s*$", last)
+        if m:
+            implementable = m.group(1).upper() == "YES"
+            lines = lines[:-1]
+    answer = "\n".join(lines).strip()
+    return answer, implementable
+
+
+def _coerce_pattern_dict(
+    data: dict, steps: int
+) -> tuple[dict, int | None, dict, str | None] | None:
+    """Validate a pattern object (from JSON text or tool_use input). Returns pattern slice + extras."""
+    if not isinstance(data, dict):
+        return None
+    if not all(k in data for k in TRACK_NAMES):
+        return None
+    if not all(len(data[k]) == steps for k in TRACK_NAMES):
+        return None
+    if not all(
+        isinstance(v, int) and 0 <= v <= 127
+        for k in TRACK_NAMES
+        for v in data[k]
+    ):
+        return None
+    producer_notes: str | None = None
+    if "producer_notes" in data:
+        pn = data["producer_notes"]
+        if not isinstance(pn, str):
+            return None
+        producer_notes = _normalize_producer_notes(pn)
+    if "prob" in data:
+        prob = data["prob"]
+        if not isinstance(prob, dict):
+            return None
+        for track, values in prob.items():
+            if track not in TRACK_NAMES:
+                return None
+            if not isinstance(values, list) or len(values) != steps:
+                return None
+            if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
+                return None
+    if "swing" in data:
+        swing = data["swing"]
+        if not isinstance(swing, (int, float)) or not (0 <= swing <= 100):
+            return None
+
+    raw_bpm = data.get("bpm")
+    bpm = int(raw_bpm) if isinstance(raw_bpm, (int, float)) and 20 <= raw_bpm <= 400 else None
+    pattern = {k: data[k] for k in TRACK_NAMES}
+    if "prob" in data:
+        pattern["prob"] = data["prob"]
+    if "swing" in data:
+        pattern["swing"] = data["swing"]
+
+    cc_changes: dict = {}
+    raw_cc = data.get("cc", {})
+    if isinstance(raw_cc, dict):
+        valid_params = set(CC_MAP.keys()) | {"velocity"}
+        for track, params in raw_cc.items():
+            if track not in TRACK_NAMES or not isinstance(params, dict):
+                continue
+            for param, value in params.items():
+                if param not in valid_params:
+                    continue
+                if not isinstance(value, int) or not (0 <= value <= 127):
+                    continue
+                cc_changes.setdefault(track, {})[param] = value
+
+    return pattern, bpm, cc_changes, producer_notes
+
+
+def _emit_pattern_tool_schema(steps: int) -> dict:
+    """JSON Schema for Anthropic tool: full pattern payload."""
+    step_arr = {
+        "type": "array",
+        "minItems": steps,
+        "maxItems": steps,
+        "items": {"type": "integer", "minimum": 0, "maximum": 127},
+    }
+    track_props = {t: step_arr for t in TRACK_NAMES}
+    return {
+        "name": "emit_pattern",
+        "description": (
+            "Submit the complete drum pattern as structured data. "
+            "Include all eight tracks; use optional prob/swing/cc/producer_notes when relevant."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "bpm": {"type": "integer", "minimum": 20, "maximum": 400},
+                **track_props,
+                "prob": {"type": "object", "additionalProperties": step_arr},
+                "swing": {"type": "integer", "minimum": 0, "maximum": 100},
+                "cc": {"type": "object", "additionalProperties": {"type": "object"}},
+                "producer_notes": {"type": "string", "maxLength": _PRODUCER_NOTES_MAX_LEN},
+            },
+            "required": list(TRACK_NAMES),
+        },
+    }
 
 _TRACK_ALIASES: dict[str, list[str]] = {
     "kick":    ["kick", "bass drum", "bassdrum", "bd"],
@@ -96,6 +227,9 @@ def _compute_generation_summary(
         summary["producer_notes"] = producer_notes
     return summary
 
+
+# Optional cache-friendly conditional style appendix (e.g. 808/909-only blurbs) is intentionally
+# deferred: dynamic system fragments reduce Anthropic prompt-cache hit rate. See LLM prompting plan.
 @functools.lru_cache(maxsize=3)
 def _build_system_prompt(steps: int = 16) -> str:
     return (
@@ -194,7 +328,8 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- Copy the PRESERVE tracks verbatim, step-for-step, from the previous pattern\n"
         "- Only generate new content for the MODIFY tracks\n"
         "- CC changes still apply to any track mentioned in the request\n\n"
-        "IMPORTANT: Output ONLY the JSON object. No text before, no text after, no markdown fences."
+        "IMPORTANT: Call the emit_pattern tool with the full pattern as its arguments. "
+        "If tools cannot be used, output ONLY the JSON object — no text before or after, no markdown fences."
     )
 
 _HELP_SYSTEM_PROMPT = (
@@ -233,7 +368,11 @@ _HELP_SYSTEM_PROMPT = (
     "At the end of each 16-step loop, global CC values are restored automatically.\n\n"
     "SOUND / ARRANGEMENT: TR-808 is long subby kicks and rounder hats; TR-909 is punchy kicks, bright snare, metallic hats — "
     "beat mode encodes these as Digitakt CC + velocity. For modular/Eurorack bass and melody ideas with a beat, use beat mode: "
-    "the JSON may include producer_notes (shown in the UI after generation). This tool only drives Digitakt drums via MIDI."
+    "the JSON may include producer_notes (shown in the UI after generation). This tool only drives Digitakt drums via MIDI.\n\n"
+    "After your answer, add exactly one final line (no blank lines after it):\n"
+    "IMPLEMENTABLE: YES   — only if you described a specific playable drum groove/rhythm/pattern.\n"
+    "IMPLEMENTABLE: NO    — for tool help, general chat, or non-rhythm answers.\n"
+    "Do not add commentary after the IMPLEMENTABLE line."
 )
 
 _CLASSIFY_SYSTEM_PROMPT = (
@@ -319,6 +458,76 @@ class Generator:
         if swing:
             parts.append(f"Swing: {swing}")
 
+        # MIDI note pitch per track (chromatic), default 60
+        pitch_ov = [
+            f"{t}={p}" for t in TRACK_NAMES
+            if (p := self.state.track_pitch.get(t, 60)) != 60
+        ]
+        if pitch_ov:
+            parts.append(f"Track MIDI pitch: {', '.join(pitch_ov)}")
+
+        pat = self.state.current_pattern
+        steps = self.state.pattern_length
+        prob = pat.get("prob") if isinstance(pat.get("prob"), dict) else None
+        if prob:
+            bits: list[str] = []
+            for t in TRACK_NAMES:
+                vals = prob.get(t)
+                if not isinstance(vals, list) or len(vals) != steps:
+                    continue
+                n_var = sum(1 for v in vals if isinstance(v, int) and v < 100)
+                if n_var:
+                    lo = min(v for v in vals if isinstance(v, int))
+                    hi = max(v for v in vals if isinstance(v, int))
+                    bits.append(f"{t}:{n_var} steps<100% min={lo} max={hi}")
+            if bits:
+                parts.append("Prob summary: " + "; ".join(bits[:8]))
+
+        gate = pat.get("gate") if isinstance(pat.get("gate"), dict) else None
+        if gate:
+            gbits: list[str] = []
+            for t in TRACK_NAMES:
+                vals = gate.get(t)
+                if not isinstance(vals, list) or len(vals) != steps:
+                    continue
+                n_non = sum(
+                    1 for v in vals
+                    if isinstance(v, int) and v != DEFAULT_GATE_PCT
+                )
+                if n_non:
+                    gbits.append(f"{t}:{n_non}≠{DEFAULT_GATE_PCT}%")
+            if gbits:
+                parts.append("Gate summary: " + "; ".join(gbits[:8]))
+
+        cond = pat.get("cond") if isinstance(pat.get("cond"), dict) else None
+        if cond:
+            cbits: list[str] = []
+            for t in TRACK_NAMES:
+                vals = cond.get(t)
+                if not isinstance(vals, list) or len(vals) != steps:
+                    continue
+                n_set = sum(1 for v in vals if v is not None and v != "")
+                if n_set:
+                    kinds: dict[str, int] = {}
+                    for v in vals:
+                        if v is None or v == "":
+                            continue
+                        s = str(v)
+                        kinds[s] = kinds.get(s, 0) + 1
+                    desc = ",".join(f"{k}:{c}" for k, c in sorted(kinds.items())[:4])
+                    cbits.append(f"{t}:{n_set}({desc})")
+            if cbits:
+                parts.append("Conditional trigs: " + "; ".join(cbits[:8]))
+
+        if self.state.chain:
+            names = " → ".join(self.state.chain[:12])
+            if len(self.state.chain) > 12:
+                names += " …"
+            parts.append(
+                f"Pattern chain: {names} (auto={self.state.chain_auto}, "
+                f"index={self.state.chain_index})"
+            )
+
         return "\n".join(parts)
 
     def _build_user_prompt(self, prompt: str, variation: bool) -> str:
@@ -326,10 +535,7 @@ class Generator:
 
         if variation and self.state.last_prompt and self.state.current_pattern:
             steps = self.state.pattern_length
-            all_tracks = {
-                k: v for k, v in self.state.current_pattern.items()
-                if isinstance(v, list) and len(v) == steps
-            }
+            pattern_json = _serialize_pattern_for_llm(self.state.current_pattern, steps)
             target_tracks = _detect_target_tracks(prompt)
             if target_tracks:
                 preserve = [t for t in TRACK_NAMES if t not in target_tracks]
@@ -345,7 +551,7 @@ class Generator:
                 f"{constraint}"
                 f"Current state:\n{state_ctx}\n\n"
                 f"Previous prompt: {self.state.last_prompt}\n"
-                f"Previous pattern: {json.dumps(all_tracks)}\n\n"
+                f"Previous pattern: {pattern_json}\n\n"
                 f"Apply this variation: {prompt}"
             )
 
@@ -365,87 +571,50 @@ class Generator:
             data = json.loads(stripped)
         except (json.JSONDecodeError, ValueError):
             return None
-        if not isinstance(data, dict):
-            return None
-        if not all(k in data for k in TRACK_NAMES):
-            return None
-        if not all(len(data[k]) == steps for k in TRACK_NAMES):
-            return None
-        if not all(
-            isinstance(v, int) and 0 <= v <= 127
-            for k in TRACK_NAMES
-            for v in data[k]
-        ):
-            return None
-        producer_notes: str | None = None
-        if "producer_notes" in data:
-            pn = data["producer_notes"]
-            if not isinstance(pn, str):
-                return None
-            producer_notes = _normalize_producer_notes(pn)
-        if "prob" in data:
-            prob = data["prob"]
-            if not isinstance(prob, dict):
-                return None
-            for track, values in prob.items():
-                if track not in TRACK_NAMES:
-                    return None
-                if not isinstance(values, list) or len(values) != steps:
-                    return None
-                if not all(isinstance(v, int) and 0 <= v <= 100 for v in values):
-                    return None
-        if "swing" in data:
-            swing = data["swing"]
-            if not isinstance(swing, (int, float)) or not (0 <= swing <= 100):
-                return None
+        return _coerce_pattern_dict(data, steps)
 
-        raw_bpm = data.get("bpm")
-        bpm = int(raw_bpm) if isinstance(raw_bpm, (int, float)) and 20 <= raw_bpm <= 400 else None
-        pattern = {k: data[k] for k in TRACK_NAMES}
-        if "prob" in data:
-            pattern["prob"] = data["prob"]
-        if "swing" in data:
-            pattern["swing"] = data["swing"]
-
-        cc_changes: dict = {}
-        raw_cc = data.get("cc", {})
-        if isinstance(raw_cc, dict):
-            valid_params = set(CC_MAP.keys()) | {"velocity"}
-            for track, params in raw_cc.items():
-                if track not in TRACK_NAMES or not isinstance(params, dict):
-                    continue
-                for param, value in params.items():
-                    if param not in valid_params:
-                        continue
-                    if not isinstance(value, int) or not (0 <= value <= 127):
-                        continue
-                    cc_changes.setdefault(track, {})[param] = value
-
-        return pattern, bpm, cc_changes, producer_notes
-
-    def _call_api(self, user_prompt: str, retry: bool = False) -> str:
+    def _call_api(self, user_prompt: str, retry: bool = False) -> tuple[str, dict | None]:
+        """Returns (raw_text, tool_input). Prefer tool_input when set."""
+        steps = self.state.pattern_length
         content = user_prompt
         if retry:
-            content += "\n\nRemember: output ONLY the JSON object, no other text. All 8 tracks are required: kick, snare, tom, clap, bell, hihat, openhat, cymbal."
+            content += (
+                "\n\nRemember: call emit_pattern with the full pattern, or output ONLY the JSON object. "
+                "All 8 tracks are required: kick, snare, tom, clap, bell, hihat, openhat, cymbal."
+            )
+        tool_def = _emit_pattern_tool_schema(steps)
+        max_out = _opus_max_output_tokens(steps)
         with tracer.span("generate" if not retry else "generate_retry", prompt=content) as span:
             response = self._client.messages.create(
                 model="claude-opus-4-6",
-                max_tokens=2048,
+                max_tokens=max_out,
                 system=[{
                     "type": "text",
-                    "text": _build_system_prompt(self.state.pattern_length),
+                    "text": _build_system_prompt(steps),
                     "cache_control": {"type": "ephemeral"},
                 }],
                 messages=[{"role": "user", "content": content}],
+                tools=[tool_def],
+                tool_choice={"type": "tool", "name": "emit_pattern"},
             )
-            text = response.content[0].text
-            span.set_response(text)
+            raw_text = ""
+            tool_input: dict | None = None
+            for block in response.content:
+                btype = getattr(block, "type", None)
+                if btype == "tool_use" and getattr(block, "name", None) == "emit_pattern":
+                    inp = getattr(block, "input", None)
+                    if isinstance(inp, dict):
+                        tool_input = inp
+                elif hasattr(block, "text"):
+                    raw_text += block.text
+            trace_payload = json.dumps(tool_input, default=str) if tool_input else raw_text
+            span.set_response(trace_payload[:8000] if trace_payload else "")
             span.set_status("ok")
         logger.info(
             "API call completed",
             extra={"latency_ms": span.latency_ms, "status": "ok", "prompt": content[:200]},
         )
-        return text
+        return raw_text, tool_input
 
     def _run(self, prompt: str, variation: bool = False) -> None:
         self.bus.emit("generation_started", {"prompt": prompt})
@@ -454,8 +623,12 @@ class Generator:
         t0 = time.monotonic()
 
         try:
-            text = self._call_api(user_prompt)
-            result = self._parse_pattern(text, steps=self.state.pattern_length)
+            text, tool_input = self._call_api(user_prompt)
+            steps = self.state.pattern_length
+            if tool_input is not None:
+                result = _coerce_pattern_dict(tool_input, steps)
+            else:
+                result = self._parse_pattern(text, steps=steps)
 
             if result is None:
                 # Log the invalid JSON response (truncated for safety)
@@ -463,19 +636,22 @@ class Generator:
                     "Invalid JSON from model, retrying",
                     extra={
                         "prompt": prompt,
-                        "raw_response": text[:500],
+                        "raw_response": (text[:500] if text else json.dumps(tool_input)[:500]),
                         "error_type": "json_parse_failed",
                     },
                 )
-                text = self._call_api(user_prompt, retry=True)
-                result = self._parse_pattern(text, steps=self.state.pattern_length)
+                text, tool_input = self._call_api(user_prompt, retry=True)
+                if tool_input is not None:
+                    result = _coerce_pattern_dict(tool_input, steps)
+                else:
+                    result = self._parse_pattern(text, steps=steps)
 
             if result is None:
                 logger.error(
                     "Invalid JSON after retry — generation failed",
                     extra={
                         "prompt": prompt,
-                        "raw_response": text[:500],
+                        "raw_response": (text[:500] if text else json.dumps(tool_input)[:500]),
                         "error_type": "json_parse_failed_after_retry",
                     },
                 )
@@ -535,25 +711,25 @@ class Generator:
         if len(self.conversation_history) > _CONVERSATION_HISTORY_MAX * 2:
             self.conversation_history = self.conversation_history[-_CONVERSATION_HISTORY_MAX * 2:]
 
-    def answer_question(self, question: str) -> str:
-        """Answer a question about the tool. Returns plain text.
-        Maintains conversation history shared with beat generation."""
-        # Include recent conversation context
+    def _ask_llm_raw(self, question: str) -> str:
+        """Single Haiku completion for /ask (plain text + IMPLEMENTABLE line)."""
         messages = list(self.conversation_history[-_CONVERSATION_HISTORY_MAX:])
         messages.append({"role": "user", "content": question})
-
         response = self._client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=256,
+            max_tokens=320,
             system=_HELP_SYSTEM_PROMPT,
             messages=messages,
         )
-        answer = _strip_markdown(response.content[0].text)
+        parts: list[str] = []
+        for block in response.content:
+            if hasattr(block, "text"):
+                parts.append(block.text)
+        return "".join(parts).strip()
 
-        self._add_to_history("user", question)
-        self._add_to_history("assistant", answer)
-
-        return answer
+    def answer_question(self, question: str) -> str:
+        """Answer a question about the tool. Returns plain text."""
+        return self.answer_question_with_classify(question)[0]
 
     def classify_as_implementable(self, answer: str) -> bool:
         """Lightweight classifier: does this answer describe a programmable drum pattern?
@@ -571,7 +747,9 @@ class Generator:
             return False
 
     def answer_question_with_classify(self, question: str) -> tuple[str, bool]:
-        """Answer a question and classify whether the response is an implementable pattern."""
-        answer = self.answer_question(question)
-        is_implementable = self.classify_as_implementable(answer)
+        """Answer a question; implementability from trailing IMPLEMENTABLE line (one API call)."""
+        raw = self._ask_llm_raw(question)
+        answer, is_implementable = _parse_ask_response(_strip_markdown(raw))
+        self._add_to_history("user", question)
+        self._add_to_history("assistant", answer)
         return answer, is_implementable

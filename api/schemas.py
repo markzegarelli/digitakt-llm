@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field, field_validator
 
 class GenerateRequest(BaseModel):
     prompt: str
+    variation: bool | None = Field(
+        default=None,
+        description="None: vary when last_prompt is set (legacy). False: fresh generation. True: force variation.",
+    )
 
     @field_validator("prompt")
     @classmethod

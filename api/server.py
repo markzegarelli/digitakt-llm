@@ -199,7 +199,10 @@ def get_state():
 
 @app.post("/generate", status_code=202)
 def post_generate(req: GenerateRequest):
-    variation = _state.last_prompt is not None
+    if req.variation is not None:
+        variation = req.variation
+    else:
+        variation = _state.last_prompt is not None
     _generator.generate(req.prompt, variation=variation)
     return {"status": "queued"}
 

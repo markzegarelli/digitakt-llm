@@ -54,6 +54,7 @@ uv run digitakt
 - `/clear` — clear activity log
 - `/mode [chat|beat]` — switch input mode
 - `/ask <question>` — ask Claude (works in any mode)
+- `/fresh <prompt>` — generate a new pattern without prior-pattern variation context (same as `POST /generate` with `"variation": false`)
 - `/gen` — generate a beat from the last `/ask` response
 
 Keyboard shortcuts (Pattern panel):
@@ -134,7 +135,7 @@ When closing a feature branch, invoke the `superpowers:finishing-a-development-b
 FastAPI starts automatically on `http://localhost:8000`. WebSocket at `/ws` streams all internal events. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full event list.
 
 Key endpoints:
-- `POST /generate` — send a prompt to Claude
+- `POST /generate` — send a prompt to Claude (`{"prompt":"...","variation":false}` optional; omit `variation` to keep legacy behavior: vary when `last_prompt` is set)
 - `POST /randbeat` — generate a random techno beat (BPM 128-160, CC randomized)
 - `POST /bpm`, `POST /swing`, `POST /prob`, `POST /prob-track`, `POST /vel`, `POST /vel-track`
 - `POST /random` — randomize velocity or prob for a track
