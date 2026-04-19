@@ -74,7 +74,7 @@ export function CCPanel({
   }));
 
   const hintText = stepMode
-    ? "←→: step  ↑↓: ±1  Shift+↑↓: ±10  0-9: type value  ⌫: del/global  Enter: confirm  Esc: exit"
+    ? "←→: step  Shift+←→: ±10 value  ↑↓: ±1  Shift+↑↓: ±10  0-9: type  ⌫: del/global  Enter: confirm  Esc: exit"
     : "[ ]: track  ↑↓: param  ←→: ±1  Shift+←→: ±10  Enter: step mode";
 
   const borderCol = isFocused ? theme.borderActive : theme.border;

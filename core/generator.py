@@ -31,7 +31,7 @@ def _serialize_pattern_for_llm(pattern: dict, steps: int) -> str:
     st.pattern_length = steps
     norm = st.normalize_pattern_length(copy.deepcopy(pattern))
     blob: dict = {t: norm[t] for t in TRACK_NAMES}
-    for key in ("prob", "gate", "cond", "step_cc"):
+    for key in ("prob", "gate", "cond", "note", "step_cc"):
         v = norm.get(key)
         if isinstance(v, dict) and v:
             blob[key] = v

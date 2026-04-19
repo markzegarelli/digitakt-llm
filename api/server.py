@@ -28,6 +28,7 @@ from api.schemas import (
     SavePatternRequest, PatternEntry,
     GateRequest, GateTrackRequest, GateResponse,
     PitchRequest, PitchResponse,
+    NoteRequest, NoteResponse,
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
     ChainRequest,
@@ -37,6 +38,7 @@ from cli.commands import (
     apply_random_prob, generate_random_beat, apply_cc_step,
     apply_gate_step, apply_gate_track, apply_cond_step,
     apply_prob_track, apply_vel_track,
+    apply_note_step,
 )
 from core.events import EventBus
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
@@ -81,7 +83,7 @@ _ALL_EVENTS = [
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
-    "gate_changed", "pitch_changed", "cond_changed", "state_reset",
+    "gate_changed", "pitch_changed", "note_changed", "cond_changed", "state_reset",
     "ask_complete", "pattern_loaded", "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
 ]
 
@@ -439,6 +441,20 @@ async def set_pitch(req: PitchRequest):
     return PitchResponse(track=req.track, value=req.value)
 
 
+@app.post("/note", response_model=NoteResponse)
+def set_note(req: NoteRequest):
+    if req.track not in TRACK_NAMES:
+        raise HTTPException(status_code=422, detail=f"Unknown track: {req.track}")
+    _validate_step_in_pattern(req.step)
+    step_0 = req.step - 1
+    _mutator.apply(
+        lambda p: apply_note_step(p, req.track, step_0, req.value),
+        event="note_changed",
+        payload={"track": req.track, "step": req.step, "value": req.value},
+    )
+    return NoteResponse(track=req.track, step=req.step, value=req.value)
+
+
 @app.post("/cond", response_model=CondResponse)
 async def set_cond(req: CondRequest):
     if req.track not in TRACK_NAMES:
@@ -519,6 +535,15 @@ async def save_pattern(name: str, req: SavePatternRequest = SavePatternRequest()
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f)
     return {"saved": name}
+
+
+@app.delete("/patterns/{name}")
+def delete_pattern(name: str):
+    path = _resolve_pattern_path(name)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Pattern '{name}' not found")
+    path.unlink()
+    return {"deleted": name}
 
 
 @app.post("/fill/{name}")

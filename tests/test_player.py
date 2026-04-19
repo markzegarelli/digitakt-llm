@@ -387,6 +387,29 @@ def test_player_uses_track_pitch():
     assert found, "Expected note_on with pitch 48 for kick"
 
 
+def test_player_per_step_note_overrides_track_pitch():
+    """Per-step pattern note overrides track_pitch for MIDI note_on."""
+    player, state, bus, port = _make_player()
+    state.bpm = 9000.0
+    state.track_pitch["kick"] = 48
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["note"] = {"kick": [50] + [None] * 15}
+    state.current_pattern = pattern
+
+    player.start()
+    time.sleep(0.1)
+    player.stop()
+
+    found = False
+    for c in port.send.call_args_list:
+        msg = c[0][0]
+        if hasattr(msg, "type") and msg.type == "note_on" and msg.channel == 0 and msg.note == 50 and msg.velocity > 0:
+            found = True
+            break
+    assert found, "Expected note_on with per-step pitch 50 for kick"
+
+
 def test_start_with_no_port_runs_local_preview_without_midi():
     state = AppState()
     state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}

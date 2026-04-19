@@ -76,7 +76,12 @@ class Player:
         self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
         for track in TRACK_NAMES:
-            note = self.state.track_pitch.get(track, midi_utils.NOTE_MAP.get(track, 60))
+            base_note = self.state.track_pitch.get(track, midi_utils.NOTE_MAP.get(track, 60))
+            note_row = pattern.get("note", {}).get(track) if isinstance(pattern.get("note"), dict) else None
+            step_note = None
+            if isinstance(note_row, list) and 0 <= step < len(note_row):
+                step_note = note_row[step]
+            note = base_note if step_note is None else int(step_note)
             if note is None or track not in pattern:
                 continue
             if self.state.track_muted.get(track, False):

@@ -80,6 +80,10 @@ def test_parity_pitch_valid(client):
     assert client.post("/pitch", json={"track": "kick", "value": 48}).status_code == 200
 
 
+def test_parity_note_valid(client):
+    assert client.post("/note", json={"track": "kick", "step": 1, "value": 40}).status_code == 200
+
+
 def test_parity_cond_valid(client):
     assert client.post("/cond", json={"track": "kick", "step": 1, "value": "1:2"}).status_code == 200
 

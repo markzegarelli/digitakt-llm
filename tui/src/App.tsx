@@ -16,7 +16,12 @@ import {
   parseChainCommand,
   validateTrackValueArity,
 } from "./commandParsing.js";
-import type { FocusPanel, TrackName, CCParam } from "./types.js";
+import {
+  canFieldUseTrackWide,
+  shouldClearNoteOverrideOnCommit,
+  shouldClearNoteOverrideOnDelete,
+} from "./trigEditing.js";
+import type { FocusPanel, TrackName, CCParam, PatternModalState } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
 
@@ -59,6 +64,7 @@ export function App({ baseUrl }: AppProps) {
   const [implementableHint, setImplementableHint] = useState(false);
   const [barCount, setBarCount] = useState(0);
   const acActiveRef = useRef(false);
+  const [patternModal, setPatternModal] = useState<PatternModalState | null>(null);
 
   const [patternStepEdit, setPatternStepEdit] = useState(false);
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
@@ -81,7 +87,7 @@ export function App({ baseUrl }: AppProps) {
   }, [ccTrack]);
 
   useEffect(() => {
-    if (trigField === 4) setTrigTrackWide(false);
+    if (!canFieldUseTrackWide(trigField)) setTrigTrackWide(false);
   }, [trigField]);
 
   useEffect(() => {
@@ -126,6 +132,67 @@ export function App({ baseUrl }: AppProps) {
   // causes the screen to stay blank because React produces the same output as
   // the previous render (panel already dismissed), Ink sees no diff, and skips
   // writing to stdout — leaving a blank screen until the next real state change.
+
+  const fetchPatternNamesAndOpenPicker = useCallback((intent: "load" | "delete") => {
+    fetch(`${baseUrl}/patterns`)
+      .then(async (r) => {
+        if (!r.ok) {
+          const b = await r.json().catch(() => ({})) as { detail?: unknown };
+          const d = b.detail;
+          actions.addLog(
+            typeof d === "string" ? `✗ ${d}` : `✗ /patterns: HTTP ${r.status}`,
+          );
+          return null as { patterns?: Array<{ name: string }> } | null;
+        }
+        return r.json() as Promise<{ patterns?: Array<{ name: string }> }>;
+      })
+      .then((d) => {
+        if (!d) return;
+        const names = (Array.isArray(d.patterns) ? d.patterns : []).map((p) => p.name);
+        if (names.length === 0) {
+          actions.addLog("No saved patterns.");
+          return;
+        }
+        setPatternModal({ phase: "pick", intent, names, idx: 0 });
+        setFocus("prompt");
+      })
+      .catch((err: Error) => actions.addLog(`✗ /patterns: ${err.message}`));
+  }, [actions, baseUrl]);
+
+  const runPatternLoadByName = useCallback((name: string) => {
+    setShowLog(true);
+    fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`)
+      .then(async (r) => {
+        if (!r.ok) {
+          const b = await r.json().catch(() => ({})) as { detail?: unknown };
+          const d = b.detail;
+          actions.addLog(
+            typeof d === "string" ? `✗ ${d}` : `Pattern "${name}" not found`,
+          );
+          return;
+        }
+        actions.addLog(
+          state.is_playing ? `Queued "${name}" for next bar` : `Loaded "${name}"`,
+        );
+      })
+      .catch((err: Error) => actions.addLog(`✗ /load: ${err.message}`));
+  }, [actions, baseUrl, setShowLog, state.is_playing]);
+
+  const runPatternDeleteByName = useCallback((name: string) => {
+    fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`, { method: "DELETE" })
+      .then(async (r) => {
+        if (!r.ok) {
+          const b = await r.json().catch(() => ({})) as { detail?: unknown };
+          const d = b.detail;
+          actions.addLog(
+            typeof d === "string" ? `✗ ${d}` : `✗ Could not delete "${name}"`,
+          );
+          return;
+        }
+        actions.addLog(`Deleted saved pattern "${name}".`);
+      })
+      .catch((err: Error) => actions.addLog(`✗ /delete: ${err.message}`));
+  }, [actions, baseUrl]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -260,23 +327,21 @@ export function App({ baseUrl }: AppProps) {
       }
       case "load": {
         const name = parts[1];
-        if (!name) break;
-        setShowLog(true);
-        fetch(`${baseUrl}/patterns/${encodeURIComponent(name)}`)
-          .then(async (r) => {
-            if (!r.ok) {
-              const b = await r.json().catch(() => ({})) as { detail?: unknown };
-              const d = b.detail;
-              actions.addLog(
-                typeof d === "string" ? `✗ ${d}` : `Pattern "${name}" not found`,
-              );
-              return;
-            }
-            actions.addLog(
-              state.is_playing ? `Queued "${name}" for next bar` : `Loaded "${name}"`,
-            );
-          })
-          .catch((err: Error) => actions.addLog(`✗ /load: ${err.message}`));
+        if (!name) {
+          fetchPatternNamesAndOpenPicker("load");
+          break;
+        }
+        runPatternLoadByName(name);
+        break;
+      }
+      case "delete": {
+        const name = parts[1];
+        if (!name) {
+          fetchPatternNamesAndOpenPicker("delete");
+          break;
+        }
+        setPatternModal({ phase: "delete-confirm", name });
+        setFocus("prompt");
         break;
       }
       case "fill":
@@ -368,7 +433,20 @@ export function App({ baseUrl }: AppProps) {
           } else { setImplementableHint(false); actions.generate(stripped.trim()); }
         }
     }
-  }, [actions, baseUrl, exit, inputMode, setShowLog, state.is_playing, state.track_muted, state.chain, state.chain_index, state.chain_auto]);
+  }, [
+    actions,
+    baseUrl,
+    exit,
+    fetchPatternNamesAndOpenPicker,
+    inputMode,
+    runPatternLoadByName,
+    setShowLog,
+    state.is_playing,
+    state.track_muted,
+    state.chain,
+    state.chain_index,
+    state.chain_auto,
+  ]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
@@ -434,11 +512,11 @@ export function App({ baseUrl }: AppProps) {
         } else if (patternStepEdit) {
           if (!showTrigPanel) {
             setShowTrigPanel(true);
-            setTrigTrackWide(!!shiftT);
+            setTrigTrackWide(!!shiftT && canFieldUseTrackWide(trigField));
             return;
           }
           if (shiftT) {
-            if (trigField !== 4) setTrigTrackWide((w) => !w);
+            if (canFieldUseTrackWide(trigField)) setTrigTrackWide((w) => !w);
             return;
           }
           setShowTrigPanel(false);
@@ -475,13 +553,19 @@ export function App({ baseUrl }: AppProps) {
         const stepIdx = patternSelectedStep;
         const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
         const vel = state.current_pattern[track]?.[stepIdx] ?? 0;
-        const pitch = state.track_pitch[track] ?? 60;
+        const noteOv = state.pattern_trig.note[track]?.[stepIdx];
+        const resolvedPitch = noteOv != null ? noteOv : (state.track_pitch[track] ?? 60);
         const gate = state.pattern_trig.gate[track]?.[stepIdx] ?? DEFAULT_GATE_PCT;
         const cond = state.pattern_trig.cond[track]?.[stepIdx] ?? null;
         const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
 
         const commitTrigBuffer = (buf: string) => {
-          if (buf.length === 0 || trigField === 4) return;
+          if (trigField === 4) return;
+          if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
+            actions.setNote(track, stepIdx + 1, null).catch(() => {});
+            return;
+          }
+          if (buf.length === 0) return;
           const raw = parseInt(buf, 10);
           if (Number.isNaN(raw)) return;
           if (trigField === 0) {
@@ -497,7 +581,7 @@ export function App({ baseUrl }: AppProps) {
               actions.setVel(track, stepIdx + 1, clamp(raw, 0, 127)).catch(err);
             }
           } else if (trigField === 2) {
-            actions.setPitch(track, clamp(raw, 0, 127)).catch(() => {});
+            actions.setNote(track, stepIdx + 1, clamp(raw, 0, 127)).catch(() => {});
           } else if (trigField === 3) {
             if (trigTrackWide) {
               actions.setGateTrack(track, clamp(raw, 0, 100)).catch(err);
@@ -561,7 +645,7 @@ export function App({ baseUrl }: AppProps) {
               actions.setVel(track, stepIdx + 1, clamp(vel + delta, 0, 127)).catch(err);
             }
           } else if (trigField === 2) {
-            actions.setPitch(track, clamp(pitch + delta, 0, 127)).catch(() => {});
+            actions.setNote(track, stepIdx + 1, clamp(resolvedPitch + delta, 0, 127)).catch(() => {});
           } else if (trigField === 3) {
             if (trigTrackWide) {
               actions.setGateTrack(track, clamp(gate + delta, 0, 100)).catch(err);
@@ -575,6 +659,8 @@ export function App({ baseUrl }: AppProps) {
         if (trigField !== 4 && (key.backspace || key.delete)) {
           if (trigInputBuffer.length > 0) {
             setTrigInputBuffer((b) => b.slice(0, -1));
+          } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
+            actions.setNote(track, stepIdx + 1, null).catch(() => {});
           }
           return;
         }
@@ -683,6 +769,17 @@ export function App({ baseUrl }: AppProps) {
         }
 
         if (key.leftArrow || key.rightArrow) {
+          if (key.shift) {
+            commitBuffer(ccStepInputBuffer);
+            setCCStepInputBuffer("");
+            if (track && param) {
+              const stepOverrides = state.step_cc?.[track]?.[param];
+              const current = stepOverrides?.[ccSelectedStep] ?? state.track_cc[track][param];
+              const delta = (key.rightArrow ? 1 : -1) * 10;
+              actions.setCCStep(track, param, ccSelectedStep + 1, clamp(current + delta, 0, 127));
+            }
+            return;
+          }
           commitBuffer(ccStepInputBuffer);
           setCCStepInputBuffer("");
           setCCSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, Math.max(0, state.pattern_length - 1)));
@@ -832,6 +929,33 @@ export function App({ baseUrl }: AppProps) {
             generationStatus={state.generation_status}
             generationError={state.generation_error}
             onCommand={handleCommand}
+            patternModal={patternModal}
+            onPatternModalClose={() => setPatternModal(null)}
+            onPatternModalNav={(dir) => {
+              setPatternModal((m) => {
+                if (!m || m.phase !== "pick") return m;
+                const ni = clamp(m.idx + dir, 0, m.names.length - 1);
+                return { ...m, idx: ni };
+              });
+            }}
+            onPatternModalPick={() => {
+              setPatternModal((m) => {
+                if (!m || m.phase !== "pick") return m;
+                if (m.intent === "load") {
+                  queueMicrotask(() => runPatternLoadByName(m.names[m.idx]!));
+                  return null;
+                }
+                return { phase: "delete-confirm", name: m.names[m.idx]! };
+              });
+            }}
+            onDeleteConfirmYes={() => {
+              setPatternModal((m) => {
+                if (!m || m.phase !== "delete-confirm") return m;
+                const n = m.name;
+                queueMicrotask(() => runPatternDeleteByName(n));
+                return null;
+              });
+            }}
             showHelp={showHelp}
             onClearHelp={() => {
               setShowHelp(false);
@@ -862,7 +986,11 @@ export function App({ baseUrl }: AppProps) {
             stepIndex={patternSelectedStep}
             prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
             velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
-            pitch={state.track_pitch[TRACK_NAMES[patternTrack] as TrackName] ?? 60}
+            pitch={(() => {
+              const tr = TRACK_NAMES[patternTrack] as TrackName;
+              const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+              return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+            })()}
             gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
             cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
             selectedField={trigField}

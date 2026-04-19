@@ -39,7 +39,8 @@ uv run digitakt
 - `/cc <track> <param> <value>` — global CC control (0–127)
 - `/cc-step <track> <param> <step> <v>` — per-step CC override (-1 to clear)
 - `/save <name> [#tag1 #tag2]` — save pattern with optional tags
-- `/load <name>` — queue a saved pattern for the next loop
+- `/load [name]` — without a name: open an interactive list (↑↓ Enter Esc); with a name: queue that saved pattern for the next loop (or load immediately when stopped)
+- `/delete [name]` — without a name: pick a pattern to delete (↑↓ Enter then Y/N); with a name: confirm deletion (Y/N)
 - `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
 - `/chain <p1> <p2> ... [--auto]` — define a pattern chain (setlist), optional auto-advance each bar
 - `/chain next` — queue next chain candidate (does not switch yet)
@@ -68,7 +69,7 @@ Keyboard shortcuts (Pattern panel):
 - `Tab` (in SEQ step edit) — toggle TRIG side panel (same as plain **`t`** when TRIG is closed; **`t`** again closes TRIG when it is open)
 - `[` / `]` (SEQ step edit) — move selected step left/right (with or without TRIG open)
 - `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
-- `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields)
+- `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields). **Note** row: per-step MIDI note only (does not change track-wide `/pitch`); other tracks’ steps are unchanged.
 - **`t`** (SEQ step edit) — open TRIG side panel if closed; **close** TRIG if it is already open
 - **`Shift+t`** (SEQ focused, **not** in step edit) — enter step edit, open TRIG, and turn **ALL** (track-wide) on; selected step follows the **playhead** when playing, otherwise step 1
 - **`Shift+t`** (SEQ step edit, TRIG open, not on condition row) — toggle **track-wide** (ALL) for probability, velocity, and gate; with TRIG **closed** in step edit, **`Shift+t`** opens TRIG **and** turns track-wide on. Note/pitch stays per-track; condition stays per-step only
@@ -142,7 +143,8 @@ Key endpoints:
 - `POST /random` — randomize velocity or prob for a track
 - `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
-- `GET/POST /patterns/{name}` — save/load patterns
+- `GET/POST /patterns/{name}` — save/load patterns; `DELETE /patterns/{name}` — remove a save
+- `POST /note` — per-step MIDI note (`track`, `step`, `value` 0–127 or `null` to inherit `track_pitch`)
 - `POST /length` — set pattern step count (8, 16, 32)
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)

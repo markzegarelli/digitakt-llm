@@ -15,21 +15,29 @@ export interface CCParamDef {
 
 export type CCParam = string;
 
-/** Per-step trig metadata (mirrors server `current_pattern` prob/gate/cond maps). */
+/** Per-step trig metadata (mirrors server `current_pattern` prob/gate/cond/note maps). */
 export interface PatternTrigState {
   prob: Record<TrackName, number[]>;
   gate: Record<TrackName, number[]>;
   cond: Record<TrackName, (string | null)[]>;
+  /** null = inherit `track_pitch` for that step */
+  note: Record<TrackName, (number | null)[]>;
 }
+
+export type PatternModalState =
+  | { phase: "pick"; intent: "load" | "delete"; names: string[]; idx: number }
+  | { phase: "delete-confirm"; name: string };
 
 export function emptyTrigState(length: number): PatternTrigState {
   const row = () => new Array(length).fill(null) as (string | null)[];
   const probRow = () => new Array(length).fill(100);
   const gateRow = () => new Array(length).fill(DEFAULT_GATE_PCT);
+  const noteRow = () => new Array(length).fill(null) as (number | null)[];
   return {
     prob: Object.fromEntries(TRACK_NAMES.map((t) => [t, probRow()])) as Record<TrackName, number[]>,
     gate: Object.fromEntries(TRACK_NAMES.map((t) => [t, gateRow()])) as Record<TrackName, number[]>,
     cond: Object.fromEntries(TRACK_NAMES.map((t) => [t, row()])) as Record<TrackName, (string | null)[]>,
+    note: Object.fromEntries(TRACK_NAMES.map((t) => [t, noteRow()])) as Record<TrackName, (number | null)[]>,
   };
 }
 
@@ -63,6 +71,21 @@ export function parsePatternFromApi(
 
   mergeNumMap("prob", 100);
   mergeNumMap("gate", DEFAULT_GATE_PCT);
+
+  const noteBlock = raw?.["note"];
+  if (noteBlock && typeof noteBlock === "object") {
+    for (const t of TRACK_NAMES) {
+      const arr = (noteBlock as Record<string, unknown>)[t];
+      if (!Array.isArray(arr)) continue;
+      const cells = arr.slice(0, patternLength).map((x) => {
+        if (x === null || x === undefined) return null;
+        if (typeof x === "number" && x >= 0 && x <= 127) return x;
+        return null;
+      }) as (number | null)[];
+      while (cells.length < patternLength) cells.push(null);
+      trig.note[t] = cells.slice(0, patternLength);
+    }
+  }
 
   const condBlock = raw?.["cond"];
   if (condBlock && typeof condBlock === "object") {
