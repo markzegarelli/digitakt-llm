@@ -8,12 +8,9 @@ const HELP_LINES = [
   "  bpm <n>                              set BPM (20–400)",
   "  swing <n>                            set swing 0–100",
   "  length [8|16|32]                     set pattern step count",
-  "  prob <track> <step> <value>          step probability 0–100 (1-indexed)",
-  "  prob-track <track> <value>           same probability on every step for a track",
-  "  vel <track> <step> <value>           step velocity 0–127 (1-indexed)",
-  "  vel-track <track> <value>            same step velocity on every step for a track",
-  "  gate <track> <step> <0-100>          note gate length (% of step duration)",
-  "  gate-track <track> <0-100>           same gate on every step for a track",
+  "  prob <track> <value>                 set probability 0–100 on every step for a track",
+  "  vel <track> <value>                  set velocity 0–127 on every step for a track",
+  "  gate <track> <0-100>                 set gate length on every step for a track",
   "  pitch <track> <0-127>                MIDI note number for track",
   "  cond <track> <step> <1:2|not:2|fill|clear>  conditional trig",
   "  random <track|all> <vel|prob> [lo-hi]  randomize",
@@ -25,10 +22,10 @@ const HELP_LINES = [
   "  patterns [#tag]                      list saved patterns (filter by tag)",
   "  fill <name>                          one-shot fill (plays once, reverts)",
   "  chain <p1> <p2> ... [--auto]         define setlist",
-  "  chain-next                           queue next pattern in chain",
-  "  chain-fire                           arm queued chain pattern for next 1",
-  "  chain-status                         show chain position",
-  "  chain-clear                          clear chain state",
+  "  chain next                           queue next pattern in chain",
+  "  chain fire                           arm queued chain pattern for next 1",
+  "  chain status                         show chain position",
+  "  chain clear                          clear chain state",
   "  log                                  toggle activity log",
   "  new                                  reset to empty pattern",
   "  undo                                 revert to previous pattern",
@@ -94,11 +91,11 @@ const HELP_LINES = [
 
 // All slash commands for autocomplete
 const COMMANDS = [
-  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "fresh", "gate", "gate-track",
+  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "fresh", "gate",
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
-  "new", "patterns", "pitch", "play", "prob", "prob-track", "quit", "random",
-  "randbeat", "save", "stop", "swing", "undo", "vel", "vel-track",
-  "chain", "chain-next", "chain-fire", "chain-status", "chain-clear", "next", "vary", "read",
+  "new", "patterns", "pitch", "play", "prob", "quit", "random",
+  "randbeat", "save", "stop", "swing", "undo", "vel",
+  "chain", "next", "vary", "read",
 ];
 
 /** Legend blocks below HELP_LINES (each counts as one scroll row). */

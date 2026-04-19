@@ -28,9 +28,9 @@ uv run digitakt
 - `/bpm <n>` — set tempo (20–400)
 - `/swing <n>` — set swing amount (0–100)
 - `/length [8|16|32]` — set pattern step count
-- `/prob <track> <step> <value>` — step probability 0–100
-- `/vel <track> <step> <value>` — step velocity 0–127
-- `/gate <track> <step> <0-100>` — set note gate length (% of step duration before note_off)
+- `/prob <track> <value>` — set probability 0–100 on every step for a track (per-step: TRIG panel)
+- `/vel <track> <value>` — set velocity 0–127 on every step for a track (per-step: TRIG panel)
+- `/gate <track> <0-100>` — set gate length on every step for a track (per-step: TRIG panel)
 - `/pitch <track> <0-127>` — set MIDI note number for track (chromatic mode)
 - `/cond <track> <step> <1:2|not:2|fill|clear>` — set/clear conditional trig on a step
 - `/random [track|all] [vel|prob] [lo-hi]` — randomize velocity or probability
@@ -42,10 +42,10 @@ uv run digitakt
 - `/load <name>` — queue a saved pattern for the next loop
 - `/fill <name>` — queue saved pattern as one-shot fill (plays once, reverts)
 - `/chain <p1> <p2> ... [--auto]` — define a pattern chain (setlist), optional auto-advance each bar
-- `/chain-next` — queue next chain candidate (does not switch yet)
-- `/chain-fire` — arm queued chain change to land on next bar downbeat (next "1")
-- `/chain-status` — show chain position, queued slot, and armed state
-- `/chain-clear` — clear chain state
+- `/chain next` — queue next chain candidate (does not switch yet)
+- `/chain fire` — arm queued chain change to land on next bar downbeat (next "1")
+- `/chain status` — show chain position, queued slot, and armed state
+- `/chain clear` — clear chain state
 - `/patterns [#tag]` — list saved patterns, optionally filtered by tag
 - `/new` — reset to empty pattern
 - `/undo` — revert to previous pattern
@@ -61,8 +61,8 @@ Keyboard shortcuts (Pattern panel):
 - `m` — immediate mute toggle on selected track
 - `q` — stage selected track for queued mute (toggle; **MQ** badges on SEQ/MIX: `Q` = queued, `M` = muted)
 - `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
-- `n` — queue next chain candidate (same as `/chain-next`)
-- `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain-fire`)
+- `n` — queue next chain candidate (same as `/chain next`)
+- `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain fire`)
 - `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
 - `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
 - `Tab` (in SEQ step edit) — toggle TRIG side panel (same as plain **`t`** when TRIG is closed; **`t`** again closes TRIG when it is open)
