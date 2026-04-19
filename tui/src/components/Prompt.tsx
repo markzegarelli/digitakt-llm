@@ -62,7 +62,7 @@ const HELP_LINES = [
   "CC / MIX panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "  Value bar: █ filled / ░ empty (0–127), width scales with terminal size",
   "",
-  "── SEQ step grid (blocks + ruler) ────────────────────────────",
+  "── SEQ step grid (dots + ruler) ──────────────────────────────",
   "  Enter (in SEQ)                       toggle SEQ step edit mode",
   "  Space (SEQ step edit)                toggle selected step on/off",
   "  ←/→ or [ / ] (SEQ step edit)         move selected step",
@@ -511,9 +511,9 @@ export function Prompt({
         rows.push(
           <Box key={`h-${ri}`}>
             <Text>{"  "}</Text>
-            <Text color={theme.textFaint}>{"\u00B7 "}</Text><Text color={theme.text}>{"vel 0   "}</Text>
-            <Text color={theme.accentSubtle}>{"\u2591\u2592\u2593\u2588 "}</Text><Text color={theme.text}>{"vel tiers"}</Text>
-            <Text color={theme.textFaint}>{"   (prob 100%)"}</Text>
+            <Text color={theme.textFaint}>{"\u00B7 "}</Text><Text color={theme.text}>{"off  "}</Text>
+            <Text color={theme.accentMuted}>{"\u25CB "}</Text><Text color={theme.text}>{"vel low  "}</Text>
+            <Text color={theme.accent}>{"\u25CF "}</Text><Text color={theme.text}>{"vel high"}</Text>
           </Box>,
         );
       } else if (leg === 1) {
@@ -530,9 +530,10 @@ export function Prompt({
         rows.push(
           <Box key={`h-${ri}`}>
             <Text>{"  "}</Text>
-            <Text color={theme.textDim}>{"\u2591\u2588 "}</Text><Text color={theme.text}>{"muted: dimmer blocks   "}</Text>
-            <Text color={theme.accent}>{"\u25BC "}</Text><Text color={theme.text}>{"ruler row = playhead   "}</Text>
-            <Text color={theme.warn}>{"\u25C7\u25C6 "}</Text><Text color={theme.text}>{"suffix: prob/cond"}</Text>
+            <Text color={theme.textDim}>{"\u00B7\u25CB\u25CF "}</Text><Text color={theme.text}>{"muted: dimmer dots   "}</Text>
+            <Text color={theme.accent}>{"\u25BC "}</Text><Text color={theme.text}>{"ruler = playhead   "}</Text>
+            <Text color={theme.warn}>{"\u25C6 "}</Text><Text color={theme.text}>{"cond  "}</Text>
+            <Text color={theme.accentMuted}>{"\u25C7 "}</Text><Text color={theme.text}>{"prob <100%"}</Text>
           </Box>,
         );
       }

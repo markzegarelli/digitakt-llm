@@ -36,20 +36,18 @@ interface StepGridProps {
   isFocused: boolean;
 }
 
-function condSuffix(cond: string | null): string {
-  if (cond === "1:2") return "₁";
-  if (cond === "not:2") return "ⁿ";
-  if (cond === "fill") return "f";
+/** Second glyph: filled diamond = conditional trig; hollow = reduced probability. */
+function trigMarker(cond: string | null, prob: number): string {
+  if (cond !== null) return "\u25C6"; // ◆
+  if (prob < 100) return "\u25C7"; // ◇
   return "";
 }
 
-/** Velocity as block fill (playhead is shown only in ruler row, not in cells). */
-function velGlyph(velocity: number): string {
+/** Velocity as dots (· off, ○ low, ● high). Playhead is only in the ruler row above. */
+function velDot(velocity: number): string {
   if (velocity === 0) return "\u00B7";
-  if (velocity < 45) return "\u2591";
-  if (velocity < 80) return "\u2592";
-  if (velocity < 110) return "\u2593";
-  return "\u2588";
+  if (velocity < 64) return "\u25CB";
+  return "\u25CF";
 }
 
 function velColor(velocity: number): string {
@@ -181,15 +179,17 @@ export function StepGrid({
               const velocity = steps[i] ?? 0;
               const prob = patternTrig.prob[track]?.[i] ?? 100;
               const cond = patternTrig.cond[track]?.[i] ?? null;
-              const suf = condSuffix(cond);
-              const base = velGlyph(velocity);
+              const marker = trigMarker(cond, prob);
+              const base = velDot(velocity);
               const isColCursor = stepEditMode && isFocused && isSelected && i === selectedStep;
               const c = stepColor(velocity, muted, prob, cond, isColCursor, isSelected);
+              const markColor =
+                cond !== null ? theme.warn : prob < 100 ? theme.accentMuted : c;
               return (
                 <Box key={`${track}-${i}`} width={colWidth} justifyContent="center">
                   <Text color={c}>
                     {base}
-                    {suf ? <Text color={theme.accentMuted}>{suf}</Text> : ""}
+                    {marker ? <Text color={markColor}>{marker}</Text> : ""}
                   </Text>
                 </Box>
               );
