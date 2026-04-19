@@ -16,6 +16,11 @@ import {
   parseChainCommand,
   validateTrackValueArity,
 } from "./commandParsing.js";
+import {
+  canFieldUseTrackWide,
+  shouldClearNoteOverrideOnCommit,
+  shouldClearNoteOverrideOnDelete,
+} from "./trigEditing.js";
 import type { FocusPanel, TrackName, CCParam, PatternModalState } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
@@ -82,7 +87,7 @@ export function App({ baseUrl }: AppProps) {
   }, [ccTrack]);
 
   useEffect(() => {
-    if (trigField === 4) setTrigTrackWide(false);
+    if (!canFieldUseTrackWide(trigField)) setTrigTrackWide(false);
   }, [trigField]);
 
   useEffect(() => {
@@ -507,11 +512,11 @@ export function App({ baseUrl }: AppProps) {
         } else if (patternStepEdit) {
           if (!showTrigPanel) {
             setShowTrigPanel(true);
-            setTrigTrackWide(!!shiftT);
+            setTrigTrackWide(!!shiftT && canFieldUseTrackWide(trigField));
             return;
           }
           if (shiftT) {
-            if (trigField !== 4) setTrigTrackWide((w) => !w);
+            if (canFieldUseTrackWide(trigField)) setTrigTrackWide((w) => !w);
             return;
           }
           setShowTrigPanel(false);
@@ -555,7 +560,12 @@ export function App({ baseUrl }: AppProps) {
         const err = (e: Error) => actions.addLog(`✗ ${e.message}`);
 
         const commitTrigBuffer = (buf: string) => {
-          if (buf.length === 0 || trigField === 4) return;
+          if (trigField === 4) return;
+          if (shouldClearNoteOverrideOnCommit(trigField, buf)) {
+            actions.setNote(track, stepIdx + 1, null).catch(() => {});
+            return;
+          }
+          if (buf.length === 0) return;
           const raw = parseInt(buf, 10);
           if (Number.isNaN(raw)) return;
           if (trigField === 0) {
@@ -649,6 +659,8 @@ export function App({ baseUrl }: AppProps) {
         if (trigField !== 4 && (key.backspace || key.delete)) {
           if (trigInputBuffer.length > 0) {
             setTrigInputBuffer((b) => b.slice(0, -1));
+          } else if (shouldClearNoteOverrideOnDelete(trigField, trigInputBuffer)) {
+            actions.setNote(track, stepIdx + 1, null).catch(() => {});
           }
           return;
         }
