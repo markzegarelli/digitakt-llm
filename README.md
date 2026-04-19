@@ -13,6 +13,10 @@ Generate drum patterns on an **Elektron Digitakt** in real time with **Claude Op
 - **Digitakt-oriented MIDI** — Eight tracks map to channels 1–8; CCs for tune, filter, envelopes, sends, and more; save/load patterns, fills, chains, and pattern history.
 - **FastAPI backend** — REST + `/ws` event stream so the same server can power the TUI or other clients.
 
+## Roadmap
+
+Release gates and v1.0 milestone order (audited against the current tree): [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## Hardware Requirements
 
 - **Elektron Digitakt** (any firmware) connected via USB

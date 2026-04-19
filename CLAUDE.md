@@ -81,6 +81,7 @@ Keyboard shortcuts (Pattern panel):
 ## Key Documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, data flow, EventBus patterns
+- [docs/ROADMAP.md](docs/ROADMAP.md) — v1 release gates and milestone order vs the codebase
 
 ## Project Layout
 
