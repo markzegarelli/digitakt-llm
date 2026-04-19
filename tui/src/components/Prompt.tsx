@@ -39,6 +39,7 @@ const HELP_LINES = [
   "  <bare text>                          generate beat (BEAT mode)",
   "                                       or ask Claude (CHAT mode)",
   "  ask <question>                       ask Claude (any mode)",
+  "  fresh <prompt>                       generate ignoring prior pattern (no variation context)",
   "  gen                                  generate from last /ask response",
   "  Ctrl+G                               generate while viewing an /ask answer",
   "                                       or any time after an /ask (hint shown)",
@@ -93,7 +94,7 @@ const HELP_LINES = [
 
 // All slash commands for autocomplete
 const COMMANDS = [
-  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "gate", "gate-track",
+  "ask", "bpm", "cc", "cc-step", "clear", "cond", "fill", "fresh", "gate", "gate-track",
   "gen", "help", "history", "length", "load", "log", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "prob-track", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel", "vel-track",

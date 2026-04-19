@@ -86,7 +86,7 @@ export interface DigitaktActions {
   setBpm(bpm: number): Promise<void>;
   play(): Promise<void>;
   stop(): Promise<void>;
-  generate(prompt: string): Promise<void>;
+  generate(prompt: string, opts?: { variation?: boolean }): Promise<void>;
   setProb(track: TrackName, step: number, value: number): Promise<void>;
   setProbTrack(track: TrackName, value: number): Promise<void>;
   setSwing(amount: number): Promise<void>;
@@ -540,8 +540,12 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     }, [api]),
     stop: useCallback(async () => { await api("POST", "/stop"); }, [api]),
 
-    generate: useCallback(async (prompt: string) => {
-      await api("POST", "/generate", { prompt });
+    generate: useCallback(async (prompt: string, opts?: { variation?: boolean }) => {
+      const body: Record<string, unknown> = { prompt };
+      if (opts?.variation !== undefined) {
+        body.variation = opts.variation;
+      }
+      await api("POST", "/generate", body);
     }, [api]),
 
     setProb: useCallback(async (track: TrackName, step: number, value: number) => {

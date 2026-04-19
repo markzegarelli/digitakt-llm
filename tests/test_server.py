@@ -50,6 +50,24 @@ def test_post_generate_returns_202(tmp_path):
     assert resp.status_code == 202
 
 
+def test_post_generate_variation_false_overrides_last_prompt(tmp_path):
+    client = _make_test_client(tmp_path)
+    server_module._state.set_last_prompt("prior beat")
+    server_module._generator.generate = MagicMock()
+    resp = client.post("/generate", json={"prompt": "new vibe", "variation": False})
+    assert resp.status_code == 202
+    server_module._generator.generate.assert_called_once_with("new vibe", variation=False)
+
+
+def test_post_generate_variation_default_uses_last_prompt(tmp_path):
+    client = _make_test_client(tmp_path)
+    server_module._state.set_last_prompt("prior")
+    server_module._generator.generate = MagicMock()
+    resp = client.post("/generate", json={"prompt": "iterate"})
+    assert resp.status_code == 202
+    server_module._generator.generate.assert_called_once_with("iterate", variation=True)
+
+
 def test_post_play_returns_200(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/play")

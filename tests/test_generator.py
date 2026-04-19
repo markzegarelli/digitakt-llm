@@ -3,7 +3,15 @@ import json
 from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
-from core.generator import Generator, _compute_generation_summary, _detect_target_tracks, _normalize_producer_notes
+from core.generator import (
+    Generator,
+    _compute_generation_summary,
+    _detect_target_tracks,
+    _normalize_producer_notes,
+    _opus_max_output_tokens,
+    _parse_ask_response,
+    _serialize_pattern_for_llm,
+)
 
 VALID_PATTERN = {k: [0] * 16 for k in TRACK_NAMES}
 VALID_PATTERN["kick"][0] = 100
@@ -15,6 +23,58 @@ def _make_mock_client(response_text: str) -> MagicMock:
     msg.content = [MagicMock(text=response_text)]
     client.messages.create.return_value = msg
     return client
+
+
+def _make_mock_client_tool(pattern_dict: dict) -> MagicMock:
+    client = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "emit_pattern"
+    tool_block.input = pattern_dict
+    msg = MagicMock()
+    msg.content = [tool_block]
+    client.messages.create.return_value = msg
+    return client
+
+
+def test_tool_use_emits_generation_complete():
+    state = AppState()
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client_tool(dict(VALID_PATTERN, bpm=135))
+    gen._run("heavy kick")
+    assert len(events) == 1
+    assert events[0]["bpm"] == 135
+
+
+def test_opus_max_output_tokens_scales_with_steps():
+    assert _opus_max_output_tokens(16) == 2048
+    assert _opus_max_output_tokens(32) > 2048
+
+
+def test_parse_ask_response_strips_trailing_line():
+    ans, impl = _parse_ask_response("Line one\nLine two\nIMPLEMENTABLE: YES")
+    assert impl is True
+    assert "IMPLEMENTABLE" not in ans
+    assert "Line two" in ans
+
+
+def test_parse_ask_response_defaults_false():
+    ans, impl = _parse_ask_response("No marker here")
+    assert impl is False
+    assert ans == "No marker here"
+
+
+def test_serialize_pattern_for_llm_includes_prob():
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    pat["prob"] = {"snare": [100] * 16}
+    raw = _serialize_pattern_for_llm(pat, 16)
+    data = json.loads(raw)
+    assert "prob" in data
+    assert data["prob"]["snare"] == [100] * 16
 
 
 def test_valid_json_emits_generation_complete():
@@ -308,6 +368,39 @@ def test_build_state_context_includes_velocity_overrides():
     assert "hihat=80" in ctx
 
 
+def test_build_state_context_includes_pitch_overrides():
+    state = AppState()
+    state.track_pitch["kick"] = 36
+    gen = Generator(state, EventBus())
+    ctx = gen._build_state_context()
+    assert "kick=36" in ctx
+    assert "pitch" in ctx.lower()
+
+
+def test_build_state_context_prob_summary():
+    state = AppState()
+    state.pattern_length = 16
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.current_pattern["prob"] = {"hihat": [100, 50] + [100] * 14}
+    gen = Generator(state, EventBus())
+    ctx = gen._build_state_context()
+    assert "Prob summary" in ctx
+    assert "hihat" in ctx
+
+
+def test_build_user_prompt_variation_includes_prob_and_gate():
+    state = AppState()
+    state.last_prompt = "original"
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.current_pattern["kick"][0] = 100
+    state.current_pattern["prob"] = {"snare": [100] * 16}
+    state.current_pattern["gate"] = {"tom": [40] * 16}
+    gen = Generator(state, EventBus())
+    p = gen._build_user_prompt("more energy", variation=True)
+    assert '"prob"' in p
+    assert '"gate"' in p
+
+
 def test_build_state_context_includes_pattern_length():
     state = AppState()
     state.pattern_length = 32
@@ -397,7 +490,9 @@ def test_strip_markdown_applied_in_answer_question():
     state = AppState()
     bus = EventBus()
     gen = Generator(state, bus)
-    gen._client = _make_mock_client("Use **bpm** command to set tempo")
+    gen._client = _make_mock_client(
+        "Use **bpm** command to set tempo\nIMPLEMENTABLE: NO"
+    )
     answer = gen.answer_question("How do I set BPM?")
     assert "**" not in answer
     assert "bpm" in answer
@@ -428,19 +523,12 @@ def test_answer_question_with_classify_returns_tuple():
     state = AppState()
     bus = EventBus()
     gen = Generator(state, bus)
-    responses = ["Use /bpm 140 for techno", "YES"]
-    call_count = [0]
-
-    def mock_create(**kwargs):
-        msg = MagicMock()
-        msg.content = [MagicMock(text=responses[call_count[0]])]
-        call_count[0] += 1
-        return msg
-
-    gen._client = MagicMock()
-    gen._client.messages.create.side_effect = mock_create
+    combined = "Use /bpm 140 for techno\nIMPLEMENTABLE: YES"
+    gen._client = _make_mock_client(combined)
     answer, is_impl = gen.answer_question_with_classify("give me a techno beat")
+    assert gen._client.messages.create.call_count == 1
     assert "bpm" in answer.lower() or "140" in answer
+    assert "IMPLEMENTABLE" not in answer
     assert is_impl is True
 
 
@@ -448,18 +536,10 @@ def test_answer_question_with_classify_false_for_info():
     state = AppState()
     bus = EventBus()
     gen = Generator(state, bus)
-    responses = ["Use /bpm to set tempo", "NO"]
-    call_count = [0]
-
-    def mock_create(**kwargs):
-        msg = MagicMock()
-        msg.content = [MagicMock(text=responses[call_count[0]])]
-        call_count[0] += 1
-        return msg
-
-    gen._client = MagicMock()
-    gen._client.messages.create.side_effect = mock_create
+    combined = "Use /bpm to set tempo\nIMPLEMENTABLE: NO"
+    gen._client = _make_mock_client(combined)
     answer, is_impl = gen.answer_question_with_classify("how do I set BPM?")
+    assert gen._client.messages.create.call_count == 1
     assert is_impl is False
 
 

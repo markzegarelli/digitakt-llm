@@ -331,8 +331,8 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/state` | Full application state snapshot |
-| `POST` | `/generate` | Queue LLM pattern generation |
-| `POST` | `/ask` | Q&A via Claude Haiku (does not generate pattern) |
+| `POST` | `/generate` | Queue LLM pattern generation; optional JSON `variation` (`null` = legacy: vary when `last_prompt` set; `false` = fresh context) |
+| `POST` | `/ask` | Q&A via Claude Haiku (single call; trailing `IMPLEMENTABLE: YES/NO` parsed for `/gen` hint) |
 | `POST` | `/play` | Start MIDI playback |
 | `POST` | `/stop` | Stop MIDI playback |
 | `POST` | `/bpm` | Set tempo (20–400) |

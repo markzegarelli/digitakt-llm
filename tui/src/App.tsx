@@ -168,6 +168,16 @@ export function App({ baseUrl }: AppProps) {
       case "new":   actions.callNew(); setImplementableHint(false); break;
       case "undo":  actions.callUndo(); setImplementableHint(false); break;
       case "randbeat": actions.randbeat(); break;
+      case "fresh": {
+        const rest = parts.slice(1).join(" ").trim();
+        if (!rest) {
+          actions.addLog("✗ Usage: /fresh <prompt> — new pattern without prior-context variation.");
+          break;
+        }
+        setImplementableHint(false);
+        actions.generate(rest, { variation: false }).catch(dispatchError);
+        break;
+      }
       case "bpm":   actions.setBpm(parseFloat(parts[1] ?? "")).catch(dispatchError); break;
       case "swing": actions.setSwing(parseInt(parts[1] ?? "", 10)).catch(dispatchError); break;
       case "length":
