@@ -135,7 +135,7 @@ slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
-`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
 
 Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `null` to inherit `track_pitch` for that step) is edited from the TRIG panel or `POST /note`; playback uses the step override when set, otherwise `track_pitch` (or the default note map).
 
@@ -359,7 +359,7 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | `POST` | `/gate-track` | Set gate to the same value on every step for a track |
 | `POST` | `/pitch` | Set per-track MIDI note number (0–127) |
 | `POST` | `/cond` | Set/clear conditional trig on a step |
-| `GET` | `/patterns` | List saved patterns (with tags) |
+| `GET` | `/patterns` | List saved patterns (name, tags, optional `bpm`, `pattern_length`, `swing` from v2 JSON) |
 | `POST` | `/patterns/{name}` | Save pattern + session snapshot (`version: 2` JSON) with optional tags |
 | `DELETE` | `/patterns/{name}` | Delete a saved pattern file |
 | `GET` | `/patterns/{name}` | Load pattern; restore BPM/CC/pitch/velocity/mutes/length when snapshot present |

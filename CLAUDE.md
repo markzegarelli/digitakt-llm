@@ -21,6 +21,8 @@ uv run digitakt
 
 **There is one UI: the Bun/Ink terminal app in `tui/`.** It is launched via the `digitakt` entry point, which starts the Python FastAPI backend and then runs `bun run src/index.tsx` in the `tui/` directory.
 
+Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** sit on one row under the sequencer; **CMD** is below. When the activity log is on, **LOG** occupies a narrow column on the right of the main stack.
+
 - Entry point: `digitakt` → `cli.tui_launcher:main`
 - The launcher starts FastAPI on `http://localhost:8000`, then spawns the Bun process
 - The Bun TUI connects via REST + WebSocket at that URL
@@ -59,11 +61,13 @@ uv run digitakt
 - `/gen` — generate a beat from the last `/ask` response
 
 Keyboard shortcuts (Pattern panel):
+- `?` — open the help overlay (also works from MIX/LOG focus, or from CMD when the input line is empty)
 - `m` — immediate mute toggle on selected track
 - `q` — stage selected track for queued mute (toggle; **MQ** badges on SEQ/MIX: `Q` = queued, `M` = muted)
 - `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
-- `n` — queue next chain candidate (same as `/chain next`)
-- `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain fire`)
+- `c` — when a chain is set, focus the **chain strip** (under the status bar); `←`/`→` move a highlight across slots; `Esc` returns focus to SEQ; `c` again exits strip focus
+- `n` — queue next chain candidate (same as `/chain next`; also works while the chain strip is focused)
+- `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain fire`; also works while the chain strip is focused)
 - `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
 - `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
 - `Tab` (in SEQ step edit) — toggle TRIG side panel (same as plain **`t`** when TRIG is closed; **`t`** again closes TRIG when it is open)

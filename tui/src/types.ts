@@ -24,8 +24,17 @@ export interface PatternTrigState {
   note: Record<TrackName, (number | null)[]>;
 }
 
+/** One row from `GET /patterns` for the load/delete picker. */
+export interface PatternListEntry {
+  name: string;
+  tags: string[];
+  bpm: number | null;
+  pattern_length: number | null;
+  swing: number | null;
+}
+
 export type PatternModalState =
-  | { phase: "pick"; intent: "load" | "delete"; names: string[]; idx: number }
+  | { phase: "pick"; intent: "load" | "delete"; entries: PatternListEntry[]; idx: number }
   | { phase: "delete-confirm"; name: string };
 
 export function emptyTrigState(length: number): PatternTrigState {

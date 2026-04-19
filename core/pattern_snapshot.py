@@ -5,18 +5,22 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from cli.commands import apply_swing
 from core.state import AppState, TRACK_NAMES
 
 SAVE_FORMAT_VERSION = 2
 
 
 def build_save_file_dict(state: AppState, pattern: dict, tags: list[str], saved_at: str) -> dict[str, Any]:
+    swing_raw = state.current_pattern.get("swing", 0) if isinstance(state.current_pattern, dict) else 0
+    swing_val = int(swing_raw) if isinstance(swing_raw, (int, float)) else 0
     return {
         "version": SAVE_FORMAT_VERSION,
         "pattern": copy.deepcopy(pattern),
         "tags": tags,
         "saved_at": saved_at,
         "bpm": state.bpm,
+        "swing": swing_val,
         "pattern_length": state.pattern_length,
         "track_cc": copy.deepcopy(state.track_cc),
         "track_velocity": copy.deepcopy(state.track_velocity),
@@ -43,6 +47,8 @@ def parse_session_snapshot(data: Any) -> dict[str, Any] | None:
         snap["bpm"] = float(data["bpm"])
     if "pattern_length" in data and isinstance(data["pattern_length"], int):
         snap["pattern_length"] = data["pattern_length"]
+    if "swing" in data and isinstance(data["swing"], (int, float)):
+        snap["swing"] = int(data["swing"])
     for key in ("track_cc", "track_velocity", "track_pitch", "track_muted"):
         if key in data and isinstance(data[key], dict):
             snap[key] = copy.deepcopy(data[key])
@@ -91,3 +97,8 @@ def merge_session_snapshot_into_state(state: AppState, snapshot: dict[str, Any])
                 state.update_mute(track, val)
             elif isinstance(val, (int, float)):
                 state.update_mute(track, bool(val))
+
+    if "swing" in snapshot:
+        sw = snapshot["swing"]
+        if isinstance(sw, (int, float)) and any(t in state.current_pattern for t in TRACK_NAMES):
+            state.current_pattern = apply_swing(state.current_pattern, int(sw))

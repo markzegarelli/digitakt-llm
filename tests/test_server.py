@@ -109,8 +109,12 @@ def test_save_and_load_pattern(tmp_path):
     assert (tmp_path / "test-beat.json").exists()
 
     list_resp = client.get("/patterns")
-    names = [p["name"] for p in list_resp.json()["patterns"]]
+    data = list_resp.json()["patterns"]
+    names = [p["name"] for p in data]
     assert "test-beat" in names
+    entry = next(p for p in data if p["name"] == "test-beat")
+    assert entry.get("bpm") is not None
+    assert entry.get("pattern_length") == 16
 
     load_resp = client.get("/patterns/test-beat")
     assert load_resp.status_code == 200

@@ -12,6 +12,15 @@ export interface PanelLayout {
   logWidth: number;
 }
 
+/** Split layout: SEQ uses full `stackWidth`; MIX + TRIG share one row below (`mixWidth` + `trigWidth`). */
+export interface SplitStackLayout {
+  centerBudget: number;
+  stackWidth: number;
+  mixWidth: number;
+  trigWidth: number;
+  logWidth: number;
+}
+
 function clampMin(v: number, min: number): number {
   return Math.max(min, v);
 }
@@ -104,6 +113,50 @@ export function computePanelLayout({
   return {
     centerBudget,
     mainWidth: Math.max(0, mainWidth),
+    trigWidth: Math.max(0, trigWidth),
+    logWidth: Math.max(0, logWidth),
+  };
+}
+
+const RAIL_OUTER = 14;
+
+/**
+ * Widths for the split handoff layout: left stack (SEQ + MIX/TRIG row + CMD) and optional LOG column.
+ * `stackWidth` + `logWidth` === `centerBudget`.
+ */
+export function computeSplitStackLayout({
+  termCols,
+  focusRailOuter = RAIL_OUTER,
+  showLog,
+  showTrig,
+}: PanelLayoutInput): SplitStackLayout {
+  const centerBudget = Math.max(0, termCols - focusRailOuter);
+  let logWidth = 0;
+  let stackWidth = centerBudget;
+  if (showLog) {
+    logWidth = Math.min(centerBudget, Math.max(24, Math.round(centerBudget * 0.28)));
+    stackWidth = Math.max(28, centerBudget - logWidth);
+  }
+  let mixWidth = stackWidth;
+  let trigWidth = 0;
+  if (showTrig) {
+    trigWidth = Math.round(stackWidth * 0.42);
+    trigWidth = Math.min(Math.max(22, trigWidth), stackWidth - 24);
+    mixWidth = Math.max(22, stackWidth - trigWidth);
+  }
+  const total = stackWidth + logWidth;
+  if (total !== centerBudget) {
+    stackWidth += centerBudget - total;
+    if (showTrig) {
+      mixWidth = stackWidth - trigWidth;
+    } else {
+      mixWidth = stackWidth;
+    }
+  }
+  return {
+    centerBudget,
+    stackWidth: Math.max(0, stackWidth),
+    mixWidth: Math.max(0, mixWidth),
     trigWidth: Math.max(0, trigWidth),
     logWidth: Math.max(0, logWidth),
   };

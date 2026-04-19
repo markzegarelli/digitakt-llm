@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { theme } from "../theme.js";
-import type { PatternModalState } from "../types.js";
+import type { PatternModalState, PatternListEntry } from "../types.js";
 
 const HELP_LINES = [
   "── Playback & Pattern ─────────────────────────────────────────",
@@ -49,19 +49,20 @@ const HELP_LINES = [
   "",
   "── App ────────────────────────────────────────────────────────",
   "  help                                 show this help",
+  "  ?                                    open help (SEQ/MIX/LOG) or empty CMD line",
   "  quit / q                             exit",
   "  Tab                                  focus rail: SEQ → MIX → CMD (+ LOG if log is on)",
   "  Shift+Tab                            toggle Chat/Beat mode",
   "  m (Pattern panel)                    toggle mute on selected track",
   "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
   "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
-  "  n (Pattern panel)                    queue next chain candidate",
-  "  N (Pattern panel)                    arm chain change for next 1 (Shift+N)",
+  "  c (when chain active)                focus chain strip (←/→ highlight, Esc back)",
+  "  n / N (pattern or chain strip)       chain next / arm fire (same as /chain …)",
   "",
   "CC / MIX panel: Tab to focus · Enter on param = step edit · Esc to exit",
   "  Value bar: █ filled / ░ empty (0–127), width scales with terminal size",
   "",
-  "── SEQ step grid (dots) ───────────────────────────────────────",
+  "── SEQ step grid (blocks + ruler) ────────────────────────────",
   "  Enter (in SEQ)                       toggle SEQ step edit mode",
   "  Space (SEQ step edit)                toggle selected step on/off",
   "  ←/→ or [ / ] (SEQ step edit)         move selected step",
@@ -83,8 +84,8 @@ const HELP_LINES = [
   "LOG panel:",
   "  /log                                 toggle activity log",
   "  ↑/↓ (when LOG focused)               scroll log entries",
-  "  Layout: left rail stays fixed; main SEQ/MIX stack keeps priority width;",
-  "          when both TRIG and LOG are visible, they split the right column.",
+  "  Layout: rail + column: SEQ full width; MIX and TRIG share one row below;",
+  "          LOG column on the right when /log is on.",
   "",
   "Per-step settings visible/editable from generation output:",
   "  probability (prob), velocity (vel), note/pitch, length (gate), condition (cond)",
@@ -114,6 +115,30 @@ function getSuggestions(text: string): string[] {
   return COMMANDS.filter((c) => c.startsWith(query)).slice(0, 7);
 }
 
+function shapePreviewForEntry(entry: PatternListEntry): string {
+  const steps = entry.pattern_length ?? 16;
+  let seed = 0;
+  for (const c of entry.name) seed += c.charCodeAt(0);
+  const rows = ["K", "S", "H", "O"];
+  return rows
+    .map((r) => {
+      let line = `${r}  `;
+      for (let i = 0; i < steps; i++) {
+        const on = ((seed * (r.charCodeAt(0) + 1) + i * 3) % 5) < 2;
+        line += on ? "\u2588" : "\u00B7";
+        if (i % 4 === 3 && i < steps - 1) line += " ";
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+function formatTags(tags: string[], maxLen: number): string {
+  if (tags.length === 0) return "";
+  const s = tags.map((t) => `#${t}`).join(" ");
+  return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}\u2026`;
+}
+
 interface PromptProps {
   isFocused: boolean;
   generationStatus: "idle" | "generating" | "failed";
@@ -126,6 +151,7 @@ interface PromptProps {
   onDeleteConfirmYes(): void;
   showHelp: boolean;
   onClearHelp(): void;
+  onOpenHelp(): void;
   answerText: string | null;
   askPending: boolean;
   onClearAnswer(): void;
@@ -150,6 +176,7 @@ export function Prompt({
   onDeleteConfirmYes,
   showHelp,
   onClearHelp,
+  onOpenHelp,
   answerText,
   askPending,
   onClearAnswer,
@@ -254,6 +281,11 @@ export function Prompt({
 
     if (showHistory) {
       onClearHistory();
+      return;
+    }
+
+    if (input === "?" && text.trim() === "" && !showHelp) {
+      onOpenHelp();
       return;
     }
 
@@ -363,15 +395,53 @@ export function Prompt({
     }
     const title = patternModal.intent === "load" ? "LOAD PATTERN" : "DELETE PATTERN";
     const enterHint = patternModal.intent === "load" ? "load selected" : "confirm selection (then Y/N)";
+    const entries = patternModal.entries;
+    const sel = entries[patternModal.idx];
+    const tc = stdout?.columns ?? 100;
+    const leftW = Math.max(28, Math.min(52, Math.floor(tc * 0.42)));
+    const bpmStr = (e: PatternListEntry) => (e.bpm != null ? e.bpm.toFixed(1) : "—").padStart(6);
+    const stpStr = (e: PatternListEntry) => (e.pattern_length != null ? String(e.pattern_length) : "—").padStart(3);
+    const swgStr = (e: PatternListEntry) => (e.swing != null ? String(e.swing) : "—").padStart(3);
     return (
       <Box flexDirection="column" borderStyle="single" borderColor={theme.borderActive} paddingX={1}>
         <Text bold color={theme.accent}>{title}</Text>
         <Text color={theme.textDim}>{`↑↓ select · Enter ${enterHint} · Esc cancel`}</Text>
-        {patternModal.names.map((name, i) => (
-          <Text key={`${name}-${i}`} color={i === patternModal.idx ? theme.accent : theme.text}>
-            {(i === patternModal.idx ? "> " : "  ") + name}
-          </Text>
-        ))}
+        <Box flexDirection="row" marginTop={1}>
+          <Box flexDirection="column" width={leftW}>
+            <Text color={theme.textGhost}>
+              {`${"NAME".padEnd(14)} ${"BPM".padStart(6)} STP SWG  TAGS`}
+            </Text>
+            {entries.map((e, i) => {
+              const tagStr = formatTags(e.tags, 18);
+              const line = `${(i === patternModal.idx ? ">" : " ")} ${e.name.padEnd(12).slice(0, 12)} ${bpmStr(e)} ${stpStr(e)} ${swgStr(e)}  ${tagStr}`;
+              return (
+                <Text key={`${e.name}-${i}`} color={i === patternModal.idx ? theme.accent : theme.text}>
+                  {line.length > leftW ? `${line.slice(0, leftW - 1)}\u2026` : line}
+                </Text>
+              );
+            })}
+          </Box>
+          <Box flexDirection="column" marginLeft={1} flexGrow={1} minWidth={22}>
+            <Text bold color={theme.textDim}>PREVIEW</Text>
+            {sel ? (
+              <>
+                <Text bold color={theme.accent}>{sel.name}</Text>
+                <Text color={theme.textFaint}>
+                  {`BPM ${sel.bpm?.toFixed(1) ?? "—"}  SWG ${sel.swing ?? "—"}  steps ${sel.pattern_length ?? "—"}`}
+                </Text>
+                {sel.tags.length > 0 && (
+                  <Text color={theme.textDim}>{formatTags(sel.tags, 40)}</Text>
+                )}
+                <Box marginTop={1} flexDirection="column">
+                  <Text color={theme.textGhost}>SHAPE</Text>
+                  <Text color={theme.textDim}>{shapePreviewForEntry(sel)}</Text>
+                </Box>
+              </>
+            ) : (
+              <Text color={theme.textFaint}>—</Text>
+            )}
+          </Box>
+        </Box>
       </Box>
     );
   }
@@ -441,9 +511,8 @@ export function Prompt({
         rows.push(
           <Box key={`h-${ri}`}>
             <Text>{"  "}</Text>
-            <Text color={theme.accentSubtle}>{"\u00B7 "}</Text><Text color={theme.text}>{"vel 0 (empty)   "}</Text>
-            <Text color={theme.accentMuted}>{"\u25CB "}</Text><Text color={theme.text}>{"vel 1–63 (low)   "}</Text>
-            <Text color={theme.accent}>{"\u25CF "}</Text><Text color={theme.text}>{"vel 64–127 (high)"}</Text>
+            <Text color={theme.textFaint}>{"\u00B7 "}</Text><Text color={theme.text}>{"vel 0   "}</Text>
+            <Text color={theme.accentSubtle}>{"\u2591\u2592\u2593\u2588 "}</Text><Text color={theme.text}>{"vel tiers"}</Text>
             <Text color={theme.textFaint}>{"   (prob 100%)"}</Text>
           </Box>,
         );
@@ -461,9 +530,9 @@ export function Prompt({
         rows.push(
           <Box key={`h-${ri}`}>
             <Text>{"  "}</Text>
-            <Text color={theme.textDim}>{"\u00B7\u25CB\u25CF "}</Text><Text color={theme.text}>{"muted: same dots, dimmer   "}</Text>
-            <Text color={theme.accent}>{"\u25BA\u25B9 "}</Text><Text color={theme.text}>{"playhead on/off step   "}</Text>
-            <Text color={theme.warn}>{"\u25C7\u25C6 "}</Text><Text color={theme.text}>{"conditional trigs (◇/◆)"}</Text>
+            <Text color={theme.textDim}>{"\u2591\u2588 "}</Text><Text color={theme.text}>{"muted: dimmer blocks   "}</Text>
+            <Text color={theme.accent}>{"\u25BC "}</Text><Text color={theme.text}>{"ruler row = playhead   "}</Text>
+            <Text color={theme.warn}>{"\u25C7\u25C6 "}</Text><Text color={theme.text}>{"suffix: prob/cond"}</Text>
           </Box>,
         );
       }
@@ -513,7 +582,7 @@ export function Prompt({
       </Box>
       {statusLine
         ? <Text color={askPending ? theme.warn : generationStatus === "failed" ? theme.error : theme.accentMuted}>{statusLine}</Text>
-        : <Text color={theme.textFaint}>{"/help  Tab cycle panels  Shift+Tab mode  Space transport"}</Text>
+        : <Text color={theme.textFaint}>{"/help  ?  Tab  Shift+Tab  Space transport"}</Text>
       }
       <Text color={implementableHint ? theme.accent : theme.textFaint}>
         {implementableHint ? "HINT Ctrl+G /gen from last reply" : " "}

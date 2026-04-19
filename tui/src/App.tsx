@@ -10,7 +10,7 @@ import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
-import { computePanelLayout } from "./layout.js";
+import { computeSplitStackLayout } from "./layout.js";
 import {
   isKnownSlashCommand,
   parseChainCommand,
@@ -21,7 +21,7 @@ import {
   shouldClearNoteOverrideOnCommit,
   shouldClearNoteOverrideOnDelete,
 } from "./trigEditing.js";
-import type { FocusPanel, TrackName, CCParam, PatternModalState } from "./types.js";
+import type { FocusPanel, TrackName, CCParam, PatternModalState, PatternListEntry } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
 
@@ -65,6 +65,8 @@ export function App({ baseUrl }: AppProps) {
   const [barCount, setBarCount] = useState(0);
   const acActiveRef = useRef(false);
   const [patternModal, setPatternModal] = useState<PatternModalState | null>(null);
+  const [chainStripFocused, setChainStripFocused] = useState(false);
+  const [chainSlotIdx, setChainSlotIdx] = useState(0);
 
   const [patternStepEdit, setPatternStepEdit] = useState(false);
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
@@ -76,6 +78,11 @@ export function App({ baseUrl }: AppProps) {
   useEffect(() => {
     setPatternSelectedStep((s) => clamp(s, 0, Math.max(0, state.pattern_length - 1)));
   }, [state.pattern_length]);
+
+  useEffect(() => {
+    const max = Math.max(0, state.chain.length - 1);
+    setChainSlotIdx((i) => clamp(i, 0, max));
+  }, [state.chain.length]);
 
   /** Option B: keep SEQ selected track and MIX selected track in lockstep. */
   useEffect(() => {
@@ -142,18 +149,30 @@ export function App({ baseUrl }: AppProps) {
           actions.addLog(
             typeof d === "string" ? `✗ ${d}` : `✗ /patterns: HTTP ${r.status}`,
           );
-          return null as { patterns?: Array<{ name: string }> } | null;
+          return null as { patterns?: unknown[] } | null;
         }
-        return r.json() as Promise<{ patterns?: Array<{ name: string }> }>;
+        return r.json() as Promise<{ patterns?: unknown[] }>;
       })
       .then((d) => {
         if (!d) return;
-        const names = (Array.isArray(d.patterns) ? d.patterns : []).map((p) => p.name);
-        if (names.length === 0) {
+        const raw = Array.isArray(d.patterns) ? d.patterns : [];
+        const entries: PatternListEntry[] = raw.map((p) => {
+          if (!p || typeof p !== "object") {
+            return { name: "?", tags: [], bpm: null, pattern_length: null, swing: null };
+          }
+          const o = p as Record<string, unknown>;
+          const name = typeof o.name === "string" ? o.name : "?";
+          const tags = Array.isArray(o.tags) ? o.tags.map((t) => String(t)) : [];
+          const bpm = typeof o.bpm === "number" ? o.bpm : null;
+          const pattern_length = typeof o.pattern_length === "number" ? o.pattern_length : null;
+          const swing = typeof o.swing === "number" ? o.swing : null;
+          return { name, tags, bpm, pattern_length, swing };
+        });
+        if (entries.length === 0) {
           actions.addLog("No saved patterns.");
           return;
         }
-        setPatternModal({ phase: "pick", intent, names, idx: 0 });
+        setPatternModal({ phase: "pick", intent, entries, idx: 0 });
         setFocus("prompt");
       })
       .catch((err: Error) => actions.addLog(`✗ /patterns: ${err.message}`));
@@ -462,8 +481,49 @@ export function App({ baseUrl }: AppProps) {
       }
       return;
     }
+    if (input === "?" && !key.ctrl && !key.meta) {
+      setShowHelp(true);
+      setFocus("prompt");
+      return;
+    }
+
+    if (chainStripFocused) {
+      if (key.escape) {
+        setChainStripFocused(false);
+        setFocus("pattern");
+        return;
+      }
+      if (input === "c" && !key.ctrl && !key.meta) {
+        setChainStripFocused(false);
+        return;
+      }
+      if (key.leftArrow) {
+        setChainSlotIdx((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setChainSlotIdx((i) => Math.min(Math.max(0, state.chain.length - 1), i + 1));
+        return;
+      }
+      if (input === "n" && !key.ctrl && !key.meta) {
+        actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+      if (input === "N" && !key.ctrl && !key.meta) {
+        actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+    }
+
+    if (!chainStripFocused && focus !== "prompt" && input === "c" && !key.ctrl && !key.meta && state.chain.length > 0) {
+      setChainStripFocused(true);
+      setChainSlotIdx(state.chain_index >= 0 ? state.chain_index : 0);
+      return;
+    }
+
     if (key.tab) {
       if (acActiveRef.current) return;  // let Prompt handle Tab for autocomplete
+      if (chainStripFocused) setChainStripFocused(false);
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
@@ -861,11 +921,12 @@ export function App({ baseUrl }: AppProps) {
 
   const termCols = stdout?.columns ?? 120;
   const trigOpen = patternStepEdit && showTrigPanel;
-  const { centerBudget, mainWidth: mainContentWidth, trigWidth: trigPanelW, logWidth: logPanelW } = computePanelLayout({
+  const { centerBudget, stackWidth, mixWidth, trigWidth: trigRowW, logWidth: logPanelW } = computeSplitStackLayout({
     termCols,
     showLog,
     showTrig: trigOpen,
   });
+  const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
   return (
     <Box flexDirection="column" width={termCols}>
@@ -874,9 +935,15 @@ export function App({ baseUrl }: AppProps) {
         swing={state.swing}
         isPlaying={state.is_playing}
         midiConnected={state.midi_connected}
+        midiPortName={state.midi_port_name}
         patternName={state.last_prompt}
         patternLength={state.pattern_length}
+        currentStep={state.current_step}
         barCount={barCount}
+        generationStatus={state.generation_status}
+        fillActive={state.fill_active}
+        fillQueued={state.fill_queued}
+        muteCount={muteCount}
       />
       <ChainPanel
         chain={state.chain}
@@ -884,128 +951,135 @@ export function App({ baseUrl }: AppProps) {
         chainAuto={state.chain_auto}
         queuedIndex={state.chain_queued_index}
         armed={state.chain_armed}
+        stripFocused={chainStripFocused}
+        selectedSlotIdx={chainSlotIdx}
       />
       <Box flexDirection="row" width={termCols}>
         <FocusRail focus={focus} showLog={showLog} />
         <Box flexDirection="row" flexGrow={1} width={centerBudget}>
-        <Box flexDirection="column" width={mainContentWidth}>
-          <StepGrid
-            contentWidth={mainContentWidth}
-            pattern={state.current_pattern}
-            patternTrig={state.pattern_trig}
-            patternLength={state.pattern_length}
-            currentStep={state.current_step}
-            trackMuted={state.track_muted}
-            selectedTrack={patternTrack}
-            pendingMuteTracks={pendingMuteTracks}
-            stepEditMode={patternStepEdit}
-            selectedStep={patternSelectedStep}
-            isFocused={focus === "pattern"}
-          />
-          <CCPanel
-            contentWidth={mainContentWidth}
-            ccParams={state.ccParams}
-            trackCC={state.track_cc}
-            stepCC={state.step_cc}
-            patternTrig={state.pattern_trig}
-            patternLength={state.pattern_length}
-            currentStep={state.current_step}
-            selectedTrack={ccTrack}
-            trackMuted={state.track_muted}
-            pendingMuteTracks={pendingMuteTracks}
-            selectedParam={ccParam}
-            isFocused={focus === "cc"}
-            stepMode={ccStepMode}
-            selectedStep={ccSelectedStep}
-            stepInputBuffer={ccStepInputBuffer}
-          />
-          <GenerationSummary
-            summary={state.generation_summary}
-            generationStatus={state.generation_status}
-            lastPrompt={state.last_prompt}
-          />
-          <Prompt
-            isFocused={focus === "prompt"}
-            generationStatus={state.generation_status}
-            generationError={state.generation_error}
-            onCommand={handleCommand}
-            patternModal={patternModal}
-            onPatternModalClose={() => setPatternModal(null)}
-            onPatternModalNav={(dir) => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "pick") return m;
-                const ni = clamp(m.idx + dir, 0, m.names.length - 1);
-                return { ...m, idx: ni };
-              });
-            }}
-            onPatternModalPick={() => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "pick") return m;
-                if (m.intent === "load") {
-                  queueMicrotask(() => runPatternLoadByName(m.names[m.idx]!));
+          <Box flexDirection="column" width={stackWidth}>
+            <StepGrid
+              contentWidth={stackWidth}
+              pattern={state.current_pattern}
+              patternTrig={state.pattern_trig}
+              patternLength={state.pattern_length}
+              currentStep={state.current_step}
+              trackMuted={state.track_muted}
+              selectedTrack={patternTrack}
+              pendingMuteTracks={pendingMuteTracks}
+              stepEditMode={patternStepEdit}
+              selectedStep={patternSelectedStep}
+              isFocused={focus === "pattern"}
+            />
+            <Box flexDirection="row" width={stackWidth}>
+              <CCPanel
+                contentWidth={mixWidth}
+                ccParams={state.ccParams}
+                trackCC={state.track_cc}
+                stepCC={state.step_cc}
+                patternTrig={state.pattern_trig}
+                patternLength={state.pattern_length}
+                currentStep={state.current_step}
+                selectedTrack={ccTrack}
+                trackMuted={state.track_muted}
+                pendingMuteTracks={pendingMuteTracks}
+                selectedParam={ccParam}
+                isFocused={focus === "cc"}
+                stepMode={ccStepMode}
+                selectedStep={ccSelectedStep}
+                stepInputBuffer={ccStepInputBuffer}
+              />
+              {trigRowW > 0 && (
+                <TrigEditPanel
+                  width={trigRowW}
+                  track={TRACK_NAMES[patternTrack] as TrackName}
+                  stepIndex={patternSelectedStep}
+                  prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+                  velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+                  pitch={(() => {
+                    const tr = TRACK_NAMES[patternTrack] as TrackName;
+                    const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+                    return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+                  })()}
+                  gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
+                  cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+                  selectedField={trigField}
+                  inputBuffer={trigInputBuffer}
+                  trackWide={trigTrackWide}
+                />
+              )}
+            </Box>
+            <GenerationSummary
+              summary={state.generation_summary}
+              generationStatus={state.generation_status}
+              lastPrompt={state.last_prompt}
+            />
+            <Prompt
+              isFocused={focus === "prompt"}
+              generationStatus={state.generation_status}
+              generationError={state.generation_error}
+              onCommand={handleCommand}
+              patternModal={patternModal}
+              onPatternModalClose={() => setPatternModal(null)}
+              onPatternModalNav={(dir) => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "pick") return m;
+                  const ni = clamp(m.idx + dir, 0, m.entries.length - 1);
+                  return { ...m, idx: ni };
+                });
+              }}
+              onPatternModalPick={() => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "pick") return m;
+                  const picked = m.entries[m.idx]?.name;
+                  if (!picked) return null;
+                  if (m.intent === "load") {
+                    queueMicrotask(() => runPatternLoadByName(picked));
+                    return null;
+                  }
+                  return { phase: "delete-confirm", name: picked };
+                });
+              }}
+              onDeleteConfirmYes={() => {
+                setPatternModal((m) => {
+                  if (!m || m.phase !== "delete-confirm") return m;
+                  const n = m.name;
+                  queueMicrotask(() => runPatternDeleteByName(n));
                   return null;
-                }
-                return { phase: "delete-confirm", name: m.names[m.idx]! };
-              });
-            }}
-            onDeleteConfirmYes={() => {
-              setPatternModal((m) => {
-                if (!m || m.phase !== "delete-confirm") return m;
-                const n = m.name;
-                queueMicrotask(() => runPatternDeleteByName(n));
-                return null;
-              });
-            }}
-            showHelp={showHelp}
+                });
+              }}
+              showHelp={showHelp}
             onClearHelp={() => {
               setShowHelp(false);
               stdout?.write("\x1b[2J\x1b[3J\x1b[H");
               setTimeout(() => forceRedraw(), 0);
             }}
-            answerText={answerText}
-            askPending={askPending}
-            onClearAnswer={() => setAnswerText(null)}
-            inputMode={inputMode}
-            showHistory={showHistory}
-            historyItems={state.pattern_history ?? []}
-            onClearHistory={() => setShowHistory(false)}
-            implementableHint={implementableHint}
-            onDismissHint={() => setImplementableHint(false)}
-            acActiveRef={acActiveRef}
-          />
-          <Box paddingX={1}>
-            <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  n chain next  N chain fire  +/- BPM  Ctrl+C quit"}
-            </Text>
+            onOpenHelp={() => setShowHelp(true)}
+              answerText={answerText}
+              askPending={askPending}
+              onClearAnswer={() => setAnswerText(null)}
+              inputMode={inputMode}
+              showHistory={showHistory}
+              historyItems={state.pattern_history ?? []}
+              onClearHistory={() => setShowHistory(false)}
+              implementableHint={implementableHint}
+              onDismissHint={() => setImplementableHint(false)}
+              acActiveRef={acActiveRef}
+            />
+            <Box paddingX={1}>
+              <Text color={theme.textFaint}>
+                {"? help  /help  Tab panels  Shift+Tab mode  c chain strip  n/N chain  Space transport  Ctrl+C quit"}
+              </Text>
+            </Box>
           </Box>
-        </Box>
-        {trigPanelW > 0 && (
-          <TrigEditPanel
-            width={trigPanelW}
-            track={TRACK_NAMES[patternTrack] as TrackName}
-            stepIndex={patternSelectedStep}
-            prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
-            velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
-            pitch={(() => {
-              const tr = TRACK_NAMES[patternTrack] as TrackName;
-              const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
-              return ov != null ? ov : (state.track_pitch[tr] ?? 60);
-            })()}
-            gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
-            cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
-            selectedField={trigField}
-            inputBuffer={trigInputBuffer}
-            trackWide={trigTrackWide}
-          />
-        )}
-        {showLog && logPanelW > 0 && (
-          <ActivityLog
-            log={state.log}
-            isFocused={focus === "log"}
-            maxVisible={Math.max(8, 17 + state.ccParams.length)}
-            width={logPanelW}
-          />
-        )}
+          {showLog && logPanelW > 0 && (
+            <ActivityLog
+              log={state.log}
+              isFocused={focus === "log"}
+              maxVisible={Math.max(8, 17 + state.ccParams.length)}
+              width={logPanelW}
+            />
+          )}
         </Box>
       </Box>
     </Box>
