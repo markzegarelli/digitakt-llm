@@ -121,22 +121,19 @@ export function computePanelLayout({
 const RAIL_OUTER = 14;
 
 /**
- * Widths for the split handoff layout: left stack (SEQ + MIX/TRIG row + CMD) and optional LOG column.
- * `stackWidth` + `logWidth` === `centerBudget`.
+ * Widths for the split layout: rail row uses full `centerBudget` for the main stack
+ * (SEQ + MIX/TRIG). Activity log is rendered **below** the rail row at full terminal width,
+ * so `showLog` does not reduce `stackWidth`. `logWidth` is always 0 (reserved for callers).
  */
 export function computeSplitStackLayout({
   termCols,
   focusRailOuter = RAIL_OUTER,
-  showLog,
+  showLog: _showLog,
   showTrig,
 }: PanelLayoutInput): SplitStackLayout {
   const centerBudget = Math.max(0, termCols - focusRailOuter);
-  let logWidth = 0;
-  let stackWidth = centerBudget;
-  if (showLog) {
-    logWidth = Math.min(centerBudget, Math.max(24, Math.round(centerBudget * 0.28)));
-    stackWidth = Math.max(28, centerBudget - logWidth);
-  }
+  const stackWidth = centerBudget;
+  const logWidth = 0;
   let mixWidth = stackWidth;
   let trigWidth = 0;
   if (showTrig) {
@@ -144,20 +141,11 @@ export function computeSplitStackLayout({
     trigWidth = Math.min(Math.max(22, trigWidth), stackWidth - 24);
     mixWidth = Math.max(22, stackWidth - trigWidth);
   }
-  const total = stackWidth + logWidth;
-  if (total !== centerBudget) {
-    stackWidth += centerBudget - total;
-    if (showTrig) {
-      mixWidth = stackWidth - trigWidth;
-    } else {
-      mixWidth = stackWidth;
-    }
-  }
   return {
     centerBudget,
     stackWidth: Math.max(0, stackWidth),
     mixWidth: Math.max(0, mixWidth),
     trigWidth: Math.max(0, trigWidth),
-    logWidth: Math.max(0, logWidth),
+    logWidth,
   };
 }

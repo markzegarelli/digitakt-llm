@@ -239,14 +239,13 @@ TRIG keyboard behavior:
 
 - `↑/↓` navigate fields
 - `←/→` adjust field value (`Shift+←/→` for ±10 on numeric fields)
-- `[`/`]` navigate steps while keeping TRIG panel open (and in SEQ step edit without TRIG)
-- Plain `t` (step edit only) opens TRIG when closed or closes it when open. `Shift+t` from the **track row** (not in step edit) enters step edit, opens TRIG, and enables ALL (playhead step when playing). `Shift+t` in step edit toggles ALL when TRIG is open (not on the condition row), or opens TRIG with ALL when TRIG is closed
+- `[`/`]` navigate steps while TRIG keys are active, or move the step when editing the step column
+- Plain `t` (step edit only) toggles whether arrow keys target **TRIG fields** vs the **step column** (TRIG panel is always visible). `Shift+t` from the **track row** (not in step edit) enters step edit, enables TRIG key focus, and enables ALL (playhead step when playing). `Shift+t` in step edit toggles ALL when TRIG keys are active (not on the condition row), or enables TRIG keys with ALL when they are off
 - `0-9` + `Enter` commit typed numeric values directly
 
 The TUI keeps **SEQ** and **MIX** selected tracks in sync: changing the track in either panel updates the other.
 
-In the TUI layout, the left focus rail remains anchored. The sequencer/main stack has priority width,
-while LOG and TRIG share the right-side column when both are visible.
+In the TUI layout, the left focus rail remains anchored. **SEQ** spans the main column; **MIX** and **TRIG** share one row below it (TRIG always shown). **LOG**, when enabled, is a full-width strip under the rail + main block.
 
 ## Per-Step Parameters
 

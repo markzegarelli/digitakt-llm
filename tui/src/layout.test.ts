@@ -41,9 +41,10 @@ test("layout remains stable for narrow windows (no negative widths)", () => {
   expect(out.mainWidth + out.logWidth + out.trigWidth).toBe(out.centerBudget);
 });
 
-test("split stack width plus log equals center budget", () => {
+test("split stack uses full center budget; log is bottom full width (logWidth 0)", () => {
   const out = computeSplitStackLayout({ termCols: 120, showLog: true, showTrig: true });
-  expect(out.stackWidth + out.logWidth).toBe(out.centerBudget);
+  expect(out.stackWidth).toBe(out.centerBudget);
+  expect(out.logWidth).toBe(0);
   expect(out.mixWidth + out.trigWidth).toBe(out.stackWidth);
 });
 

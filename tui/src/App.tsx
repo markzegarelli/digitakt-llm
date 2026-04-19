@@ -70,7 +70,8 @@ export function App({ baseUrl }: AppProps) {
 
   const [patternStepEdit, setPatternStepEdit] = useState(false);
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
-  const [showTrigPanel, setShowTrigPanel] = useState(false);
+  /** When step edit is on, arrows/digits go to TRIG fields instead of the step column (TRIG panel is always visible). */
+  const [trigKeysActive, setTrigKeysActive] = useState(false);
   const [trigField, setTrigField] = useState(0);
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
@@ -105,14 +106,14 @@ export function App({ baseUrl }: AppProps) {
   useEffect(() => {
     if (focus !== "pattern") {
       setPatternStepEdit(false);
-      setShowTrigPanel(false);
+      setTrigKeysActive(false);
       setTrigTrackWide(false);
     }
   }, [focus]);
 
   useEffect(() => {
     setTrigInputBuffer("");
-  }, [showTrigPanel, patternSelectedStep, patternTrack]);
+  }, [trigKeysActive, patternSelectedStep, patternTrack]);
 
   // Clear the full screen when generation completes so Ink redraws into a
   // clean buffer, preventing ghost rows from the previous "generating" frame.
@@ -528,12 +529,7 @@ export function App({ baseUrl }: AppProps) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
         if (focus === "pattern" && patternStepEdit) {
-          if (showTrigPanel) {
-            setShowTrigPanel(false);
-            setTrigTrackWide(false);
-          } else {
-            setShowTrigPanel(true);
-          }
+          setTrigKeysActive((a) => !a);
           return;
         }
         const nextFocus: FocusPanel =
@@ -563,15 +559,15 @@ export function App({ baseUrl }: AppProps) {
               play !== null && play >= 0 ? clamp(play, 0, maxStep) : 0;
             setPatternStepEdit(true);
             setPatternSelectedStep(step);
-            setShowTrigPanel(true);
+            setTrigKeysActive(true);
             setTrigTrackWide(true);
             setTrigField(0);
             setTrigInputBuffer("");
             return;
           }
         } else if (patternStepEdit) {
-          if (!showTrigPanel) {
-            setShowTrigPanel(true);
+          if (!trigKeysActive) {
+            setTrigKeysActive(true);
             setTrigTrackWide(!!shiftT && canFieldUseTrackWide(trigField));
             return;
           }
@@ -579,7 +575,7 @@ export function App({ baseUrl }: AppProps) {
             if (canFieldUseTrackWide(trigField)) setTrigTrackWide((w) => !w);
             return;
           }
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
@@ -608,7 +604,7 @@ export function App({ baseUrl }: AppProps) {
       const plen = state.pattern_length;
       const maxStep = Math.max(0, plen - 1);
 
-      if (showTrigPanel) {
+      if (patternStepEdit && trigKeysActive) {
         const track = TRACK_NAMES[patternTrack] as TrackName;
         const stepIdx = patternSelectedStep;
         const prob = state.pattern_trig.prob[track]?.[stepIdx] ?? 100;
@@ -653,7 +649,7 @@ export function App({ baseUrl }: AppProps) {
 
         if (key.escape) {
           setTrigInputBuffer("");
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
@@ -745,13 +741,13 @@ export function App({ baseUrl }: AppProps) {
       if (patternStepEdit) {
         if (key.escape) {
           setPatternStepEdit(false);
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
         if (key.return) {
           setPatternStepEdit(false);
-          setShowTrigPanel(false);
+          setTrigKeysActive(false);
           setTrigTrackWide(false);
           return;
         }
@@ -773,7 +769,7 @@ export function App({ baseUrl }: AppProps) {
       if (key.return) {
         setPatternStepEdit(true);
         setPatternSelectedStep(0);
-        setShowTrigPanel(false);
+        setTrigKeysActive(false);
         setTrigField(0);
         setTrigTrackWide(false);
         return;
@@ -920,11 +916,10 @@ export function App({ baseUrl }: AppProps) {
   });
 
   const termCols = stdout?.columns ?? 120;
-  const trigOpen = patternStepEdit && showTrigPanel;
-  const { centerBudget, stackWidth, mixWidth, trigWidth: trigRowW, logWidth: logPanelW } = computeSplitStackLayout({
+  const { centerBudget, stackWidth, mixWidth, trigWidth: trigRowW } = computeSplitStackLayout({
     termCols,
     showLog,
-    showTrig: trigOpen,
+    showTrig: true,
   });
   const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
@@ -989,8 +984,7 @@ export function App({ baseUrl }: AppProps) {
                 selectedStep={ccSelectedStep}
                 stepInputBuffer={ccStepInputBuffer}
               />
-              {trigRowW > 0 && (
-                <TrigEditPanel
+              <TrigEditPanel
                   width={trigRowW}
                   track={TRACK_NAMES[patternTrack] as TrackName}
                   stepIndex={patternSelectedStep}
@@ -1007,7 +1001,6 @@ export function App({ baseUrl }: AppProps) {
                   inputBuffer={trigInputBuffer}
                   trackWide={trigTrackWide}
                 />
-              )}
             </Box>
             <GenerationSummary
               summary={state.generation_summary}
@@ -1072,16 +1065,16 @@ export function App({ baseUrl }: AppProps) {
               </Text>
             </Box>
           </Box>
-          {showLog && logPanelW > 0 && (
-            <ActivityLog
-              log={state.log}
-              isFocused={focus === "log"}
-              maxVisible={Math.max(8, 17 + state.ccParams.length)}
-              width={logPanelW}
-            />
-          )}
         </Box>
       </Box>
+      {showLog && (
+        <ActivityLog
+          log={state.log}
+          isFocused={focus === "log"}
+          maxVisible={Math.max(10, Math.min(24, Math.max(8, (stdout?.rows ?? 28) - 14)))}
+          width={termCols}
+        />
+      )}
     </Box>
   );
 }

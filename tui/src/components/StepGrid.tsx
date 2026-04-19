@@ -142,7 +142,7 @@ export function StepGrid({
       <Box marginBottom={0} minHeight={1}>
         <Text color={theme.textFaint}>
           {stepEditMode && isFocused
-            ? "Step edit: ←→ [ ] step  Space  Enter/Esc  Tab|t TRIG  Shift+T ALL  ↑↓ tracks"
+            ? "Step edit: ←→ [ ] step  Space  Enter/Esc  Tab step↔TRIG keys  t TRIG keys  Shift+T ALL  ↑↓ tracks"
             : " "}
         </Text>
       </Box>
