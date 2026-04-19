@@ -11,6 +11,11 @@ import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { computePanelLayout } from "./layout.js";
+import {
+  isKnownSlashCommand,
+  parseChainCommand,
+  validateTrackValueArity,
+} from "./commandParsing.js";
 import type { FocusPanel, TrackName, CCParam } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
 import { theme } from "./theme.js";
@@ -187,21 +192,33 @@ export function App({ baseUrl }: AppProps) {
         }).then(async r => { if (!r.ok) { const b = await r.json().catch(() => ({})) as { detail?: unknown }; actions.addLog(`✗ ${b.detail ?? r.status}`); } });
         break;
       case "prob":
-        actions.setProb(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
-          .catch(dispatchError); break;
-      case "prob-track":
+        {
+          const arityError = validateTrackValueArity("prob", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setProbTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "vel":
-        actions.setVel(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
-          .catch(dispatchError); break;
-      case "vel-track":
+        {
+          const arityError = validateTrackValueArity("vel", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setVelTrack(normalizeTrack(parts[1] ?? "") as TrackName, parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "gate":
-        actions.setGate(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10), parseInt(parts[3] ?? "", 10))
-          .catch(dispatchError); break;
-      case "gate-track":
+        {
+          const arityError = validateTrackValueArity("gate", parts);
+          if (arityError) {
+            actions.addLog(`✗ ${arityError}`);
+            break;
+          }
+        }
         actions.setGateTrack(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "pitch":
@@ -266,41 +283,40 @@ export function App({ baseUrl }: AppProps) {
         if (parts[1]) actions.queueFill(parts[1]).catch((err: Error) => actions.addLog(`Error: ${err.message}`));
         break;
       case "chain": {
-        const autoFlag = parts.includes("--auto");
-        const names = parts.slice(1).filter((p) => p !== "--auto");
-        if (names.length === 0) {
-          actions.addLog("usage: /chain <p1> <p2> ... [--auto]");
-          return;
+        const chainCommand = parseChainCommand(parts);
+        if (chainCommand.kind === "subcommand") {
+          const sub = chainCommand.subcommand;
+          if (sub === "next") {
+            actions.chainNext()
+              .then(() => actions.addLog("chain: queued next candidate"))
+              .catch(dispatchError);
+          } else if (sub === "fire") {
+            actions.chainFire()
+              .then(() => actions.addLog("chain: armed for next 1"))
+              .catch(dispatchError);
+          } else if (sub === "status") {
+            const { chain, chain_index, chain_auto, chain_queued_index, chain_armed } = state;
+            if (chain.length === 0) actions.addLog("no chain defined");
+            else {
+              const pos = chain_index < 0 ? "unstarted" : `${chain_index + 1}/${chain.length}`;
+              const queued = chain_queued_index === null ? "none" : `${chain_queued_index + 1}/${chain.length}`;
+              const armed = chain_armed ? "armed@1" : "idle";
+              actions.addLog(`chain [${pos} queued:${queued} ${armed}]: ${chain.join(" -> ")}${chain_auto ? " (auto)" : ""}`);
+            }
+          } else if (sub === "clear") {
+            actions.chainClear().then(() => actions.addLog("chain cleared")).catch(dispatchError);
+          }
+          break;
         }
-        actions.setChain(names, autoFlag)
-          .then(() => actions.addLog(`chain set: ${names.join(" -> ")}${autoFlag ? " (auto)" : ""}`))
+        if (chainCommand.kind === "error") {
+          actions.addLog(chainCommand.message);
+          break;
+        }
+        actions.setChain(chainCommand.names, chainCommand.autoFlag)
+          .then(() => actions.addLog(`chain set: ${chainCommand.names.join(" -> ")}${chainCommand.autoFlag ? " (auto)" : ""}`))
           .catch(dispatchError);
         break;
       }
-      case "chain-next":
-        actions.chainNext()
-          .then(() => actions.addLog("chain: queued next candidate"))
-          .catch(dispatchError);
-        break;
-      case "chain-fire":
-        actions.chainFire()
-          .then(() => actions.addLog("chain: armed for next 1"))
-          .catch(dispatchError);
-        break;
-      case "chain-status": {
-        const { chain, chain_index, chain_auto, chain_queued_index, chain_armed } = state;
-        if (chain.length === 0) actions.addLog("no chain defined");
-        else {
-          const pos = chain_index < 0 ? "unstarted" : `${chain_index + 1}/${chain.length}`;
-          const queued = chain_queued_index === null ? "none" : `${chain_queued_index + 1}/${chain.length}`;
-          const armed = chain_armed ? "armed@1" : "idle";
-          actions.addLog(`chain [${pos} queued:${queued} ${armed}]: ${chain.join(" -> ")}${chain_auto ? " (auto)" : ""}`);
-        }
-        break;
-      }
-      case "chain-clear":
-        actions.chainClear().then(() => actions.addLog("chain cleared")).catch(dispatchError);
-        break;
       case "patterns": {
         const filterTag = parts[1]?.startsWith("#") ? parts[1].slice(1) : null;
         setShowLog(true);
@@ -335,7 +351,11 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       default:
-        if (cmd.startsWith("/")) { actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`); return; }
+        if (cmd.startsWith("/") && !isKnownSlashCommand(verb)) {
+          actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);
+          return;
+        }
+        if (cmd.startsWith("/")) return;
         if (stripped.trim()) {
           if (inputMode === "chat") {
             setAskPending(true); setFocus("prompt");
@@ -831,7 +851,7 @@ export function App({ baseUrl }: AppProps) {
           />
           <Box paddingX={1}>
             <Text color={theme.textFaint}>
-              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  n chain-next  Shift+N chain-fire  +/- BPM  Ctrl+C quit"}
+              {"/ prompt  Tab panels  Enter step  t TRIG  Shift+T ALL (SEQ row or step edit)  [ ] step  Space  m mute  n chain next  N chain fire  +/- BPM  Ctrl+C quit"}
             </Text>
           </Box>
         </Box>
