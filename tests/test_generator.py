@@ -745,6 +745,10 @@ def test_detect_genre_respects_negation_phrases():
     assert _detect_genre("no drone layers") is None
 
 
+def test_detect_genre_negation_does_not_cross_clause_boundary():
+    assert _detect_genre("not techno, ambient pad wash") == "ambient"
+
+
 def test_detect_genre_first_mention_wins_with_multiple_genres():
     import core.generator as generator_module
 

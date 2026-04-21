@@ -254,7 +254,11 @@ def _is_negated_match(prompt_lowered: str, start: int) -> bool:
         if prefix == "non-":
             return True
 
-    window = prompt_lowered[max(0, start - 40):start]
+    # Keep negation local to the current clause. This avoids false negatives
+    # like "not techno, ambient pad" where "not" should not suppress "ambient".
+    prefix = prompt_lowered[:start]
+    clause_start = max(prefix.rfind(sep) for sep in ",.;:!?\n")
+    window = prefix[clause_start + 1:]
     tokens = re.findall(r"[a-z]+", window)
     if not tokens:
         return False
