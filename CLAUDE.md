@@ -59,6 +59,8 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/ask <question>` — ask Claude (works in any mode)
 - `/fresh <prompt>` — generate a new pattern without prior-pattern variation context (same as `POST /generate` with `"variation": false`)
 - `/gen` — generate a beat from the last `/ask` response
+- `/midi` — connect MIDI output after hot-plug (auto-finds a port whose name contains `Digitakt`); flushes CC and sends MIDI start if playback is already running
+- `/midi list` — list MIDI output port names (when auto-detect fails)
 
 Keyboard shortcuts (Pattern panel):
 - `?` — open the help overlay (also works from MIX/LOG focus, or from CMD when the input line is empty)
@@ -147,6 +149,7 @@ Key endpoints:
 - `POST /random` — randomize velocity or prob for a track
 - `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
+- `GET /midi/outputs`, `POST /midi/connect` — hot-plug MIDI output (`{"port": "exact name"}` optional; omit to auto-detect Digitakt)
 - `GET/POST /patterns/{name}` — save/load patterns; `DELETE /patterns/{name}` — remove a save
 - `POST /note` — per-step MIDI note (`track`, `step`, `value` 0–127 or `null` to inherit `track_pitch`)
 - `POST /length` — set pattern step count (8, 16, 32)

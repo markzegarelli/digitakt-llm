@@ -54,6 +54,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `playback_started` | Player | `{}` |
 | `playback_stopped` | Player | `{}` |
 | `midi_disconnected` | Player | `{port}` |
+| `midi_connected` | Server | `{port}` — after `POST /midi/connect` hot-plugs an output |
 | `cc_changed` | Server | `{track, param, value}` |
 | `cc_step_changed` | Server | `{track, param, step, value}` |
 | `mute_changed` | Server / Player | `{track, muted}` |
@@ -345,6 +346,8 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | `POST` | `/ask` | Q&A via Claude Haiku (single call; trailing `IMPLEMENTABLE: YES/NO` parsed for `/gen` hint) |
 | `POST` | `/play` | Start MIDI playback |
 | `POST` | `/stop` | Stop MIDI playback |
+| `GET` | `/midi/outputs` | List MIDI output port names |
+| `POST` | `/midi/connect` | Hot-plug MIDI output (`{}` auto-finds a port containing `Digitakt`, or `{"port": "<exact name>"}`) |
 | `POST` | `/bpm` | Set tempo (20–400) |
 | `POST` | `/swing` | Set swing amount (0–100) |
 | `POST` | `/length` | Set pattern step count (8, 16, or 32) |

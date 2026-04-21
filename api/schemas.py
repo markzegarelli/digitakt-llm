@@ -250,3 +250,18 @@ class AskResponse(BaseModel):
 class ChainRequest(BaseModel):
     names: list[str] = Field(min_length=1)
     auto: bool = False
+
+
+class MidiConnectRequest(BaseModel):
+    """Omit `port` to auto-detect an output whose name contains \"Digitakt\"."""
+
+    port: str | None = Field(default=None, description="Exact name from GET /midi/outputs")
+
+
+class MidiConnectResponse(BaseModel):
+    status: str
+    port: str
+
+
+class MidiOutputsResponse(BaseModel):
+    ports: list[str]
