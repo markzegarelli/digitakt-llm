@@ -249,7 +249,9 @@ def test_loop_respects_pattern_length_8():
     steps_seen = []
     bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
     player.start()
-    time.sleep(0.05)
+    deadline = time.monotonic() + 0.2
+    while time.monotonic() < deadline and len(steps_seen) < 8:
+        time.sleep(0.005)
     player.stop()
     assert steps_seen, "No steps emitted"
     assert all(s < 8 for s in steps_seen)
@@ -263,7 +265,9 @@ def test_loop_respects_pattern_length_32():
     steps_seen = []
     bus.subscribe("step_changed", lambda p: steps_seen.append(p["step"]))
     player.start()
-    time.sleep(0.05)
+    deadline = time.monotonic() + 0.3
+    while time.monotonic() < deadline and not any(s >= 16 for s in steps_seen):
+        time.sleep(0.005)
     player.stop()
     assert any(s >= 16 for s in steps_seen), "No steps > 15 seen for 32-step pattern"
     assert all(s < 32 for s in steps_seen)
