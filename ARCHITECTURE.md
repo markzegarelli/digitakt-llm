@@ -192,6 +192,14 @@ Before every API call, `Generator._build_state_context()` assembles a plain-text
 
 If `state.last_prompt` is set, subsequent prompts are sent as variations: the prior prompt and active pattern JSON (non-silent tracks only) are prepended to the user message alongside the state context, giving Claude full context for incremental changes.
 
+## Genre Context Injection
+
+`Generator._build_user_prompt()` also consults a small genre registry (`_GENRE_ALIASES` + `_GENRE_CONTEXTS` in `core/generator.py`). When the user prompt matches a registered alias (longest-match wins), the corresponding context block is prepended to the user message — before the variation/TARGETED UPDATE block and before `Current state:`. The system prompt stays byte-identical so Anthropic's ephemeral prompt cache keeps hitting; all variability rides in the user message.
+
+The first genre is `ambient` (aliases: `ambient`, `dark ambient`, `drone`, `downtempo`, `soundscape`, `deep listening`). Its context remaps the 8 drum track slots to atmospheric voices (sub drone, reverse swell, tonal pad, granular texture, FM bell, shimmer cloud, tape wash, long crash) and requires the model to open `producer_notes` with a `TRACK SAMPLES:` section listing a sample description per track. No schema change was needed — the per-track descriptions ride inside the existing `producer_notes` string that the TUI already renders.
+
+Adding another genre is a two-line change: one entry in `_GENRE_ALIASES` and one in `_GENRE_CONTEXTS`.
+
 ## Conversation Continuity
 
 `Generator.conversation_history` is a shared list (bounded to 20 entries / 10 pairs) used by both beat generation and the `/ask` Q&A path. This means follow-up questions can reference recently generated patterns, and beat prompts can reference prior conversation. Both `_run()` and `answer_question()` append to this history after each interaction.

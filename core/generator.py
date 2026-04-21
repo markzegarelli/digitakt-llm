@@ -160,6 +160,138 @@ _TRACK_ALIASES: dict[str, list[str]] = {
 }
 
 
+# Ambient context block injected into the user message (not the system prompt)
+# when the user prompt matches an ambient alias. Kept out of the cached system
+# prompt to preserve prompt-cache hit rate for the common techno path.
+_AMBIENT_CONTEXT = (
+    "AMBIENT MODE CONTEXT (use instead of standard drum conventions):\n"
+    "This is an ambient / drone / downtempo request. The 8 fixed track slots are\n"
+    "named after drums (kick/snare/tom/clap/bell/hihat/openhat/cymbal) but should\n"
+    "be REPURPOSED as atmospheric voices. Do not program a typical beat.\n\n"
+    "PATTERN CONVENTIONS:\n"
+    "  - BPM 70–110 (pick from ambient range).\n"
+    "  - Extremely sparse triggers: often 1–2 hits per bar per voice; some voices\n"
+    "    may be silent across the entire loop (that is correct, not a mistake).\n"
+    "  - Avoid four-on-the-floor, avoid hi-hat 16th grids — no rhythmic beat.\n"
+    "  - Use \"prob\" aggressively on 10–40 for most active steps so the loop\n"
+    "    evolves slowly across bars rather than repeating verbatim.\n"
+    "  - \"swing\" should be 0 unless the request explicitly asks for groove.\n"
+    "  - Velocities soft: mostly 40–90. Occasional 100+ for a swell peak.\n\n"
+    "TRACK ROLE REMAPPING — treat each track as an ambient voice:\n"
+    "  - kick    → sub drone / filtered low pulse (≤1 hit per bar, very long tail)\n"
+    "  - snare   → reverse cymbal swell / noise riser\n"
+    "  - tom     → tonal pad or mallet (long attack, long decay)\n"
+    "  - clap    → granular texture burst / air / breath sample\n"
+    "  - bell    → FM bell / chime / music-box ping with long reverb tail\n"
+    "  - hihat   → high shimmer / grain cloud / tape flutter\n"
+    "  - openhat → wash / tape hiss bed / field-recording wind\n"
+    "  - cymbal  → crash with very long reverb, used once as a rare marker\n\n"
+    "CC GUIDANCE TUNED FOR AMBIENT (emit a \"cc\" block reflecting these):\n"
+    "  attack 40–100, decay 100–127, reverb 60–100, delay 30–70,\n"
+    "  filter 40–90 (for slow movement), resonance 0–25, volume 90–110.\n"
+    "  Kick/sub voice may keep attack low (0–15) but decay 100+ for sustain.\n\n"
+    "REQUIRED producer_notes FORMAT for ambient:\n"
+    "producer_notes MUST begin with a TRACK SAMPLES: section listing every one\n"
+    "of the 8 tracks on its own line as:\n"
+    "  - <track>: <concise sample description>\n"
+    "Then follow with 2–4 short sentences of arrangement guidance (evolution,\n"
+    "register, how the voices interlock over time). Plain text, no markdown.\n"
+    "Example opening:\n"
+    "TRACK SAMPLES:\n"
+    "- kick: filtered sub-drone, one pulse per bar, slow decay\n"
+    "- snare: reverse cymbal swell on the back half of the bar\n"
+    "- tom: soft mallet pad, long attack, rooted on A2\n"
+    "- clap: granular breath texture, very low velocity\n"
+    "- bell: FM chime with 3-second reverb, sparse taps\n"
+    "- hihat: high shimmer cloud, probability 20\n"
+    "- openhat: tape hiss wash, constant low-velocity bed\n"
+    "- cymbal: crash with 6-second tail, fires once across the loop\n"
+)
+
+
+_GENRE_ALIASES: dict[str, list[str]] = {
+    # Longer phrases first in the matching pass below so e.g. "dark ambient"
+    # wins over "ambient" when both appear.
+    "ambient": [
+        "dark ambient",
+        "deep listening",
+        "ambient",
+        "drone",
+        "downtempo",
+        "soundscape",
+    ],
+}
+
+
+_GENRE_CONTEXTS: dict[str, str] = {
+    "ambient": _AMBIENT_CONTEXT,
+}
+
+
+def _validate_genre_registry() -> None:
+    """Fail fast if genre alias/context maps drift out of sync."""
+    alias_keys = set(_GENRE_ALIASES.keys())
+    context_keys = set(_GENRE_CONTEXTS.keys())
+    if alias_keys != context_keys:
+        missing_contexts = sorted(alias_keys - context_keys)
+        missing_aliases = sorted(context_keys - alias_keys)
+        raise ValueError(
+            "Genre registry key mismatch: "
+            f"missing_contexts={missing_contexts}, missing_aliases={missing_aliases}"
+        )
+
+
+_validate_genre_registry()
+
+
+_GENRE_NEGATION_WORDS = {"no", "not", "without", "non"}
+
+
+def _is_negated_match(prompt_lowered: str, start: int) -> bool:
+    """Return True when a genre alias is locally negated (e.g. 'not ambient')."""
+    if start > 0 and prompt_lowered[start - 1] == "-":
+        prefix = prompt_lowered[max(0, start - 4):start]
+        if prefix == "non-":
+            return True
+
+    window = prompt_lowered[max(0, start - 40):start]
+    tokens = re.findall(r"[a-z]+", window)
+    if not tokens:
+        return False
+
+    # Allow small filler words between negation and alias ("not really ambient").
+    for token in tokens[-4:]:
+        if token in _GENRE_NEGATION_WORDS:
+            return True
+    return False
+
+
+def _detect_genre(prompt: str) -> str | None:
+    """Return canonical genre key when a genre alias appears in the prompt.
+
+    Uses word-boundary matching, ignores locally negated aliases
+    ("not ambient", "non-ambient"), and for multi-genre prompts picks the
+    first mention in the sentence. For aliases at the same start position,
+    longer phrases win ("dark ambient" beats "ambient").
+    """
+    lowered = prompt.lower()
+    matches: list[tuple[int, int, str]] = []
+
+    for genre, aliases in _GENRE_ALIASES.items():
+        for alias in aliases:
+            for m in re.finditer(r"\b" + re.escape(alias) + r"\b", lowered):
+                if _is_negated_match(lowered, m.start()):
+                    continue
+                matches.append((m.start(), m.end(), genre))
+
+    if not matches:
+        return None
+
+    # First mention wins; if aliases share a start index, prefer longer phrase.
+    matches.sort(key=lambda m: (m[0], -(m[1] - m[0])))
+    return matches[0][2]
+
+
 def _detect_target_tracks(prompt: str) -> set[str]:
     """Return canonical track names mentioned (directly or by alias) in prompt."""
     lowered = prompt.lower()
@@ -532,6 +664,9 @@ class Generator:
 
     def _build_user_prompt(self, prompt: str, variation: bool) -> str:
         state_ctx = self._build_state_context()
+        genre = _detect_genre(prompt)
+        genre_block = _GENRE_CONTEXTS.get(genre, "") if genre else ""
+        genre_prefix = f"{genre_block}\n" if genre_block else ""
 
         if variation and self.state.last_prompt and self.state.current_pattern:
             steps = self.state.pattern_length
@@ -548,6 +683,7 @@ class Generator:
             else:
                 constraint = ""
             return (
+                f"{genre_prefix}"
                 f"{constraint}"
                 f"Current state:\n{state_ctx}\n\n"
                 f"Previous prompt: {self.state.last_prompt}\n"
@@ -556,7 +692,9 @@ class Generator:
             )
 
         if state_ctx:
-            return f"Current state:\n{state_ctx}\n\n{prompt}"
+            return f"{genre_prefix}Current state:\n{state_ctx}\n\n{prompt}"
+        if genre_prefix:
+            return f"{genre_prefix}\n{prompt}"
         return prompt
 
     def _parse_pattern(
