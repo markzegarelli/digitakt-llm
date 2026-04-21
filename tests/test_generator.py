@@ -6,6 +6,7 @@ from core.events import EventBus
 from core.generator import (
     Generator,
     _compute_generation_summary,
+    _detect_genre,
     _detect_target_tracks,
     _normalize_producer_notes,
     _opus_max_output_tokens,
@@ -711,3 +712,82 @@ def test_system_prompt_includes_targeted_update_guidance():
     assert "TARGETED UPDATES" in prompt
     assert "PRESERVE" in prompt
     assert "amp envelope" in prompt
+
+
+# ── Genre context injection ──────────────────────────────────────────────────
+
+def test_detect_genre_ambient_aliases():
+    assert _detect_genre("ambient pad loop") == "ambient"
+    assert _detect_genre("dark ambient drone") == "ambient"
+    assert _detect_genre("slow downtempo texture") == "ambient"
+    assert _detect_genre("eerie soundscape") == "ambient"
+    assert _detect_genre("DRONE layers please") == "ambient"
+
+
+def test_detect_genre_no_match():
+    assert _detect_genre("techno banger 135 bpm") is None
+    assert _detect_genre("dub techno groove") is None
+    assert _detect_genre("") is None
+
+
+def test_detect_genre_word_boundary():
+    # Substring without word boundary must not match.
+    assert _detect_genre("ambientness") is None
+    assert _detect_genre("dronebot") is None
+
+
+def test_build_user_prompt_injects_ambient_block_plain():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("deep ambient texture", variation=False)
+
+    assert "AMBIENT MODE CONTEXT" in prompt
+    assert "TRACK SAMPLES:" in prompt
+    assert "REPURPOSED" in prompt
+    # Ensure the original user request survives the prefix.
+    assert "deep ambient texture" in prompt
+
+
+def test_build_user_prompt_no_injection_when_no_genre_match():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("punchy minimal techno", variation=False)
+
+    assert "AMBIENT MODE CONTEXT" not in prompt
+    assert "TRACK SAMPLES:" not in prompt
+
+
+def test_build_user_prompt_injects_ambient_block_with_state():
+    state = AppState()
+    state.bpm = 90
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("slow downtempo pad", variation=False)
+
+    assert "AMBIENT MODE CONTEXT" in prompt
+    assert "Current state:" in prompt
+    # Genre block must precede state context.
+    assert prompt.index("AMBIENT MODE CONTEXT") < prompt.index("Current state:")
+
+
+def test_build_user_prompt_ambient_composes_with_targeted_variation():
+    state = AppState()
+    state.last_prompt = "previous ambient drone"
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt(
+        "make the bell more ambient and sparse", variation=True
+    )
+
+    assert "AMBIENT MODE CONTEXT" in prompt
+    assert "TARGETED UPDATE" in prompt
+    assert "Apply this variation:" in prompt
+    # Genre block should come before the TARGETED UPDATE block.
+    assert prompt.index("AMBIENT MODE CONTEXT") < prompt.index("TARGETED UPDATE")
