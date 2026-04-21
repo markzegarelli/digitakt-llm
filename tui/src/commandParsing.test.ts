@@ -42,3 +42,9 @@ describe("removed commands are unknown", () => {
     expect(isKnownSlashCommand("chain-next")).toBe(false);
   });
 });
+
+describe("MIDI slash command", () => {
+  test("recognizes midi", () => {
+    expect(isKnownSlashCommand("midi")).toBe(true);
+  });
+});

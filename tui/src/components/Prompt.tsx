@@ -48,6 +48,8 @@ const HELP_LINES = [
   "  read                                 Claude describes current pattern",
   "",
   "── App ────────────────────────────────────────────────────────",
+  "  midi                                 connect MIDI output (hot-plug; auto-finds Digitakt)",
+  "  midi list                            list MIDI output port names",
   "  help                                 show this help",
   "  ?                                    open help (SEQ/MIX) or empty CMD line",
   "  quit / q                             exit",
@@ -93,7 +95,7 @@ const HELP_LINES = [
 // All slash commands for autocomplete
 const COMMANDS = [
   "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "fill", "fresh", "gate",
-  "gen", "help", "history", "length", "load", "log", "mode", "mute",
+  "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
   "chain", "next", "vary", "read",

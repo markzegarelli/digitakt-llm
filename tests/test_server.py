@@ -95,6 +95,62 @@ def test_post_stop_returns_200(tmp_path):
     assert resp.status_code == 200
 
 
+def test_get_midi_outputs(tmp_path):
+    client = _make_test_client(tmp_path)
+    with patch("api.server.midi_utils.list_ports", return_value=["Generic", "Elektron Digitakt"]):
+        resp = client.get("/midi/outputs")
+    assert resp.status_code == 200
+    assert resp.json()["ports"] == ["Generic", "Elektron Digitakt"]
+
+
+def test_post_midi_connect_auto_digitakt(tmp_path):
+    state = AppState()
+    state.current_pattern = {k: list(DEFAULT_PATTERN[k]) for k in TRACK_NAMES}
+    bus = EventBus()
+    old_port = MagicMock()
+    player = Player(state, bus, old_port)
+    gen = Generator(state, bus)
+    gen._client = MagicMock()
+    server_module.init(state, bus, player, gen, patterns_dir=str(tmp_path))
+    client = TestClient(server_module.app)
+    new_port = MagicMock()
+    with patch("api.server.midi_utils.list_ports", return_value=["Other", "Elektron Digitakt MIDI 1"]):
+        with patch("api.server.midi_utils.open_port", return_value=new_port):
+            resp = client.post("/midi/connect", json={})
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "connected", "port": "Elektron Digitakt MIDI 1"}
+    assert server_module._player.port is new_port
+    assert state.midi_port_name == "Elektron Digitakt MIDI 1"
+    old_port.close.assert_called_once()
+
+
+def test_post_midi_connect_explicit_port(tmp_path):
+    client = _make_test_client(tmp_path)
+    new_port = MagicMock()
+    with patch("api.server.midi_utils.list_ports", return_value=["Custom Name", "X"]):
+        with patch("api.server.midi_utils.open_port", return_value=new_port):
+            resp = client.post("/midi/connect", json={"port": "Custom Name"})
+    assert resp.status_code == 200
+    assert resp.json()["port"] == "Custom Name"
+
+
+def test_post_midi_connect_no_digitakt(tmp_path):
+    client = _make_test_client(tmp_path)
+    with patch("api.server.midi_utils.list_ports", return_value=["USB MIDI"]):
+        resp = client.post("/midi/connect", json={})
+    assert resp.status_code == 404
+    detail = resp.json()["detail"]
+    assert isinstance(detail, dict)
+    assert "Digitakt" in detail["message"]
+
+
+def test_post_midi_connect_unknown_explicit_port(tmp_path):
+    client = _make_test_client(tmp_path)
+    with patch("api.server.midi_utils.list_ports", return_value=["Only This"]):
+        resp = client.post("/midi/connect", json={"port": "Missing"})
+    assert resp.status_code == 404
+
+
 def test_get_patterns_empty(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.get("/patterns")
