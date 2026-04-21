@@ -439,6 +439,54 @@ export function App({ baseUrl }: AppProps) {
           .catch((err: Error) => actions.addLog(`✗ /patterns: ${err.message}`));
         break;
       }
+      case "midi": {
+        const sub = parts[1]?.toLowerCase();
+        if (sub === "list") {
+          fetch(`${baseUrl}/midi/outputs`)
+            .then(async (r) => {
+              if (!r.ok) {
+                const b = await r.json().catch(() => ({})) as { detail?: unknown };
+                const d = b.detail;
+                actions.addLog(
+                  typeof d === "string" ? `✗ /midi list: ${d}` : `✗ /midi list: HTTP ${r.status}`,
+                );
+                return;
+              }
+              const d = await r.json() as { ports?: string[] };
+              const ports = Array.isArray(d.ports) ? d.ports : [];
+              if (ports.length === 0) actions.addLog("No MIDI output ports.");
+              else ports.forEach((p) => actions.addLog(`  ${p}`));
+            })
+            .catch((err: Error) => actions.addLog(`✗ /midi list: ${err.message}`));
+          break;
+        }
+        fetch(`${baseUrl}/midi/connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        })
+          .then(async (r) => {
+            if (!r.ok) {
+              const b = await r.json().catch(() => ({})) as { detail?: unknown };
+              const det = b.detail;
+              if (det && typeof det === "object" && det !== null && "message" in det) {
+                const o = det as { message: string; available?: string[] };
+                actions.addLog(`✗ ${o.message}`);
+                if (Array.isArray(o.available) && o.available.length > 0) {
+                  actions.addLog("MIDI outputs:");
+                  o.available.forEach((p) => actions.addLog(`  ${p}`));
+                }
+              } else {
+                actions.addLog(
+                  typeof det === "string" ? `✗ ${det}` : `✗ /midi: HTTP ${r.status}`,
+                );
+              }
+              return;
+            }
+          })
+          .catch((err: Error) => actions.addLog(`✗ /midi: ${err.message}`));
+        break;
+      }
       default:
         if (cmd.startsWith("/") && !isKnownSlashCommand(verb)) {
           actions.addLog(`✗ Unknown command: "/${verb}". Type /help for commands.`);

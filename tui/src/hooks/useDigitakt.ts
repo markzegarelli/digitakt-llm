@@ -54,6 +54,7 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "playback_started":     return "playback started";
     case "playback_stopped":     return "playback stopped";
     case "midi_disconnected":    return `MIDI disconnected: ${data["port"]}`;
+    case "midi_connected":       return `MIDI connected: ${data["port"]}`;
     case "cc_changed":           return `CC: ${data["track"]} ${data["param"]} = ${data["value"]}`;
     case "cc_step_changed":      return `CC step: ${data["track"]} ${data["param"]} step ${data["step"]} = ${data["value"]}`;
     case "mute_changed":         return `mute: ${data["track"]} = ${data["muted"]}`;
@@ -336,6 +337,13 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               };
             case "midi_disconnected":
               return { ...prev, midi_connected: false, log: newLog };
+            case "midi_connected":
+              return {
+                ...prev,
+                midi_port_name: data["port"] as string,
+                midi_connected: true,
+                log: newLog,
+              };
             case "swing_changed":
               return { ...prev, swing: msg.data["amount"] as number, log: newLog };
             case "length_changed": {

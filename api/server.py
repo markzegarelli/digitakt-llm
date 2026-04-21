@@ -32,6 +32,9 @@ from api.schemas import (
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
     ChainRequest,
+    MidiConnectRequest,
+    MidiConnectResponse,
+    MidiOutputsResponse,
 )
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
@@ -41,6 +44,7 @@ from cli.commands import (
     apply_note_step,
 )
 from core.events import EventBus
+from core import midi_utils
 from core.midi_utils import CC_MAP, TRACK_CHANNELS, send_cc, _CC_PARAM_DEFS
 from core.mutator import PatternMutator
 from core.state import AppState, TRACK_NAMES
@@ -80,6 +84,7 @@ _PATTERN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _ALL_EVENTS = [
     "pattern_changed", "bpm_changed", "playback_started", "playback_stopped",
     "generation_started", "generation_complete", "generation_failed", "midi_disconnected",
+    "midi_connected",
     "cc_changed", "cc_step_changed", "mute_changed", "velocity_changed",
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
@@ -227,6 +232,59 @@ def post_play():
 def post_stop():
     _player.stop()
     return {"status": "stopped"}
+
+
+@app.get("/midi/outputs", response_model=MidiOutputsResponse)
+def get_midi_outputs():
+    return MidiOutputsResponse(ports=midi_utils.list_ports())
+
+
+@app.post("/midi/connect", response_model=MidiConnectResponse)
+def post_midi_connect(req: MidiConnectRequest):
+    """Attach a MIDI output after hot-plug. Auto-finds a port containing \"Digitakt\" unless `port` is set."""
+    available = midi_utils.list_ports()
+    if req.port is not None:
+        if req.port not in available:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": f"No output named {req.port!r}",
+                    "available": available,
+                },
+            )
+        port_name = req.port
+    else:
+        port_name = midi_utils.find_digitakt(available)
+        if port_name is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "No Digitakt MIDI output found (name must contain \"Digitakt\").",
+                    "available": available,
+                },
+            )
+
+    old_port = _player.port
+    try:
+        new_port = midi_utils.open_port(port_name)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Could not open MIDI port: {e}") from e
+
+    _player.port = new_port
+    _state.midi_port_name = port_name
+
+    if old_port is not None:
+        try:
+            old_port.close()
+        except Exception:
+            logger.debug("Could not close previous MIDI output", exc_info=True)
+
+    if _state.is_playing and _player.port is not None:
+        midi_utils.send_start(_player.port)
+    _send_all_track_cc_to_midi()
+
+    _broadcast_event("midi_connected", {"port": port_name})
+    return MidiConnectResponse(status="connected", port=port_name)
 
 
 @app.post("/new")
