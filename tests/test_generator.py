@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.generator import (
+    _GENRE_ALIASES,
+    _GENRE_CONTEXTS,
     Generator,
     _compute_generation_summary,
     _detect_genre,
@@ -734,6 +736,36 @@ def test_detect_genre_word_boundary():
     # Substring without word boundary must not match.
     assert _detect_genre("ambientness") is None
     assert _detect_genre("dronebot") is None
+
+
+def test_detect_genre_respects_negation_phrases():
+    assert _detect_genre("not ambient please") is None
+    assert _detect_genre("non-ambient techno groove") is None
+    assert _detect_genre("without downtempo vibes") is None
+    assert _detect_genre("no drone layers") is None
+
+
+def test_detect_genre_first_mention_wins_with_multiple_genres():
+    import core.generator as generator_module
+
+    with patch.dict(
+        generator_module._GENRE_ALIASES,
+        {
+            "ambient": ["ambient", "drone"],
+            "industrial": ["industrial", "hard industrial"],
+        },
+        clear=True,
+    ), patch.dict(
+        generator_module._GENRE_CONTEXTS,
+        {"ambient": "ambient ctx", "industrial": "industrial ctx"},
+        clear=True,
+    ):
+        assert _detect_genre("industrial pulse then ambient wash") == "industrial"
+        assert _detect_genre("ambient wash then industrial pulse") == "ambient"
+
+
+def test_genre_registry_maps_have_identical_keys():
+    assert set(_GENRE_ALIASES.keys()) == set(_GENRE_CONTEXTS.keys())
 
 
 def test_build_user_prompt_injects_ambient_block_plain():

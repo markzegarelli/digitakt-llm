@@ -228,12 +228,51 @@ _GENRE_CONTEXTS: dict[str, str] = {
 }
 
 
+def _validate_genre_registry() -> None:
+    """Fail fast if genre alias/context maps drift out of sync."""
+    alias_keys = set(_GENRE_ALIASES.keys())
+    context_keys = set(_GENRE_CONTEXTS.keys())
+    if alias_keys != context_keys:
+        missing_contexts = sorted(alias_keys - context_keys)
+        missing_aliases = sorted(context_keys - alias_keys)
+        raise ValueError(
+            "Genre registry key mismatch: "
+            f"missing_contexts={missing_contexts}, missing_aliases={missing_aliases}"
+        )
+
+
+_validate_genre_registry()
+
+
+_GENRE_NEGATION_WORDS = {"no", "not", "without", "non"}
+
+
+def _is_negated_match(prompt_lowered: str, start: int) -> bool:
+    """Return True when a genre alias is locally negated (e.g. 'not ambient')."""
+    if start > 0 and prompt_lowered[start - 1] == "-":
+        prefix = prompt_lowered[max(0, start - 4):start]
+        if prefix == "non-":
+            return True
+
+    window = prompt_lowered[max(0, start - 40):start]
+    tokens = re.findall(r"[a-z]+", window)
+    if not tokens:
+        return False
+
+    # Allow small filler words between negation and alias ("not really ambient").
+    for token in tokens[-4:]:
+        if token in _GENRE_NEGATION_WORDS:
+            return True
+    return False
+
+
 def _detect_genre(prompt: str) -> str | None:
     """Return canonical genre key when a genre alias appears in the prompt.
 
-    Uses word-boundary matching and prefers longer alias phrases so compound
-    names (e.g. "dark ambient") win over single-word prefixes ("ambient").
-    Returns None when no registered genre alias matches.
+    Uses word-boundary matching, ignores locally negated aliases
+    ("not ambient", "non-ambient"), and for multi-genre prompts picks the
+    first mention in the sentence. For aliases at the same start position,
+    longer phrases win ("dark ambient" beats "ambient").
     """
     lowered = prompt.lower()
     matches: list[tuple[int, int, str]] = []
@@ -241,13 +280,15 @@ def _detect_genre(prompt: str) -> str | None:
     for genre, aliases in _GENRE_ALIASES.items():
         for alias in aliases:
             for m in re.finditer(r"\b" + re.escape(alias) + r"\b", lowered):
+                if _is_negated_match(lowered, m.start()):
+                    continue
                 matches.append((m.start(), m.end(), genre))
 
     if not matches:
         return None
 
-    # Prefer longer alias spans first; on tie, earliest position wins.
-    matches.sort(key=lambda m: (-(m[1] - m[0]), m[0]))
+    # First mention wins; if aliases share a start index, prefer longer phrase.
+    matches.sort(key=lambda m: (m[0], -(m[1] - m[0])))
     return matches[0][2]
 
 
