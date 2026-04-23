@@ -97,7 +97,7 @@ interface EuclidRingPanelProps {
   // k/n/r edit state (owned by App.tsx)
   editBox: number | null;      // null = no box focused; 0=k, 1=n, 2=r
   onEditBoxChange: (box: number | null) => void;
-  onValueChange: (track: TrackName, field: "k" | "n" | "r", delta: number) => void;
+  onValueChange: (field: "k" | "n" | "r", delta: number) => void;
 }
 ```
 
@@ -114,7 +114,7 @@ interface EuclidRingPanelProps {
 └──────────────────────────────────────────────────────────┘
 ```
 
-- Ring grid is left-padded to center within `width`
+- Ring grid is centered horizontally within `width`
 - k/n/r boxes are monospace, rendered with `<Box>` + `<Text>` using Ink
 - Active box has `borderColor={theme.borderActive}`, inactive has `borderColor={theme.border}`
 - Grid size: 9×9 if `width ≥ 60`, else 7×7
@@ -130,7 +130,7 @@ seq_mode: "standard" | "euclidean";
 euclid: Record<TrackName, { k: number; n: number; r: number }>;
 ```
 
-Defaults: `seq_mode = "standard"`, all tracks `{ k: patternLength, n: patternLength, r: 0 }`.
+TypeScript initial value: `seq_mode = "standard"`, all tracks `{ k: 16, n: 16, r: 0 }`. Real values are populated immediately from the first WebSocket `state` message.
 
 ### `useDigitakt.ts` — `pattern_changed` handler
 
