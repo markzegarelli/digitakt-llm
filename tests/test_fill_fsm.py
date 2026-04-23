@@ -165,7 +165,10 @@ def test_apply_bar_boundary_no_pending_returns_current():
     pat = {k: [1] * 16 for k in TRACK_NAMES}
     state.current_pattern = dict(pat)
     result = state.apply_bar_boundary()
-    assert result["current_pattern"] == pat
+    cp = result["current_pattern"]
+    for t in TRACK_NAMES:
+        assert cp[t] == pat[t]
+    assert cp.get("seq_mode") == "standard"
     assert result["pattern_changed"] is False
     assert result["fill_event"] is None
     assert result["mute_changes"] is None

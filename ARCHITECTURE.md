@@ -26,9 +26,12 @@ Anthropic API → JSON → validate
 Player._loop()                  ← runs in daemon thread
     │  N steps × 6 MIDI clock ticks (24 PPQN), N = pattern_length (8/16/32)
     │  per step: apply swing delay on odd steps, evaluate conditional trig,
-    │            check per-step prob, scale velocity by track_velocity,
+    │            check per-step prob; if `current_pattern.seq_mode` is `euclidean`, gate note-ons
+    │            by per-track Bjorklund (k, n, r) from `current_pattern.euclid`
+    │            scale velocity by track_velocity,
     │            apply gate scheduling (note_off via threading.Timer), send note + clock ticks
     │  check track_muted before sending
+    │  per-step CC overrides are sent every step regardless of Euclidean gating
     │
     └── end of loop:
         ├── if pending_pattern → swap atomically; emits: pattern_changed
@@ -40,7 +43,8 @@ Player._loop()                  ← runs in daemon thread
 command → clone pattern (deepcopy) → mutate field → queue_pattern → atomic swap at loop end
 ```
 This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel`, `/vel-track`, `/swing`, `/mute`,
-`/mute-queued`, `/random`, `/gate`, `/gate-track`, `/pitch`, `/cond`, and `/cc-step`.
+`/mute-queued`, `/random`, `/gate`, `/gate-track`, `/pitch`, `/cond`, `/cc-step`, and `POST /seq-mode`
+(TUI: `/mode standard` or `/mode euclidean`).
 
 ## EventBus Events
 
@@ -136,7 +140,7 @@ slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
-`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, optional `seq_mode` and `euclid` for Euclidean sequencing, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
 
 Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `null` to inherit `track_pitch` for that step) is edited from the TRIG panel or `POST /note`; playback uses the step override when set, otherwise `track_pitch` (or the default note map).
 
@@ -145,6 +149,16 @@ Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `n
 `AppState.pattern_length` (8, 16, or 32 steps) controls the player loop range. `POST /length` also
 resizes the current pattern (pad with zeros or truncate) and emits `pattern_changed` so the TUI grid
 redraws. The system prompt passed to Claude is dynamically generated to match the current step count.
+
+## Sequencing mode (standard vs Euclidean)
+
+`current_pattern` may include `seq_mode`: `"standard"` (default) or `"euclidean"`, and `euclid`: a map
+of track name → `{k, n, r}` (pulse count, ring length 1–32, rotation). In Euclidean mode the player
+gates **note-ons** using Bjorklund(k, n) at ring index `(master_step + r) % n`; per-step trigs and
+velocities are still read at the global step index. `POST /seq-mode` updates mode and optional `euclid`
+rows (same mutator path as other pattern edits). `GET /state` ensures defaults exist when all eight
+track rows are present. The TUI uses `/mode standard` or `/mode euclidean` (overloaded alongside
+`/mode chat|beat` for input mode).
 
 ## Bar-Synced Mute Queue
 

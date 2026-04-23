@@ -93,7 +93,10 @@ def test_valid_json_emits_generation_complete():
 
     assert events[0] == ("started", {"prompt": "heavy kick"})
     assert events[1][0] == "complete"
-    assert events[1][1]["pattern"] == VALID_PATTERN
+    emitted = events[1][1]["pattern"]
+    for t in TRACK_NAMES:
+        assert emitted[t] == VALID_PATTERN[t]
+    assert emitted.get("seq_mode") == "standard"
     assert events[1][1]["prompt"] == "heavy kick"
     assert events[1][1]["summary"]["prompt"] == "heavy kick"
     assert "latency_ms" in events[1][1]["summary"]
@@ -160,7 +163,10 @@ def test_valid_json_updates_state():
 
     assert state.last_prompt == "heavy kick"
     assert len(state.pattern_history) == 1
-    assert state.pending_pattern == VALID_PATTERN
+    pend = state.pending_pattern
+    for t in TRACK_NAMES:
+        assert pend[t] == VALID_PATTERN[t]
+    assert pend.get("seq_mode") == "standard"
 
 
 def test_invalid_json_retries_once_then_emits_failed():

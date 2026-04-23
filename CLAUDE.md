@@ -55,7 +55,7 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/history` — show pattern history
 - `/log` — toggle activity log
 - `/clear` — clear activity log
-- `/mode [chat|beat]` — switch input mode
+- `/mode [chat|beat|standard|euclidean]` — switch input mode (`chat` / `beat`) or pattern sequencing mode (`standard` grid vs `euclidean` rhythms)
 - `/ask <question>` — ask Claude (works in any mode)
 - `/fresh <prompt>` — generate a new pattern without prior-pattern variation context (same as `POST /generate` with `"variation": false`)
 - `/gen` — generate a beat from the last `/ask` response
@@ -153,6 +153,7 @@ Key endpoints:
 - `GET/POST /patterns/{name}` — save/load patterns; `DELETE /patterns/{name}` — remove a save
 - `POST /note` — per-step MIDI note (`track`, `step`, `value` 0–127 or `null` to inherit `track_pitch`)
 - `POST /length` — set pattern step count (8, 16, 32)
+- `POST /seq-mode` — set `seq_mode` (`standard` \| `euclidean`) and optional per-track `euclid` `{k,n,r}` in the live pattern
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)
 - `POST /gate-track` — set gate to the same value on every step for a track

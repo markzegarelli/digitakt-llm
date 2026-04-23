@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from core.midi_utils import CC_DEFAULTS as _DEFAULT_CC_PARAMS
 from core.fill_fsm import FillFSM
+from core.euclidean import normalize_euclid_in_pattern
 
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
@@ -134,6 +135,7 @@ class AppState:
     def update_pattern(self, pattern: dict, prompt: str | None = None) -> None:
         with self._lock:
             self.current_pattern = pattern
+            normalize_euclid_in_pattern(self.current_pattern, self.pattern_length, tuple(TRACK_NAMES))
             if prompt:
                 self.last_prompt = prompt
                 self.pattern_history.append({
@@ -157,6 +159,13 @@ class AppState:
     def set_pattern_length(self, steps: int) -> None:
         with self._lock:
             self.pattern_length = steps
+
+    def touch_euclid_metadata_if_live_pattern(self) -> None:
+        """Ensure `seq_mode` / `euclid` exist when the pattern dict holds all track velocity rows."""
+        with self._lock:
+            if not all(t in self.current_pattern for t in TRACK_NAMES):
+                return
+            normalize_euclid_in_pattern(self.current_pattern, self.pattern_length, tuple(TRACK_NAMES))
 
     def set_last_prompt(self, prompt: str | None) -> None:
         with self._lock:
@@ -232,6 +241,7 @@ class AppState:
                 new_note[track] = cells[:target_steps]
             result["note"] = new_note
 
+        normalize_euclid_in_pattern(result, target_steps, tuple(TRACK_NAMES))
         return result
 
     def update_pitch(self, track: str, value: int) -> None:
@@ -247,6 +257,7 @@ class AppState:
         with self._lock:
             self.current_pattern = pattern
             self.pending_pattern = None
+            normalize_euclid_in_pattern(self.current_pattern, self.pattern_length, tuple(TRACK_NAMES))
 
     def reset(self, pattern: dict, bpm: float, prompt: str | None) -> None:
         """Atomic bulk reset (used by /new)."""
@@ -392,6 +403,7 @@ class AppState:
                     self._fill_active = False
                     self._pre_fill_pattern = None
 
+            normalize_euclid_in_pattern(self.current_pattern, self.pattern_length, tuple(TRACK_NAMES))
             return {
                 "mute_changes": mute_changes,
                 "pattern_changed": pattern_changed,

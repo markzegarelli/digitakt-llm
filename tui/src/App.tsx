@@ -233,7 +233,31 @@ export function App({ baseUrl }: AppProps) {
       case "history": setShowHistory(true); setFocus("prompt"); return;
       case "mode": {
         const m = parts[1]?.toLowerCase();
-        if (m === "chat" || m === "beat") setInputMode(m);
+        if (m === "chat" || m === "beat") {
+          setInputMode(m);
+          return;
+        }
+        if (m === "standard" || m === "euclidean") {
+          fetch(`${baseUrl}/seq-mode`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: m }),
+          })
+            .then(async (r) => {
+              if (!r.ok) {
+                const b = await r.json().catch(() => ({})) as { detail?: unknown };
+                const d = b.detail;
+                actions.addLog(
+                  typeof d === "string" ? `✗ ${d}` : `✗ /seq-mode failed (${r.status})`,
+                );
+                return;
+              }
+              actions.addLog(`Sequencing mode → ${m}`);
+            })
+            .catch((err: Error) => actions.addLog(`✗ /seq-mode: ${err.message}`));
+          return;
+        }
+        actions.addLog("✗ Usage: /mode chat|beat|standard|euclidean");
         return;
       }
       case "gen":

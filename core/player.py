@@ -4,6 +4,7 @@ import random
 import time
 import threading
 from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
+from core.euclidean import SEQ_MODE_EUCLIDEAN, track_euclidean_hit
 from core.events import EventBus
 from core.logging_config import get_logger
 from core import midi_utils
@@ -101,6 +102,9 @@ class Player:
                 elif cond == "not:2" and self._loop_count % 2 == 0:
                     continue
                 elif cond == "fill" and not self.state.is_fill_active():
+                    continue
+            if pattern.get("seq_mode") == SEQ_MODE_EUCLIDEAN:
+                if not track_euclidean_hit(pattern, track, step):
                     continue
             velocity = pattern[track][step]
             if velocity > 0:

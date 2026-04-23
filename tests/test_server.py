@@ -44,6 +44,17 @@ def test_post_bpm_updates_state(tmp_path):
     assert state_resp.json()["bpm"] == 140.0
 
 
+def test_post_seq_mode_updates_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/seq-mode", json={"mode": "euclidean"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["seq_mode"] == "euclidean"
+    assert "kick" in body["euclid"]
+    st = client.get("/state").json()
+    assert st["current_pattern"]["seq_mode"] == "euclidean"
+
+
 def test_post_generate_returns_202(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/generate", json={"prompt": "heavy kick"})
