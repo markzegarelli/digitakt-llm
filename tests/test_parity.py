@@ -92,6 +92,14 @@ def test_parity_cond_clear_valid(client):
     assert client.post("/cond", json={"track": "kick", "step": 1, "value": None}).status_code == 200
 
 
+def test_parity_seq_mode_standard_valid(client):
+    assert client.post("/seq-mode", json={"mode": "standard"}).status_code == 200
+
+
+def test_parity_seq_mode_euclidean_valid(client):
+    assert client.post("/seq-mode", json={"mode": "euclidean"}).status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # Category B: rejection contracts (what TypeScript used to pre-screen)
 # ---------------------------------------------------------------------------
@@ -130,6 +138,13 @@ def test_parity_gate_invalid_track_rejected(client):
 
 def test_parity_cond_invalid_track_rejected(client):
     assert client.post("/cond", json={"track": "cowbell", "step": 1, "value": "1:2"}).status_code == 422
+
+
+def test_parity_seq_mode_unknown_track_rejected(client):
+    assert client.post(
+        "/seq-mode",
+        json={"mode": "euclidean", "euclid": {"cowbell": {"k": 1, "n": 4, "r": 0}}},
+    ).status_code == 422
 
 
 def test_parity_velocity_out_of_range_rejected(client):

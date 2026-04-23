@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import re
@@ -32,6 +33,7 @@ from api.schemas import (
     CondRequest, CondResponse,
     CCParamEntry, CCParamsResponse,
     ChainRequest,
+    SeqModeRequest,
     MidiConnectRequest,
     MidiConnectResponse,
     MidiOutputsResponse,
@@ -55,6 +57,8 @@ from core.pattern_snapshot import (
     parse_session_snapshot,
 )
 from core.tracing import tracer
+from core.euclidean import normalize_euclid_in_pattern
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -182,6 +186,7 @@ async def _broadcast_to_clients(message: dict) -> None:
 
 @app.get("/state", response_model=StateResponse)
 def get_state():
+    _state.touch_euclid_metadata_if_live_pattern()
     return StateResponse(
         current_pattern=_state.current_pattern,
         pending_pattern=_state.pending_pattern,
@@ -437,6 +442,28 @@ def set_length(req: LengthRequest):
     _bus.emit("length_changed", {"steps": req.steps})
     _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
     return LengthResponse(steps=req.steps)
+
+
+@app.post("/seq-mode")
+def post_seq_mode(req: SeqModeRequest):
+    """Set pattern sequencing mode (`standard` grid vs `euclidean`) and optional per-track k/n/r."""
+    tnames = tuple(TRACK_NAMES)
+
+    def _apply(p: dict) -> dict:
+        q = copy.deepcopy(p)
+        q["seq_mode"] = req.mode
+        if req.euclid:
+            block = q.setdefault("euclid", {})
+            for name, row in req.euclid.items():
+                if name not in TRACK_NAMES:
+                    raise HTTPException(status_code=422, detail=f"Unknown track: {name}")
+                block[name] = {"k": row.k, "n": row.n, "r": row.r}
+        normalize_euclid_in_pattern(q, _state.pattern_length, tnames)
+        return q
+
+    new_pattern = _mutator.apply(_apply, event=None)
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
+    return {"seq_mode": new_pattern.get("seq_mode"), "euclid": new_pattern.get("euclid")}
 
 
 @app.post("/vel")

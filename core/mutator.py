@@ -4,7 +4,8 @@ from __future__ import annotations
 from typing import Callable, Literal
 
 from core.events import EventBus
-from core.state import AppState
+from core.state import AppState, TRACK_NAMES
+from core.euclidean import normalize_euclid_in_pattern
 
 
 class PatternMutator:
@@ -32,6 +33,11 @@ class PatternMutator:
     ) -> dict:
         new_pattern = fn(self._state.current_pattern)
         self._state.current_pattern = new_pattern
+        normalize_euclid_in_pattern(
+            self._state.current_pattern,
+            self._state.pattern_length,
+            tuple(TRACK_NAMES),
+        )
         if mode == "queue":
             self._player.queue_pattern(new_pattern)
         if event is not None:

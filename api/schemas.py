@@ -1,6 +1,8 @@
 # api/schemas.py
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -250,6 +252,17 @@ class AskResponse(BaseModel):
 class ChainRequest(BaseModel):
     names: list[str] = Field(min_length=1)
     auto: bool = False
+
+
+class EuclidTrackRow(BaseModel):
+    k: int = Field(..., ge=0, le=32)
+    n: int = Field(..., ge=1, le=32)
+    r: int = Field(default=0)
+
+
+class SeqModeRequest(BaseModel):
+    mode: Literal["standard", "euclidean"]
+    euclid: dict[str, EuclidTrackRow] | None = None
 
 
 class MidiConnectRequest(BaseModel):

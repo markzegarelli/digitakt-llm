@@ -42,7 +42,7 @@ const HELP_LINES = [
   "  gen                                  generate from last /ask response",
   "  Ctrl+G                               generate while viewing an /ask answer",
   "                                       or any time after an /ask (hint shown)",
-  "  mode [chat|beat]                     switch input mode",
+  "  mode [chat|beat|standard|euclidean]  input mode (chat/beat) or pattern seq mode (standard/euclidean)",
   "  next [section]                       context-aware next pattern",
   "  vary [light|medium|heavy]            variation of current pattern",
   "  read                                 Claude describes current pattern",
