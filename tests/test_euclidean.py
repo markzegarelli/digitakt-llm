@@ -58,6 +58,7 @@ def test_normalize_seq_mode():
 def test_clamp_euclid_triplet():
     assert clamp_euclid_triplet(10, 5, 0) == (5, 5, 0)
     assert clamp_euclid_triplet(-1, 8, 99) == (0, 8, 3)
+    assert clamp_euclid_triplet(20, 40, 0) == (16, 16, 0)
 
 
 def test_normalize_euclid_in_pattern():
@@ -83,4 +84,9 @@ def test_track_euclidean_hit_respects_row():
 
 def test_default_euclid_block():
     b = default_euclid_block(16, ("a", "b"))
+    assert b["a"] == {"k": 16, "n": 16, "r": 0}
+
+
+def test_default_euclid_block_caps_n_at_16_for_long_patterns():
+    b = default_euclid_block(32, ("a",))
     assert b["a"] == {"k": 16, "n": 16, "r": 0}

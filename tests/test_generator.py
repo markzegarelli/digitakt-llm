@@ -4,16 +4,19 @@ from unittest.mock import MagicMock, patch
 from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.generator import (
-    _GENRE_ALIASES,
-    _GENRE_CONTEXTS,
     Generator,
     _compute_generation_summary,
-    _detect_genre,
     _detect_target_tracks,
     _normalize_producer_notes,
     _opus_max_output_tokens,
     _parse_ask_response,
     _serialize_pattern_for_llm,
+)
+from core.injectable_profiles import (
+    InjectableProfile,
+    PROFILES_BY_ID,
+    detect_drum_machine_profile,
+    detect_genre_profile,
 )
 
 VALID_PATTERN = {k: [0] * 16 for k in TRACK_NAMES}
@@ -621,6 +624,16 @@ def test_system_prompt_includes_808_909_hypnotic_and_producer_notes():
     assert "producer_notes" in prompt
 
 
+def test_system_prompt_includes_euclidean_guidance():
+    from core.generator import _build_system_prompt
+    _build_system_prompt.cache_clear()
+    prompt = _build_system_prompt(16)
+    assert "EUCLIDEAN" in prompt
+    assert "BJORKLUND" in prompt
+    assert "k = number of pulses" in prompt
+    assert "/mode euclidean" in prompt
+
+
 # ── Targeted track detection ──────────────────────────────────────────────────
 
 def test_detect_target_tracks_exact():
@@ -725,53 +738,67 @@ def test_system_prompt_includes_targeted_update_guidance():
 # ── Genre context injection ──────────────────────────────────────────────────
 
 def test_detect_genre_ambient_aliases():
-    assert _detect_genre("ambient pad loop") == "ambient"
-    assert _detect_genre("dark ambient drone") == "ambient"
-    assert _detect_genre("slow downtempo texture") == "ambient"
-    assert _detect_genre("eerie soundscape") == "ambient"
-    assert _detect_genre("DRONE layers please") == "ambient"
+    assert detect_genre_profile("ambient pad loop") == "ambient"
+    assert detect_genre_profile("dark ambient drone") == "ambient"
+    assert detect_genre_profile("slow downtempo texture") == "ambient"
+    assert detect_genre_profile("eerie soundscape") == "ambient"
+    assert detect_genre_profile("DRONE layers please") == "ambient"
 
 
 def test_detect_genre_no_match():
-    assert _detect_genre("techno banger 135 bpm") is None
-    assert _detect_genre("dub techno groove") is None
-    assert _detect_genre("") is None
+    assert detect_genre_profile("techno banger 135 bpm") is None
+    assert detect_genre_profile("dub techno groove") is None
+    assert detect_genre_profile("") is None
 
 
 def test_detect_genre_word_boundary():
     # Substring without word boundary must not match.
-    assert _detect_genre("ambientness") is None
-    assert _detect_genre("dronebot") is None
+    assert detect_genre_profile("ambientness") is None
+    assert detect_genre_profile("dronebot") is None
 
 
 def test_detect_genre_respects_negation_phrases():
-    assert _detect_genre("not ambient please") is None
-    assert _detect_genre("non-ambient techno groove") is None
-    assert _detect_genre("without downtempo vibes") is None
-    assert _detect_genre("no drone layers") is None
+    assert detect_genre_profile("not ambient please") is None
+    assert detect_genre_profile("non-ambient techno groove") is None
+    assert detect_genre_profile("without downtempo vibes") is None
+    assert detect_genre_profile("no drone layers") is None
 
 
 def test_detect_genre_first_mention_wins_with_multiple_genres():
-    import core.generator as generator_module
+    import core.injectable_profiles as injectable_profiles
 
-    with patch.dict(
-        generator_module._GENRE_ALIASES,
-        {
-            "ambient": ["ambient", "drone"],
-            "industrial": ["industrial", "hard industrial"],
-        },
-        clear=True,
-    ), patch.dict(
-        generator_module._GENRE_CONTEXTS,
-        {"ambient": "ambient ctx", "industrial": "industrial ctx"},
-        clear=True,
-    ):
-        assert _detect_genre("industrial pulse then ambient wash") == "industrial"
-        assert _detect_genre("ambient wash then industrial pulse") == "ambient"
+    industrial = InjectableProfile(
+        id="industrial",
+        category="genre",
+        aliases=("industrial", "hard industrial"),
+        body="industrial ctx",
+    )
+    custom = {
+        "ambient": PROFILES_BY_ID["ambient"],
+        "industrial": industrial,
+    }
+    with patch.dict(injectable_profiles.PROFILES_BY_ID, custom, clear=True):
+        assert detect_genre_profile("industrial pulse then ambient wash") == "industrial"
+        assert detect_genre_profile("ambient wash then industrial pulse") == "ambient"
 
 
-def test_genre_registry_maps_have_identical_keys():
-    assert set(_GENRE_ALIASES.keys()) == set(_GENRE_CONTEXTS.keys())
+def test_detect_drum_machine_linndrum_aliases():
+    assert detect_drum_machine_profile("LinnDrum groove") == "linndrum"
+    assert detect_drum_machine_profile("linn drum pattern") == "linndrum"
+    assert detect_drum_machine_profile("LM-2 style beat") == "linndrum"
+    assert detect_drum_machine_profile("lm2 pop") == "linndrum"
+
+
+def test_detect_drum_machine_cr78_aliases():
+    assert detect_drum_machine_profile("CR-78 pattern") == "cr78"
+    assert detect_drum_machine_profile("cr78 compurhythm") == "cr78"
+    assert detect_drum_machine_profile("Roland CR-78 vibe") == "cr78"
+    assert detect_drum_machine_profile("compurhythm 78 loop") == "cr78"
+
+
+def test_detect_drum_machine_respects_negation_and_boundaries():
+    assert detect_drum_machine_profile("not cr-78 please") is None
+    assert detect_drum_machine_profile("cr780 model") is None
 
 
 def test_build_user_prompt_injects_ambient_block_plain():
@@ -797,6 +824,42 @@ def test_build_user_prompt_no_injection_when_no_genre_match():
 
     assert "AMBIENT MODE CONTEXT" not in prompt
     assert "TRACK SAMPLES:" not in prompt
+    assert "LINNDRUM (LM-2)" not in prompt
+    assert "ROLAND CR-78" not in prompt
+
+
+def test_build_user_prompt_injects_linndrum_block():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("tight LM-2 house beat 120 bpm", variation=False)
+
+    assert "LINNDRUM (LM-2) MACHINE CONTEXT" in prompt
+    assert "tight LM-2 house beat 120 bpm" in prompt
+
+
+def test_build_user_prompt_injects_cr78_block():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("slow CR-78 pattern with swing", variation=False)
+
+    assert "ROLAND CR-78 MACHINE CONTEXT" in prompt
+    assert "slow CR-78 pattern with swing" in prompt
+
+
+def test_build_user_prompt_genre_then_machine_order():
+    state = AppState()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("ambient texture on a CR-78 machine bed", variation=False)
+
+    assert "AMBIENT MODE CONTEXT" in prompt
+    assert "ROLAND CR-78 MACHINE CONTEXT" in prompt
+    assert prompt.index("AMBIENT MODE CONTEXT") < prompt.index("ROLAND CR-78 MACHINE CONTEXT")
 
 
 def test_build_user_prompt_injects_ambient_block_with_state():

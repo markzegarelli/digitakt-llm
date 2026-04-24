@@ -255,8 +255,8 @@ class ChainRequest(BaseModel):
 
 
 class EuclidTrackRow(BaseModel):
-    k: int = Field(..., ge=0, le=32)
-    n: int = Field(..., ge=1, le=32)
+    k: int = Field(..., ge=0, le=16)
+    n: int = Field(..., ge=1, le=16)
     r: int = Field(default=0)
 
 

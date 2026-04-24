@@ -10,6 +10,14 @@ import { CCPanel } from "./components/CCPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
+import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
+import {
+  EUCLID_N_MAX,
+  advanceEuclideanHitMasterStep,
+  euclideanMasterStepHit,
+  listEuclideanHitMasterSteps,
+  snapMasterStepToEuclideanHit,
+} from "./euclidRing.js";
 import { computeSplitStackLayout } from "./layout.js";
 import {
   isKnownSlashCommand,
@@ -75,6 +83,14 @@ export function App({ baseUrl }: AppProps) {
   const [trigField, setTrigField] = useState(0);
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
+  const [euclidEditBox, setEuclidEditBox] = useState<number | null>(null);
+  // 0=k, 1=n, 2=r; null = no box focused
+
+  const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
+  const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 16, n: 16, r: 0 };
+  const euclidSnapK = euclidSnapRow.k;
+  const euclidSnapN = euclidSnapRow.n;
+  const euclidSnapR = euclidSnapRow.r;
 
   /** TRIG keyplane while step edit: runs for SEQ or MIX focus so arrows still hit TRIG, not MIX bars. */
   const consumeTrigKeysRef = useRef<(input: string, key: Record<string, boolean | undefined>) => boolean>(() => false);
@@ -87,6 +103,52 @@ export function App({ baseUrl }: AppProps) {
     const max = Math.max(0, state.chain.length - 1);
     setChainSlotIdx((i) => clamp(i, 0, max));
   }, [state.chain.length]);
+
+  // Clear TRIG edit state when switching to euclidean; clear euclid edit box when switching to standard.
+  useEffect(() => {
+    if (state.seq_mode === "euclidean") {
+      setPatternStepEdit(false);
+      setTrigKeysActive(false);
+      setTrigTrackWide(false);
+    } else {
+      setEuclidEditBox(null);
+    }
+  }, [state.seq_mode]);
+
+  // Clear euclid edit box when SEQ panel loses focus.
+  useEffect(() => {
+    if (focus !== "pattern") setEuclidEditBox(null);
+  }, [focus]);
+
+  /** Euclidean step+TRIG: keep selection on a pulse step when k/n/r, track, or length changes; exit if k=0. */
+  useEffect(() => {
+    if (state.seq_mode !== "euclidean" || !patternStepEdit) return;
+    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+    const pl = state.pattern_length;
+    const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, pl);
+    if (hits.length === 0) {
+      setPatternStepEdit(false);
+      setTrigKeysActive(false);
+      setTrigTrackWide(false);
+      setTrigField(0);
+      actions.addLog("Step+TRIG closed: no Euclidean pulses (k=0). Raise k to edit per-pulse TRIG.");
+      return;
+    }
+    if (!euclideanMasterStepHit(row.k, row.n, row.r, patternSelectedStep)) {
+      setPatternSelectedStep(snapMasterStepToEuclideanHit(patternSelectedStep, hits, pl));
+    }
+  }, [
+    actions.addLog,
+    state.seq_mode,
+    patternStepEdit,
+    patternTrack,
+    state.pattern_length,
+    patternSelectedStep,
+    euclidSnapK,
+    euclidSnapN,
+    euclidSnapR,
+  ]);
 
   /** Option B: keep SEQ selected track and MIX selected track in lockstep. */
   useEffect(() => {
@@ -217,6 +279,22 @@ export function App({ baseUrl }: AppProps) {
       })
       .catch((err: Error) => actions.addLog(`✗ /delete: ${err.message}`));
   }, [actions, baseUrl]);
+
+  const handleEuclidValueChange = useCallback((field: "k" | "n" | "r", delta: number) => {
+    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const current = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+    const raw = current[field] + delta;
+    const clamped =
+      field === "k" ? Math.max(0, Math.min(raw, current.n)) :
+      field === "n" ? Math.max(1, Math.min(raw, EUCLID_N_MAX)) :
+      /* r */ Math.max(0, Math.min(raw, Math.max(0, current.n - 1)));
+    const updated = { ...current, [field]: clamped };
+    fetch(`${baseUrl}/seq-mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "euclidean", euclid: { [track]: updated } }),
+    }).catch((err: Error) => actions.addLog(`✗ /seq-mode: ${err.message}`));
+  }, [baseUrl, patternTrack, state.euclid, actions]);
 
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
@@ -622,7 +700,15 @@ export function App({ baseUrl }: AppProps) {
     if (input === "[" || input === "]") {
       commitTrigBuffer(trigInputBuffer);
       setTrigInputBuffer("");
-      setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+      if (state.seq_mode === "euclidean") {
+        const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+        const d = input === "]" ? 1 : (-1 as const);
+        setPatternSelectedStep((s) =>
+          advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),
+        );
+      } else {
+        setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+      }
       return true;
     }
 
@@ -777,10 +863,44 @@ export function App({ baseUrl }: AppProps) {
             const play = state.current_step;
             const step =
               play !== null && play >= 0 ? clamp(play, 0, maxStep) : 0;
+            let selected = step;
+            if (state.seq_mode === "euclidean") {
+              const tr = TRACK_NAMES[patternTrack] as TrackName;
+              const row = state.euclid[tr] ?? { k: 16, n: 16, r: 0 };
+              const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, state.pattern_length);
+              if (hits.length === 0) {
+                actions.addLog("No Euclidean pulses on this track (k=0). Raise k to use step+TRIG.");
+                return;
+              }
+              selected = snapMasterStepToEuclideanHit(step, hits, state.pattern_length);
+            }
+            setEuclidEditBox(null);
             setPatternStepEdit(true);
-            setPatternSelectedStep(step);
-            setTrigKeysActive(true);
+            setPatternSelectedStep(selected);
+            // Euclidean: start with TRIG keys off so ←/→ move the step (Tab enables TRIG keyplane). Standard Shift+t keeps TRIG on + ALL.
+            setTrigKeysActive(state.seq_mode !== "euclidean");
             setTrigTrackWide(true);
+            setTrigField(0);
+            setTrigInputBuffer("");
+            return;
+          }
+          if (
+            state.seq_mode === "euclidean" &&
+            ch === "t" &&
+            !key.shift
+          ) {
+            const tr = TRACK_NAMES[patternTrack] as TrackName;
+            const row = state.euclid[tr] ?? { k: 16, n: 16, r: 0 };
+            const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, state.pattern_length);
+            if (hits.length === 0) {
+              actions.addLog("No Euclidean pulses on this track (k=0). Raise k to use step+TRIG.");
+              return;
+            }
+            setEuclidEditBox(null);
+            setPatternStepEdit(true);
+            setPatternSelectedStep(snapMasterStepToEuclideanHit(0, hits, state.pattern_length));
+            setTrigKeysActive(false);
+            setTrigTrackWide(false);
             setTrigField(0);
             setTrigInputBuffer("");
             return;
@@ -826,30 +946,89 @@ export function App({ baseUrl }: AppProps) {
       const plen = state.pattern_length;
       const maxStep = Math.max(0, plen - 1);
 
+      // Step + TRIG (standard and euclidean): must run before euclidean ring-only swallow.
       if (patternStepEdit) {
         if (key.escape) {
           setPatternStepEdit(false);
           setTrigKeysActive(false);
           setTrigTrackWide(false);
+          setTrigField(0);
           return;
         }
         if (key.return) {
           setPatternStepEdit(false);
           setTrigKeysActive(false);
           setTrigTrackWide(false);
+          setTrigField(0);
           return;
         }
         if (input === "[" || input === "]") {
-          setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+          if (state.seq_mode === "euclidean") {
+            const track = TRACK_NAMES[patternTrack] as TrackName;
+            const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+            const d = input === "]" ? 1 : (-1 as const);
+            setPatternSelectedStep((s) =>
+              advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),
+            );
+          } else {
+            setPatternSelectedStep((s) => clamp(s + (input === "]" ? 1 : -1), 0, maxStep));
+          }
           return;
         }
         if (key.leftArrow || key.rightArrow) {
-          setPatternSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, maxStep));
+          if (state.seq_mode === "euclidean") {
+            const track = TRACK_NAMES[patternTrack] as TrackName;
+            const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+            const d = key.rightArrow ? 1 : (-1 as const);
+            setPatternSelectedStep((s) =>
+              advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),
+            );
+          } else {
+            setPatternSelectedStep((s) => clamp(s + (key.rightArrow ? 1 : -1), 0, maxStep));
+          }
           return;
         }
         if (key.upArrow)   setPatternTrack((t) => clamp(t - 1, 0, 7));
         if (key.downArrow) setPatternTrack((t) => clamp(t + 1, 0, 7));
         return;
+      }
+
+      // Euclidean ring view (k/n/r): Enter toggles k/n/r edit; ]/[ cycle fields; ↑/↓ value or track.
+      if (state.seq_mode === "euclidean") {
+        if (key.escape && euclidEditBox !== null) {
+          setEuclidEditBox(null);
+          return;
+        }
+        if (key.return) {
+          setEuclidEditBox((b) => (b === null ? 0 : null));
+          return;
+        }
+        if (euclidEditBox !== null && (input === "[" || input === "]")) {
+          setEuclidEditBox((b) => {
+            const cur = b ?? 0;
+            return (input === "]" ? (cur + 1) % 3 : (cur + 2) % 3) as 0 | 1 | 2;
+          });
+          return;
+        }
+        if (euclidEditBox !== null && (key.leftArrow || key.rightArrow) && !key.shift) {
+          setEuclidEditBox((b) => {
+            const cur = b ?? 0;
+            return (key.rightArrow ? (cur + 1) % 3 : (cur + 2) % 3) as 0 | 1 | 2;
+          });
+          return;
+        }
+        if (key.upArrow || key.downArrow) {
+          if (euclidEditBox !== null) {
+            const fields = ["k", "n", "r"] as const;
+            const field = fields[euclidEditBox as 0 | 1 | 2];
+            const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
+            handleEuclidValueChange(field, delta);
+          } else {
+            setPatternTrack((t) => clamp(t + (key.downArrow ? 1 : -1), 0, 7));
+          }
+          return;
+        }
+        return; // swallow remaining keys in euclidean ring view
       }
 
       if (key.upArrow)   setPatternTrack((t) => clamp(t - 1, 0, 7));
@@ -1044,37 +1223,74 @@ export function App({ baseUrl }: AppProps) {
         <Box flexDirection="row" flexGrow={1} width={centerBudget}>
           <Box flexDirection="column" width={stackWidth}>
             <Box flexDirection="row" width={stackWidth}>
-              <StepGrid
-                contentWidth={seqGridWidth}
-                pattern={state.current_pattern}
-                patternTrig={state.pattern_trig}
-                patternLength={state.pattern_length}
-                currentStep={state.current_step}
-                trackMuted={state.track_muted}
-                selectedTrack={patternTrack}
-                pendingMuteTracks={pendingMuteTracks}
-                stepEditMode={patternStepEdit}
-                selectedStep={patternSelectedStep}
-                isFocused={focus === "pattern"}
-              />
-              <TrigEditPanel
-                width={trigRowW}
-                keysActive={trigKeysActive}
-                track={TRACK_NAMES[patternTrack] as TrackName}
-                stepIndex={patternSelectedStep}
-                prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
-                velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
-                pitch={(() => {
-                  const tr = TRACK_NAMES[patternTrack] as TrackName;
-                  const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
-                  return ov != null ? ov : (state.track_pitch[tr] ?? 60);
-                })()}
-                gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
-                cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
-                selectedField={trigField}
-                inputBuffer={trigInputBuffer}
-                trackWide={trigTrackWide}
-              />
+              {state.seq_mode === "euclidean" ? (
+                <>
+                  <EuclidRingPanel
+                    width={patternStepEdit ? seqGridWidth : stackWidth}
+                    track={TRACK_NAMES[patternTrack] as TrackName}
+                    euclid={state.euclid}
+                    currentStep={state.current_step}
+                    isFocused={focus === "pattern"}
+                    editBox={euclidEditBox}
+                    stepTrigEdit={patternStepEdit}
+                    selectedPatternStep={patternStepEdit ? patternSelectedStep : null}
+                  />
+                  {patternStepEdit && (
+                    <TrigEditPanel
+                      width={trigRowW}
+                      keysActive={trigKeysActive}
+                      track={TRACK_NAMES[patternTrack] as TrackName}
+                      stepIndex={patternSelectedStep}
+                      prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+                      velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+                      pitch={(() => {
+                        const tr = TRACK_NAMES[patternTrack] as TrackName;
+                        const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+                        return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+                      })()}
+                      gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
+                      cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+                      selectedField={trigField}
+                      inputBuffer={trigInputBuffer}
+                      trackWide={trigTrackWide}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <StepGrid
+                    contentWidth={seqGridWidth}
+                    pattern={state.current_pattern}
+                    patternTrig={state.pattern_trig}
+                    patternLength={state.pattern_length}
+                    currentStep={state.current_step}
+                    trackMuted={state.track_muted}
+                    selectedTrack={patternTrack}
+                    pendingMuteTracks={pendingMuteTracks}
+                    stepEditMode={patternStepEdit}
+                    selectedStep={patternSelectedStep}
+                    isFocused={focus === "pattern"}
+                  />
+                  <TrigEditPanel
+                    width={trigRowW}
+                    keysActive={trigKeysActive}
+                    track={TRACK_NAMES[patternTrack] as TrackName}
+                    stepIndex={patternSelectedStep}
+                    prob={state.pattern_trig.prob[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 100}
+                    velocity={state.current_pattern[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? 0}
+                    pitch={(() => {
+                      const tr = TRACK_NAMES[patternTrack] as TrackName;
+                      const ov = state.pattern_trig.note[tr]?.[patternSelectedStep];
+                      return ov != null ? ov : (state.track_pitch[tr] ?? 60);
+                    })()}
+                    gate={state.pattern_trig.gate[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? DEFAULT_GATE_PCT}
+                    cond={state.pattern_trig.cond[TRACK_NAMES[patternTrack] as TrackName]?.[patternSelectedStep] ?? null}
+                    selectedField={trigField}
+                    inputBuffer={trigInputBuffer}
+                    trackWide={trigTrackWide}
+                  />
+                </>
+              )}
             </Box>
             <Box flexDirection="row" width={stackWidth}>
               <CCPanel
