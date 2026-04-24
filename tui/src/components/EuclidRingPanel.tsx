@@ -11,7 +11,6 @@ const TRACK_LABELS: Record<TrackName, string> = {
 };
 
 const FIELD_NAMES = ["k", "n", "r"] as const;
-type FieldName = typeof FIELD_NAMES[number];
 
 export interface EuclidRingPanelProps {
   width: number;
@@ -20,8 +19,6 @@ export interface EuclidRingPanelProps {
   currentStep: number | null;
   isFocused: boolean;
   editBox: number | null; // null=none focused, 0=k, 1=n, 2=r
-  onEditBoxChange: (box: number | null) => void;
-  onValueChange: (field: FieldName, delta: number) => void;
 }
 
 function buildLookup(vertices: [number, number][], size: number): number[][] {

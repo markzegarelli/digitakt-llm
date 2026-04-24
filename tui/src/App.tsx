@@ -240,7 +240,12 @@ export function App({ baseUrl }: AppProps) {
   const handleEuclidValueChange = useCallback((field: "k" | "n" | "r", delta: number) => {
     const track = TRACK_NAMES[patternTrack] as TrackName;
     const current = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
-    const updated = { ...current, [field]: current[field] + delta };
+    const raw = current[field] + delta;
+    const clamped =
+      field === "k" ? Math.max(0, Math.min(raw, current.n)) :
+      field === "n" ? Math.max(1, Math.min(raw, 32)) :
+      /* r */ Math.max(0, Math.min(raw, Math.max(0, current.n - 1)));
+    const updated = { ...current, [field]: clamped };
     fetch(`${baseUrl}/seq-mode`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1107,8 +1112,6 @@ export function App({ baseUrl }: AppProps) {
                   currentStep={state.current_step}
                   isFocused={focus === "pattern"}
                   editBox={euclidEditBox}
-                  onEditBoxChange={setEuclidEditBox}
-                  onValueChange={handleEuclidValueChange}
                 />
               ) : (
                 <>

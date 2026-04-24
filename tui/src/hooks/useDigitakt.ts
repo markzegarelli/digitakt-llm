@@ -377,7 +377,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "midi_connected":
               return {
                 ...prev,
-                midi_port_name: data["port"] as string,
+                midi_port_name: msg.data["port"] as string,
                 midi_connected: true,
                 log: newLog,
               };
