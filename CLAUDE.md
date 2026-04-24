@@ -70,9 +70,15 @@ Keyboard shortcuts (Pattern panel):
 - `c` — when a chain is set, focus the **chain strip** (under the status bar); `←`/`→` move a highlight across slots; `Esc` returns focus to SEQ; `c` again exits strip focus
 - `n` — queue next chain candidate (same as `/chain next`; also works while the chain strip is focused)
 - `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain fire`; also works while the chain strip is focused)
-- `Enter` (SEQ focused) — enter/exit SEQ step edit mode on the selected track
-- `Space` (in SEQ step edit) — toggle selected step on/off (uses per-track default velocity when enabling)
-- `Tab` (in SEQ step edit) — switch keyboard focus between the **step column** and **TRIG fields** (TRIG panel stays visible)
+- `Enter` (SEQ focused) — **standard:** enter/exit SEQ step edit on the selected track; **euclidean:** enter/exit **k/n/r** (ring) edit for the focused track (not used for TRIG in euclidean — use **`t`** / **`Shift+t`** below)
+- `]` / `[` or `←` / `→` (SEQ focused, euclidean, k/n/r edit open, **without Shift**) — next / previous k/n/r field (`Esc` also exits edit)
+- `↑/↓` (SEQ focused, **euclidean**, ring view) — change focused track when k/n/r edit is closed; adjust the focused k/n/r value when edit is open (`Shift+↑/↓` = ±10)
+- Euclidean **ring** (TUI): the 16-dot perimeter is drawn with a **+15 slot rotation** so **step 1** (0-based pattern step index `1`) aligns with the **top** cell when the ring has 16 positions; the playhead still follows `step % n` on the same logical vertices as the engine
+- **`t`** (SEQ focused, **euclidean**, ring view) — enter **step + TRIG** edit: TRIG panel appears beside the ring; step **1** selected; TRIG keys on; if **k/n/r** edit was open, it closes first
+- **`Shift+t`** (SEQ focused, **euclidean**, ring view) — enter step + TRIG like **`t`**, but selected step follows the **playhead** when playing (otherwise step 1), TRIG keys on, and **ALL** (track-wide) on for prob/vel/gate
+- `Space` (in SEQ step edit, **standard or euclidean**) — toggle selected step on/off (uses per-track default velocity when enabling)
+- `Tab` (SEQ focused, **euclidean**, ring view only) — panel rotation (SEQ → MIX → prompt); k/n/r fields use `Enter` and `]` / `[`, not Tab
+- `Tab` (in SEQ step edit, **standard or euclidean**) — toggle TRIG **keyboard** focus vs step/ring navigation (`Shift+Tab` still toggles Chat/Beat)
 - `[` / `]` (SEQ step edit) — move selected step left/right (with or without TRIG open)
 - `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
 - `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields). **Note** row: per-step MIDI note only (does not change track-wide `/pitch`); other tracks’ steps are unchanged.

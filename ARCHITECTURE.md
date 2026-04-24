@@ -207,13 +207,25 @@ Before every API call, `Generator._build_state_context()` assembles a plain-text
 
 If `state.last_prompt` is set, subsequent prompts are sent as variations: the prior prompt and active pattern JSON (non-silent tracks only) are prepended to the user message alongside the state context, giving Claude full context for incremental changes.
 
-## Genre Context Injection
+## Injectable user-message context (genres + drum machines)
 
-`Generator._build_user_prompt()` also consults a small genre registry (`_GENRE_ALIASES` + `_GENRE_CONTEXTS` in `core/generator.py`). When the user prompt matches a registered alias (longest-match wins), the corresponding context block is prepended to the user message — before the variation/TARGETED UPDATE block and before `Current state:`. The system prompt stays byte-identical so Anthropic's ephemeral prompt cache keeps hitting; all variability rides in the user message.
+`Generator._build_user_prompt()` calls `build_injectable_context_prefix()` from [`core/injectable_profiles.py`](core/injectable_profiles.py). Each **injectable profile** has a stable `id`, a `category` (`genre` or `drum_machine`), phrase **aliases** (word-boundary, case-insensitive match; negations like `not` / `non-` respected), and a **body** string prepended to the user message — before the variation/TARGETED UPDATE block and before `Current state:`. The system prompt stays byte-identical so Anthropic's ephemeral prompt cache keeps hitting; variable guidance lives in the user message.
 
-The first genre is `ambient` (aliases: `ambient`, `dark ambient`, `drone`, `downtempo`, `soundscape`, `deep listening`). Its context remaps the 8 drum track slots to atmospheric voices (sub drone, reverse swell, tonal pad, granular texture, FM bell, shimmer cloud, tape wash, long crash) and requires the model to open `producer_notes` with a `TRACK SAMPLES:` section listing a sample description per track. No schema change was needed — the per-track descriptions ride inside the existing `producer_notes` string that the TUI already renders.
+**Prefix order:** when both match, the **genre** block is first, then the **drum_machine** block (so e.g. ambient layout rules still lead timbre-specific machine notes).
 
-Adding another genre is a two-line change: one entry in `_GENRE_ALIASES` and one in `_GENRE_CONTEXTS`.
+**Registry:** profiles live in `_PROFILE_TUPLE` / `PROFILES_BY_ID` in `injectable_profiles.py`. `validate_injectable_profile_registry()` runs at import: dict keys must equal `profile.id`, and **aliases must be unique across all profiles**.
+
+**How to add a profile:** append one `InjectableProfile(...)` to `_PROFILE_TUPLE` with a new `id`, `category`, `aliases` (put longer phrases before shorter ones when they share a start position), and `body`. Add tests for aliases and injection if non-trivial.
+
+**Shipped profiles:**
+
+- **Genre `ambient`** — aliases include `ambient`, `dark ambient`, `drone`, `downtempo`, `soundscape`, `deep listening`. Remaps the eight track slots to atmospheric voices and requires `producer_notes` to open with `TRACK SAMPLES:` (per-track sample lines, then short arrangement notes).
+
+- **Drum machine `linndrum`** — LM-2 / LinnDrum sonic target (80s dry sample character, per-track + CC hints).
+
+- **Drum machine `cr78`** — Roland CR-78 sonic target (warm hybrid analog/ROM character, per-track + CC hints).
+
+**TR-808 / TR-909** remain described in the cached **system** prompt (`_build_system_prompt` in `core/generator.py`) as classic Roland box stereotypes; they are not injectable profiles yet (moving them would trade prompt-cache locality for consistency). Mention **LinnDrum** / **CR-78** (or aliases) in the beat prompt to pull those injectable blocks.
 
 ## Conversation Continuity
 

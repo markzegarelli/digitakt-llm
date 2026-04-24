@@ -1,9 +1,15 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import type { TrackName } from "../types.js";
-import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
-import { VERTICES_7x7, VERTICES_9x9, isVertexHit, stepToVertex } from "../euclidRing.js";
+import {
+  EUCLID_N_MAX,
+  buildVertexLookup,
+  computeRingVertices,
+  isVertexHit,
+  ringGridSize,
+  stepToPlayheadVertex,
+} from "../euclidRing.js";
 
 const TRACK_LABELS: Record<TrackName, string> = {
   kick: "BD", snare: "SD", tom: "LT", clap: "CL",
@@ -19,16 +25,9 @@ export interface EuclidRingPanelProps {
   currentStep: number | null;
   isFocused: boolean;
   editBox: number | null; // null=none focused, 0=k, 1=n, 2=r
+  /** Step + TRIG edit row is open (ring shares row with TrigEditPanel). */
+  stepTrigEdit?: boolean;
 }
-
-function buildLookup(vertices: [number, number][], size: number): number[][] {
-  const lookup = Array.from({ length: size }, () => new Array(size).fill(-1) as number[]);
-  vertices.forEach(([row, col], idx) => { lookup[row][col] = idx; });
-  return lookup;
-}
-
-const LOOKUP_7x7 = buildLookup(VERTICES_7x7, 7);
-const LOOKUP_9x9 = buildLookup(VERTICES_9x9, 9);
 
 const CELL_W = 2;
 
@@ -39,13 +38,23 @@ export function EuclidRingPanel({
   currentStep,
   isFocused,
   editBox,
+  stepTrigEdit = false,
 }: EuclidRingPanelProps) {
   const { k, n, r } = euclid[track] ?? { k: 16, n: 16, r: 0 };
+  const nClamped = Math.max(1, Math.min(EUCLID_N_MAX, n));
   const useWide = width >= 60;
-  const GRID_SIZE = useWide ? 9 : 7;
-  const lookup = useWide ? LOOKUP_9x9 : LOOKUP_7x7;
+  const gridSize = ringGridSize(useWide);
+  const vertices = useMemo(
+    () => computeRingVertices(nClamped, useWide),
+    [nClamped, useWide],
+  );
+  const lookup = useMemo(
+    () => buildVertexLookup(vertices, gridSize),
+    [vertices, gridSize],
+  );
 
-  const playheadVertex = currentStep !== null ? stepToVertex(currentStep, n) : null;
+  const playheadVertex =
+    currentStep !== null ? stepToPlayheadVertex(currentStep, nClamped) : null;
 
   return (
     <Box
@@ -65,14 +74,14 @@ export function EuclidRingPanel({
 
       {/* Ring grid */}
       <Box flexDirection="column" paddingX={1} marginTop={1}>
-        {Array.from({ length: GRID_SIZE }, (_, row) => (
+        {Array.from({ length: gridSize }, (_, row) => (
           <Box key={row} flexDirection="row">
-            {Array.from({ length: GRID_SIZE }, (_, col) => {
+            {Array.from({ length: gridSize }, (_, col) => {
               const vIdx = lookup[row][col];
               if (vIdx === -1) {
                 return <Box key={col} width={CELL_W}><Text> </Text></Box>;
               }
-              const hit = isVertexHit(vIdx, k, n, r);
+              const hit = isVertexHit(vIdx, k, nClamped, r);
               const isHead = playheadVertex === vIdx;
               const glyph = hit ? "\u25CF" : "\u25CB";
               const color = isHead
@@ -111,9 +120,11 @@ export function EuclidRingPanel({
       {/* Hint line */}
       <Box paddingX={1}>
         <Text color={theme.textGhost}>
-          {editBox !== null
-            ? "↑↓ value  Shift+↑↓ ×10  Tab next  Esc done"
-            : "↑↓ track  Tab edit k/n/r"}
+          {stepTrigEdit
+            ? "[ ] step  t TRIG  Shift+t ALL  Tab panels/TRIG  Enter/Esc done"
+            : editBox !== null
+              ? "↑↓ value  Shift+↑↓ ×10  ←/→ or ]/[ field  Enter/Esc done"
+              : "↑↓ track  Enter k/n/r  t TRIG  Shift+t play+TRIG  Tab panels"}
         </Text>
       </Box>
     </Box>
