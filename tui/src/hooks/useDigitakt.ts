@@ -42,7 +42,30 @@ const DEFAULT_STATE: DigitaktState = {
   chain_queued_index: null,
   chain_armed: false,
   generation_summary: null,
+  seq_mode: "standard" as const,
+  euclid: Object.fromEntries(
+    TRACK_NAMES.map((t) => [t, { k: 16, n: 16, r: 0 }])
+  ) as Record<TrackName, { k: number; n: number; r: number }>,
 };
+
+function parseEuclidBlock(
+  raw: unknown,
+  fallback: DigitaktState["euclid"],
+): DigitaktState["euclid"] {
+  if (!raw || typeof raw !== "object") return fallback;
+  const block = raw as Record<string, unknown>;
+  const result = { ...fallback };
+  for (const t of TRACK_NAMES) {
+    const row = block[t];
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const k = typeof r["k"] === "number" ? r["k"] : fallback[t].k;
+    const n = typeof r["n"] === "number" ? r["n"] : fallback[t].n;
+    const rot = typeof r["r"] === "number" ? r["r"] : fallback[t].r;
+    result[t] = { k, n, r: rot };
+  }
+  return result;
+}
 
 function formatLogEntry(event: string, data: Record<string, unknown>): string {
   switch (event) {
@@ -246,7 +269,17 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               if (!raw) return { ...prev, log: newLog };
               const plen = prev.pattern_length;
               const { velocities, trig } = parsePatternFromApi(raw, plen);
-              return { ...prev, current_pattern: velocities, pattern_trig: trig, log: newLog };
+              const seqMode = raw["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
+              const rawEuclid = raw["euclid"];
+              const euclid = parseEuclidBlock(rawEuclid, prev.euclid);
+              return {
+                ...prev,
+                current_pattern: velocities,
+                pattern_trig: trig,
+                seq_mode: seqMode,
+                euclid,
+                log: newLog,
+              };
             }
             case "bpm_changed":
               return { ...prev, bpm: msg.data["bpm"] as number, log: newLog };
@@ -265,11 +298,15 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               const parsed = raw
                 ? parsePatternFromApi(raw, plen)
                 : { velocities: prev.current_pattern, trig: prev.pattern_trig };
+              const seqMode = raw?.["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
+              const euclid = raw ? parseEuclidBlock(raw["euclid"], prev.euclid) : prev.euclid;
               return {
                 ...prev,
                 generation_status: "idle",
                 current_pattern: parsed.velocities,
                 pattern_trig: parsed.trig,
+                seq_mode: seqMode,
+                euclid,
                 last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
                 generation_summary: (msg.data["summary"] as DigitaktState["generation_summary"]) ?? null,
                 ...(genBpm ? { bpm: genBpm } : {}),
