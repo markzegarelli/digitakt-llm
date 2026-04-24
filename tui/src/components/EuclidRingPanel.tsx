@@ -27,6 +27,8 @@ export interface EuclidRingPanelProps {
   editBox: number | null; // null=none focused, 0=k, 1=n, 2=r
   /** Step + TRIG edit row is open (ring shares row with TrigEditPanel). */
   stepTrigEdit?: boolean;
+  /** Master pattern step (0-based) highlighted as the edit cursor; null when not in step+TRIG. */
+  selectedPatternStep?: number | null;
 }
 
 const CELL_W = 2;
@@ -39,6 +41,7 @@ export function EuclidRingPanel({
   isFocused,
   editBox,
   stepTrigEdit = false,
+  selectedPatternStep = null,
 }: EuclidRingPanelProps) {
   const { k, n, r } = euclid[track] ?? { k: 16, n: 16, r: 0 };
   const nClamped = Math.max(1, Math.min(EUCLID_N_MAX, n));
@@ -55,6 +58,10 @@ export function EuclidRingPanel({
 
   const playheadVertex =
     currentStep !== null ? stepToPlayheadVertex(currentStep, nClamped) : null;
+  const editCursorVertex =
+    stepTrigEdit && selectedPatternStep !== null && selectedPatternStep !== undefined
+      ? stepToPlayheadVertex(selectedPatternStep, nClamped)
+      : null;
 
   return (
     <Box
@@ -83,10 +90,14 @@ export function EuclidRingPanel({
               }
               const hit = isVertexHit(vIdx, k, nClamped, r);
               const isHead = playheadVertex === vIdx;
-              const glyph = hit ? "\u25CF" : "\u25CB";
+              const isEdit = editCursorVertex === vIdx;
+              const glyph =
+                isEdit && !isHead ? "\u25C6" : hit ? "\u25CF" : "\u25CB";
               const color = isHead
                 ? theme.accent
-                : hit ? theme.accentMuted : theme.textGhost;
+                : isEdit
+                  ? theme.accentSubtle
+                  : hit ? theme.accentMuted : theme.textGhost;
               return (
                 <Box key={col} width={CELL_W} justifyContent="center">
                   <Text color={color}>{glyph}</Text>
@@ -121,7 +132,7 @@ export function EuclidRingPanel({
       <Box paddingX={1}>
         <Text color={theme.textGhost}>
           {stepTrigEdit
-            ? "[ ] step  t TRIG  Shift+t ALL  Tab panels/TRIG  Enter/Esc done"
+            ? "←→ / [ ] pulse steps only  ↑↓ track  Tab TRIG  t TRIG  Shift+t ALL  Enter/Esc done"
             : editBox !== null
               ? "↑↓ value  Shift+↑↓ ×10  ←/→ or ]/[ field  Enter/Esc done"
               : "↑↓ track  Enter k/n/r  t TRIG  Shift+t play+TRIG  Tab panels"}

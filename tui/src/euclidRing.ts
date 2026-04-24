@@ -78,6 +78,91 @@ export function isVertexHit(vIdx: number, k: number, n: number, r: number): bool
   return ring[local] ?? false;
 }
 
+/** Matches `core.euclidean.clamp_euclid_triplet` (n capped to EUCLID_N_MAX). */
+export function clampEuclidTriplet(k: number, n: number, r: number): [number, number, number] {
+  const nClamped = Math.max(1, Math.min(Math.floor(n), EUCLID_N_MAX));
+  const kClamped = Math.max(0, Math.min(Math.floor(k), nClamped));
+  let rClamped = Math.floor(r);
+  if (nClamped) {
+    rClamped = ((rClamped % nClamped) + nClamped) % nClamped;
+  } else {
+    rClamped = 0;
+  }
+  return [kClamped, nClamped, rClamped];
+}
+
+/**
+ * True if master pattern step `step` (0-based) is a Euclidean pulse for k/n/r.
+ * Matches `core.euclidean.rhythm_hit` + `track_euclidean_hit` edge cases (k=0 → false, k≥n → all on).
+ */
+export function euclideanMasterStepHit(k: number, n: number, r: number, step: number): boolean {
+  const [kc, nc, rc] = clampEuclidTriplet(k, n, r);
+  if (kc <= 0) return false;
+  if (kc >= nc) return true;
+  const v = stepToVertex(step, nc);
+  return isVertexHit(v, kc, nc, rc);
+}
+
+/** Sorted master steps in `[0, patternLength)` where {@link euclideanMasterStepHit} is true. */
+export function listEuclideanHitMasterSteps(
+  k: number,
+  n: number,
+  r: number,
+  patternLength: number,
+): number[] {
+  const pl = Math.max(0, Math.floor(patternLength));
+  const out: number[] = [];
+  for (let s = 0; s < pl; s++) {
+    if (euclideanMasterStepHit(k, n, r, s)) out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Snap `step` to a hit step: unchanged if already a hit; else smallest hit ≥ step, else first hit.
+ */
+export function snapMasterStepToEuclideanHit(
+  step: number,
+  hits: readonly number[],
+  patternLength: number,
+): number {
+  const pl = Math.max(0, Math.floor(patternLength));
+  if (pl === 0) return 0;
+  const s = ((Math.floor(step) % pl) + pl) % pl;
+  if (hits.length === 0) return clampStepToPattern(s, pl);
+  if (hits.includes(s)) return s;
+  const next = hits.find((h) => h >= s);
+  return next ?? hits[0]!;
+}
+
+function clampStepToPattern(s: number, pl: number): number {
+  const hi = Math.max(0, pl - 1);
+  return Math.max(0, Math.min(Math.floor(s), hi));
+}
+
+/**
+ * Next/previous hit step along the cyclic hit list (`delta` = +1 or −1).
+ */
+export function advanceEuclideanHitMasterStep(
+  current: number,
+  delta: 1 | -1,
+  k: number,
+  n: number,
+  r: number,
+  patternLength: number,
+): number {
+  const pl = Math.max(0, Math.floor(patternLength));
+  const hits = listEuclideanHitMasterSteps(k, n, r, pl);
+  if (hits.length === 0) return clampStepToPattern(current, pl);
+  if (hits.length === 1) return hits[0]!;
+  let s = snapMasterStepToEuclideanHit(current, hits, pl);
+  let idx = hits.indexOf(s);
+  if (idx < 0) idx = 0;
+  const len = hits.length;
+  const ni = (((idx + delta) % len) + len) % len;
+  return hits[ni]!;
+}
+
 /**
  * Which ring vertex (0..n-1) the master step maps to (no UI rotation).
  * Step 0 → vertex 0.

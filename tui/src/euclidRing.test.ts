@@ -4,12 +4,16 @@ import {
   EUCLID_RING_PERIMETER_ROTATION,
   VERTICES_9x9,
   VERTICES_11x11,
+  advanceEuclideanHitMasterStep,
   bjorklund,
   buildVertexLookup,
   computeRingVertices,
+  euclideanMasterStepHit,
   isVertexHit,
+  listEuclideanHitMasterSteps,
   logicalVertexToRingSlot,
   ringGridSize,
+  snapMasterStepToEuclideanHit,
   stepToPlayheadVertex,
   stepToVertex,
 } from "./euclidRing.js";
@@ -180,5 +184,41 @@ test("buildVertexLookup matches vertex list", () => {
   for (let i = 0; i < n; i++) {
     const [r, c] = verts[i]!;
     expect(lookup[r][c]).toBe(i);
+  }
+});
+
+// ===== master-step hit list (matches core/euclidean rhythm_hit) =====
+
+test("euclideanMasterStepHit(3,8,0,s) matches bjorklund ring[(s+r)%n]", () => {
+  const ring = bjorklund(3, 8);
+  for (let s = 0; s < 24; s++) {
+    const local = ((s + 0) % 8 + 8) % 8;
+    expect(euclideanMasterStepHit(3, 8, 0, s)).toBe(ring[local] ?? false);
+  }
+});
+
+test("listEuclideanHitMasterSteps k=3 n=8 length 16", () => {
+  expect(listEuclideanHitMasterSteps(3, 8, 0, 16)).toEqual([2, 5, 7, 10, 13, 15]);
+});
+
+test("advanceEuclideanHitMasterStep wraps on k=3 n=8", () => {
+  expect(advanceEuclideanHitMasterStep(15, 1, 3, 8, 0, 16)).toBe(2);
+  expect(advanceEuclideanHitMasterStep(2, -1, 3, 8, 0, 16)).toBe(15);
+});
+
+test("snapMasterStepToEuclideanHit picks next hit", () => {
+  const hits = listEuclideanHitMasterSteps(3, 8, 0, 16);
+  expect(snapMasterStepToEuclideanHit(0, hits, 16)).toBe(2);
+  expect(snapMasterStepToEuclideanHit(3, hits, 16)).toBe(5);
+  expect(snapMasterStepToEuclideanHit(7, hits, 16)).toBe(7);
+});
+
+test("euclideanMasterStepHit k=0 is never true", () => {
+  expect(euclideanMasterStepHit(0, 8, 0, 0)).toBe(false);
+});
+
+test("euclideanMasterStepHit k=n is always true", () => {
+  for (let s = 0; s < 16; s++) {
+    expect(euclideanMasterStepHit(8, 8, 0, s)).toBe(true);
   }
 });
