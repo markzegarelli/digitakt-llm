@@ -80,12 +80,9 @@ export function TrigEditPanel({
       width={width}
       flexShrink={0}
     >
-      <Box flexDirection="row">
+      <Box flexDirection="row" flexWrap="nowrap">
         <Text bold color={theme.accent}>
-          TRIG {track.toUpperCase()}{" "}
-        </Text>
-        <Text bold color={keysActive ? theme.accent : theme.accentSubtle}>
-          step {stepIndex + 1}
+          TRIG {track.toUpperCase()} s{stepIndex + 1}
         </Text>
         {trackWide ? <Text bold color={theme.warn}> ALL</Text> : null}
       </Box>

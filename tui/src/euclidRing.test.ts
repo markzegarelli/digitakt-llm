@@ -222,3 +222,16 @@ test("euclideanMasterStepHit k=n is always true", () => {
     expect(euclideanMasterStepHit(8, 8, 0, s)).toBe(true);
   }
 });
+
+test("listEuclideanHitMasterSteps is empty when k=0", () => {
+  expect(listEuclideanHitMasterSteps(0, 8, 0, 16)).toEqual([]);
+});
+
+test("snapMasterStepToEuclideanHit with empty hits clamps step", () => {
+  expect(snapMasterStepToEuclideanHit(7, [], 16)).toBe(7);
+  expect(snapMasterStepToEuclideanHit(99, [], 8)).toBe(3);
+});
+
+test("advanceEuclideanHitMasterStep with empty hits clamps current", () => {
+  expect(advanceEuclideanHitMasterStep(3, 1, 0, 8, 0, 16)).toBe(3);
+});
