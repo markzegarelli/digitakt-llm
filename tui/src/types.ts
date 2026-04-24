@@ -148,6 +148,8 @@ export interface DigitaktState {
     latency_ms: number;
     producer_notes?: string;
   } | null;
+  seq_mode: "standard" | "euclidean";
+  euclid: Record<TrackName, { k: number; n: number; r: number }>;
 }
 
 export type FocusPanel = "pattern" | "cc" | "prompt";
