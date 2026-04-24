@@ -5,7 +5,7 @@ import {
   stepToVertex,
   VERTICES_7x7,
   VERTICES_9x9,
-} from "./euclidRing";
+} from "./euclidRing.js";
 
 // ===== bjorklund tests =====
 
