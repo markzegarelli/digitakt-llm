@@ -34,8 +34,8 @@ export function EuclidTrackStrip({
       </Text>
       {rows.map((row) => {
         const selected = row.cursor === ">";
-        const pending = row.badge.includes("Q");
-        const muted = row.badge.includes("M");
+        const pending = pendingMuteTracks.has(row.track);
+        const muted = trackMuted[row.track] ?? false;
         const color = pending
           ? theme.warn
           : selected && isFocused
@@ -59,8 +59,8 @@ export function EuclidTrackStrip({
         );
       })}
       <Box marginTop={1}>
-        <Text color={theme.textGhost}>
-          {isFocused ? "↑↓ track  Enter ring  m/q/Q mute" : "selected track"}
+        <Text color={theme.textGhost} wrap="truncate">
+          {isFocused ? "↑↓ Enter" : "tracks"}
         </Text>
       </Box>
     </Box>
