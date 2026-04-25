@@ -67,3 +67,17 @@ test("split stack with trig stays bounded on very narrow windows", () => {
   expect(out.mixWidth).toBe(out.stackWidth);
 });
 
+test("split stack can reserve extra SEQ width for Euclidean track strip plus ring", () => {
+  const out = computeSplitStackLayout({
+    termCols: 64,
+    showLog: false,
+    showTrig: true,
+    minSeqWidth: 36,
+  });
+  expect(out.centerBudget).toBe(50);
+  expect(out.seqGridWidth).toBeGreaterThanOrEqual(36);
+  expect(out.seqGridWidth - 12).toBeGreaterThanOrEqual(24);
+  expect(out.trigWidth).toBeGreaterThanOrEqual(0);
+  expect(out.seqGridWidth + out.trigWidth).toBe(out.stackWidth);
+});
+

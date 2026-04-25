@@ -140,6 +140,23 @@ def test_euclidean_mode_gates_kick_to_ring_hits():
     assert len(_kick_note_ons(port)) >= 1
 
 
+def test_euclidean_ring_hit_fires_even_when_grid_step_is_empty():
+    from core.euclidean import normalize_euclid_in_pattern
+
+    player, state, _, port = _make_player()
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["seq_mode"] = "euclidean"
+    eu = {t: {"k": 16, "n": 16, "r": 0} for t in TRACK_NAMES}
+    eu["kick"] = {"k": 1, "n": 16, "r": 0}
+    pat["euclid"] = eu
+    normalize_euclid_in_pattern(pat, 16, tuple(TRACK_NAMES))
+    state.current_pattern = pat
+    player._play_step(15)
+    kick_sends = _kick_note_ons(port)
+    assert len(kick_sends) == 1
+    assert kick_sends[0][0][0].velocity == state.track_velocity["kick"]
+
+
 def test_start_sends_midi_start():
     player, state, bus, port = _make_player()
     player.start()
