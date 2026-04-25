@@ -86,6 +86,20 @@ test("m/q/Shift+Q intents target the selected track in any pattern UI mode", () 
   expect(getPatternMuteIntent("Q", "snare", new Set())).toEqual({ kind: "none" });
 });
 
+test("standard mode can use the same mute intent helper without changing behavior", () => {
+  const pending = new Set<TrackName>(["kick"]);
+
+  expect(getPatternMuteIntent("m", "clap", pending)).toEqual({
+    kind: "immediate",
+    track: "clap",
+  });
+  expect(getPatternMuteIntent("q", "clap", pending)).toEqual({
+    kind: "toggle-pending",
+    track: "clap",
+  });
+  expect(getPatternMuteIntent("Q", "clap", pending)).toEqual({ kind: "queue-all" });
+});
+
 test("pending mute toggles selected track and Shift+Q snapshots staged tracks", () => {
   const original = new Set<TrackName>();
   const first = togglePendingMuteTrack(original, "hihat");

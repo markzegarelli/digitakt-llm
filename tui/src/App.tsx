@@ -12,6 +12,12 @@ import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
 import {
+  getPatternMuteIntent,
+  togglePendingMuteTrack,
+  tracksToQueueAndClear,
+} from "./euclidMuteUi.js";
+import type { EuclidDepth } from "./euclidMuteUi.js";
+import {
   EUCLID_N_MAX,
   advanceEuclideanHitMasterStep,
   euclideanMasterStepHit,
@@ -84,6 +90,7 @@ export function App({ baseUrl }: AppProps) {
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
   const [euclidEditBox, setEuclidEditBox] = useState<number | null>(null);
+  const [euclidDepth, setEuclidDepth] = useState<EuclidDepth>("track-strip");
   // 0=k, 1=n, 2=r; null = no box focused
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
@@ -110,14 +117,20 @@ export function App({ baseUrl }: AppProps) {
       setPatternStepEdit(false);
       setTrigKeysActive(false);
       setTrigTrackWide(false);
+      setEuclidDepth("track-strip");
+      setEuclidEditBox(null);
     } else {
       setEuclidEditBox(null);
+      setEuclidDepth("track-strip");
     }
   }, [state.seq_mode]);
 
-  // Clear euclid edit box when SEQ panel loses focus.
+  // Clear euclid edit state when SEQ panel loses focus.
   useEffect(() => {
-    if (focus !== "pattern") setEuclidEditBox(null);
+    if (focus !== "pattern") {
+      setEuclidEditBox(null);
+      setEuclidDepth("track-strip");
+    }
   }, [focus]);
 
   /** Euclidean step+TRIG: keep selection on a pulse step when k/n/r, track, or length changes; exit if k=0. */
@@ -769,6 +782,34 @@ export function App({ baseUrl }: AppProps) {
     return true;
   };
 
+  const handlePatternMuteKey = useCallback((input: string): boolean => {
+    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const intent = getPatternMuteIntent(input, track, pendingMuteTracks);
+
+    if (intent.kind === "immediate") {
+      actions.setMute(intent.track, !state.track_muted[intent.track])
+        .catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+      return true;
+    }
+
+    if (intent.kind === "toggle-pending") {
+      setPendingMuteTracks((prev) => togglePendingMuteTrack(prev, intent.track));
+      return true;
+    }
+
+    if (intent.kind === "queue-all") {
+      const queued = tracksToQueueAndClear(pendingMuteTracks);
+      setPendingMuteTracks(queued.nextPending);
+      for (const queuedTrack of queued.tracks) {
+        actions.setMuteQueued(queuedTrack, !state.track_muted[queuedTrack])
+          .catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+      }
+      return true;
+    }
+
+    return false;
+  }, [actions, patternTrack, pendingMuteTracks, state.track_muted]);
+
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       exit();
@@ -834,7 +875,7 @@ export function App({ baseUrl }: AppProps) {
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
-        if (focus === "pattern" && patternStepEdit) {
+        if (focus === "pattern" && patternStepEdit && state.seq_mode !== "euclidean") {
           setTrigKeysActive((a) => !a);
           return;
         }
@@ -923,6 +964,15 @@ export function App({ baseUrl }: AppProps) {
     }
 
     if (focus === "prompt") return;  // Prompt handles its own keys
+
+    if (
+      focus === "pattern" &&
+      !key.ctrl &&
+      !key.meta &&
+      (input === "m" || input === "q" || input === "Q")
+    ) {
+      if (handlePatternMuteKey(input)) return;
+    }
 
     if (input === " ") {
       if (focus === "pattern" && patternStepEdit) {
@@ -1040,27 +1090,6 @@ export function App({ baseUrl }: AppProps) {
         setTrigField(0);
         setTrigTrackWide(false);
         return;
-      }
-      if (input === "m") {
-        const track = TRACK_NAMES[patternTrack];
-        if (track) actions.setMute(track, !state.track_muted[track]);
-      }
-      if (input === "q") {
-        const track = TRACK_NAMES[patternTrack];
-        if (track) {
-          setPendingMuteTracks((prev) => {
-            const next = new Set(prev);
-            if (next.has(track)) { next.delete(track); } else { next.add(track); }
-            return next;
-          });
-        }
-      }
-      if (input === "Q" && pendingMuteTracks.size > 0) {
-        const tracksToQueue = Array.from(pendingMuteTracks) as TrackName[];
-        setPendingMuteTracks(new Set());
-        for (const track of tracksToQueue) {
-          actions.setMuteQueued(track, !state.track_muted[track]);
-        }
       }
       if (input === "n") {
         actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
