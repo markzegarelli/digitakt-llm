@@ -5,6 +5,7 @@ from core.state import AppState, TRACK_NAMES
 from core.events import EventBus
 from core.generator import (
     Generator,
+    _coerce_pattern_dict,
     _compute_generation_summary,
     _detect_target_tracks,
     _normalize_producer_notes,
@@ -632,6 +633,36 @@ def test_system_prompt_includes_euclidean_guidance():
     assert "BJORKLUND" in prompt
     assert "k = number of pulses" in prompt
     assert "/mode euclidean" in prompt
+    assert "seq_mode" in prompt
+    assert "emit_pattern" in prompt
+
+
+def test_coerce_pattern_dict_accepts_seq_mode_and_partial_euclid():
+    base = {**VALID_PATTERN, "bpm": 90, "seq_mode": "euclidean"}
+    base["euclid"] = {"hihat": {"k": 5, "n": 12, "r": 3}}
+    out = _coerce_pattern_dict(base, 16)
+    assert out is not None
+    pat, bpm, _, _ = out
+    assert bpm == 90
+    assert pat["seq_mode"] == "euclidean"
+    assert pat["euclid"]["hihat"] == {"k": 5, "n": 12, "r": 3}
+
+
+def test_tool_use_emits_euclidean_when_model_includes_seq_mode():
+    state = AppState()
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+    gen = Generator(state, bus)
+    eu = {"hihat": {"k": 5, "n": 8, "r": 0}}
+    gen._client = _make_mock_client_tool(
+        dict(VALID_PATTERN, bpm=90, seq_mode="euclidean", euclid=eu)
+    )
+    gen._run("slow ambient euclidean hats")
+    assert len(events) == 1
+    pat = events[0]["pattern"]
+    assert pat.get("seq_mode") == "euclidean"
+    assert pat.get("euclid", {}).get("hihat") == {"k": 5, "n": 8, "r": 0}
 
 
 # ── Targeted track detection ──────────────────────────────────────────────────
