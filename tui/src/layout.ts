@@ -3,6 +3,7 @@ export interface PanelLayoutInput {
   focusRailOuter?: number;
   showLog: boolean;
   showTrig: boolean;
+  minSeqWidth?: number;
 }
 
 export interface PanelLayout {
@@ -136,6 +137,7 @@ export function computeSplitStackLayout({
   focusRailOuter = RAIL_OUTER,
   showLog: _showLog,
   showTrig,
+  minSeqWidth = 24,
 }: PanelLayoutInput): SplitStackLayout {
   const centerBudget = Math.max(0, termCols - focusRailOuter);
   const stackWidth = centerBudget;
@@ -150,7 +152,7 @@ export function computeSplitStackLayout({
       logWidth,
     };
   }
-  const MIN_SEQ_WIDTH = 24;
+  const MIN_SEQ_WIDTH = Math.max(0, minSeqWidth);
   const MIN_TRIG_WIDTH = 22;
   let seqGridWidth = stackWidth;
   let trigWidth = 0;
