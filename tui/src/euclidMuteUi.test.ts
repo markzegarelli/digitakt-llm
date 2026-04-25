@@ -69,6 +69,12 @@ test("TRIG can open only from active ring and is blocked at k=0", () => {
   });
 });
 
+test("t and Shift+T are eligible only while the active ring is selected", () => {
+  expect(canHandleEuclidTrigShortcut("track-strip")).toBe(false);
+  expect(canHandleEuclidTrigShortcut("active-ring")).toBe(true);
+  expect(canHandleEuclidTrigShortcut("trig")).toBe(false);
+});
+
 test("m/q/Shift+Q intents target the selected track in any pattern UI mode", () => {
   expect(getPatternMuteIntent("m", "snare", new Set())).toEqual({
     kind: "immediate",
