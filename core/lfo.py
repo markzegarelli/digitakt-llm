@@ -88,3 +88,44 @@ def lfo_mod_w(
     except ValueError:
         return None
     return (w, depth)
+
+
+def _lfo_target_key_valid(key: str) -> bool:
+    """Match `cli.commands.validate_lfo_target_key` without importing cli (avoids import cycles)."""
+    from core.midi_utils import CC_MAP
+    from core.state import TRACK_NAMES
+
+    trig_fields = frozenset({"prob", "vel", "gate", "note"})
+    parts = key.split(":")
+    if len(parts) != 3:
+        return False
+    kind, track, rest = parts
+    if track not in TRACK_NAMES:
+        return False
+    if kind == "cc":
+        return rest in CC_MAP
+    if kind == "trig":
+        return rest in trig_fields
+    if kind == "pitch":
+        return rest == "main"
+    return False
+
+
+def sanitize_lfo_in_pattern(result: dict, pattern_length: int) -> None:
+    """Drop invalid `lfo` routes (bad key grammar, unknown shape/rate, etc.) in-place."""
+    block = result.get("lfo")
+    if not isinstance(block, dict):
+        return
+    new_block: dict = {}
+    for k, v in block.items():
+        if not isinstance(v, dict):
+            continue
+        if not _lfo_target_key_valid(k):
+            continue
+        if lfo_mod_w(v, pattern_length, 0) is None:
+            continue
+        new_block[k] = v
+    if new_block:
+        result["lfo"] = new_block
+    else:
+        result.pop("lfo", None)

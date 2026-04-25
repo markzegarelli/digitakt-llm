@@ -121,6 +121,35 @@ export function parsePatternFromApi(
   return { velocities, trig };
 }
 
+/** Derive step count from a `current_pattern` API object when WebSocket frames omit `pattern_length`. */
+export function inferPatternLengthFromApi(
+  raw: Record<string, unknown> | undefined,
+  fallback: number,
+): number {
+  if (!raw || typeof raw !== "object") return fallback;
+  const explicit = raw["pattern_length"];
+  if (typeof explicit === "number" && Number.isFinite(explicit)) {
+    const e = Math.round(explicit);
+    if (e >= 1 && e <= 64) return e;
+  }
+  let max = 0;
+  for (const t of TRACK_NAMES) {
+    const arr = raw[t];
+    if (Array.isArray(arr)) max = Math.max(max, arr.length);
+  }
+  for (const key of ["prob", "gate", "cond", "note"] as const) {
+    const block = raw[key];
+    if (!block || typeof block !== "object") continue;
+    const o = block as Record<string, unknown>;
+    for (const t of TRACK_NAMES) {
+      const arr = o[t];
+      if (Array.isArray(arr)) max = Math.max(max, arr.length);
+    }
+  }
+  if (max >= 1) return max;
+  return fallback;
+}
+
 export interface DigitaktState {
   current_pattern: Record<TrackName, number[]>;
   /** Parsed from the same document as `current_pattern` on the server. */
@@ -144,6 +173,8 @@ export interface DigitaktState {
   midi_connected: boolean;
   log: string[];
   current_step: number | null;
+  /** Monotonic step index from engine while playing (`step_changed.global_step`); null when stopped. */
+  global_step: number | null;
   last_prompt: string | null;
   pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
   chain: string[];

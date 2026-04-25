@@ -1,6 +1,14 @@
 import pytest
 
-from core.lfo import SHAPES, apply_depth_clamp, cycle_steps, lfo_mod_w, lfo_shape, lfo_w_at_step
+from core.lfo import (
+    SHAPES,
+    apply_depth_clamp,
+    cycle_steps,
+    lfo_mod_w,
+    lfo_shape,
+    lfo_w_at_step,
+    sanitize_lfo_in_pattern,
+)
 from core.state import AppState, EMPTY_PATTERN
 
 
@@ -111,6 +119,25 @@ def test_apply_depth_clamp_clamps_narrow_range():
     # full swing ±5 around base 5 → 10 at w=+1, 0 at w=-1
     assert apply_depth_clamp(5, 1.0, 100, 0, 10) == 10
     assert apply_depth_clamp(5, -1.0, 100, 0, 10) == 0
+
+
+def test_sanitize_lfo_in_pattern_drops_invalid_shape():
+    pat = {
+        "kick": [0] * 16,
+        "lfo": {
+            "cc:kick:filter": {"shape": "nope", "depth": 50, "phase": 0.0, "rate": {"num": 1, "den": 1}},
+            "cc:kick:decay": {"shape": "sine", "depth": 10, "phase": 0.0, "rate": {"num": 1, "den": 1}},
+        },
+    }
+    sanitize_lfo_in_pattern(pat, 16)
+    assert "cc:kick:filter" not in pat.get("lfo", {})
+    assert pat["lfo"]["cc:kick:decay"]["shape"] == "sine"
+
+
+def test_sanitize_lfo_in_pattern_drops_bad_target_key():
+    pat = {"kick": [0] * 16, "lfo": {"cc:kick:__bad__": {"shape": "sine", "depth": 1, "phase": 0.0, "rate": {"num": 1, "den": 1}}}}
+    sanitize_lfo_in_pattern(pat, 16)
+    assert "lfo" not in pat
 
 
 def test_lfo_preserved_in_replace_current_pattern():

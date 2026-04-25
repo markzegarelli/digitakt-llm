@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { DigitaktState, LfoDef, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
-import { TRACK_NAMES, emptyTrigState, parseLfoFromApi, parsePatternFromApi } from "../types.js";
+import {
+  TRACK_NAMES,
+  emptyTrigState,
+  inferPatternLengthFromApi,
+  parseLfoFromApi,
+  parsePatternFromApi,
+} from "../types.js";
 
 const DEFAULT_STATE: DigitaktState = {
   current_pattern: Object.fromEntries(
@@ -34,6 +40,7 @@ const DEFAULT_STATE: DigitaktState = {
   midi_connected: false,
   log: [],
   current_step: null,
+  global_step: null,
   last_prompt: null,
   pattern_history: [],
   chain: [],
@@ -211,6 +218,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         chain_armed: (data["chain_armed"] as boolean) ?? prev.chain_armed,
         lfo: parseLfoFromApi(pattern["lfo"]),
         lfo_out: {},
+        global_step: null,
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
@@ -279,13 +287,14 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "pattern_changed": {
               const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
               if (!raw) return { ...prev, log: newLog };
-              const plen = prev.pattern_length;
+              const plen = inferPatternLengthFromApi(raw, prev.pattern_length);
               const { velocities, trig } = parsePatternFromApi(raw, plen);
               const seqMode = raw["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
               const rawEuclid = raw["euclid"];
               const euclid = parseEuclidBlock(rawEuclid, prev.euclid);
               return {
                 ...prev,
+                pattern_length: plen,
                 current_pattern: velocities,
                 pattern_trig: trig,
                 lfo: parseLfoFromApi(raw["lfo"]),
@@ -300,15 +309,27 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "playback_started":
               return { ...prev, is_playing: true, log: newLog };
             case "playback_stopped":
-              return { ...prev, is_playing: false, current_step: null, lfo_out: {}, log: newLog };
-            case "step_changed":
-              return { ...prev, current_step: msg.data["step"] as number, log: newLog };
+              return {
+                ...prev,
+                is_playing: false,
+                current_step: null,
+                global_step: null,
+                lfo_out: {},
+                log: newLog,
+              };
+            case "step_changed": {
+              const st = msg.data["step"] as number;
+              const gsRaw = msg.data["global_step"];
+              const global_step =
+                typeof gsRaw === "number" && Number.isFinite(gsRaw) ? gsRaw : st;
+              return { ...prev, current_step: st, global_step, log: newLog };
+            }
             case "generation_started":
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete": {
               const genBpm = msg.data["bpm"] as number | undefined;
               const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
-              const plen = prev.pattern_length;
+              const plen = raw ? inferPatternLengthFromApi(raw, prev.pattern_length) : prev.pattern_length;
               const parsed = raw
                 ? parsePatternFromApi(raw, plen)
                 : { velocities: prev.current_pattern, trig: prev.pattern_trig };
@@ -317,6 +338,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return {
                 ...prev,
                 generation_status: "idle",
+                pattern_length: plen,
                 current_pattern: parsed.velocities,
                 pattern_trig: parsed.trig,
                 lfo: raw ? parseLfoFromApi(raw["lfo"]) : prev.lfo,
@@ -429,6 +451,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 delete nextOut[t];
               } else {
                 next[t] = ld;
+                delete nextOut[t];
               }
               return { ...prev, lfo: next, lfo_out: nextOut, log: newLog };
             }

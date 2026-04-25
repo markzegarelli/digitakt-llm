@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from core.midi_utils import CC_DEFAULTS as _DEFAULT_CC_PARAMS
 from core.fill_fsm import FillFSM
 from core.euclidean import normalize_euclid_in_pattern
+from core.lfo import sanitize_lfo_in_pattern
 
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
 
@@ -242,6 +243,7 @@ class AppState:
             result["note"] = new_note
 
         normalize_euclid_in_pattern(result, target_steps, tuple(TRACK_NAMES))
+        sanitize_lfo_in_pattern(result, target_steps)
         return result
 
     def update_pitch(self, track: str, value: int) -> None:

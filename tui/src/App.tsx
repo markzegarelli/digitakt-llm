@@ -502,6 +502,29 @@ export function App({ baseUrl }: AppProps) {
         }
         const num = parseInt(m[1]!, 10);
         const den = parseInt(m[2]!, 10);
+        if (num < 1 || den < 1) {
+          actions.addLog("✗ LFO rate num and den must be ≥ 1");
+          break;
+        }
+        const gcd = (a: number, b: number): number => {
+          let x = a;
+          let y = b;
+          while (y !== 0) {
+            const t = y;
+            y = x % y;
+            x = t;
+          }
+          return x;
+        };
+        if (gcd(num, den) !== 1) {
+          actions.addLog("✗ LFO rate num/den must be coprime (reduced fraction)");
+          break;
+        }
+        const csn = Math.max(1, Math.floor((state.pattern_length * num) / den));
+        if (csn > 256) {
+          actions.addLog("✗ LFO rate: cycle too long for this pattern (max 256 steps)");
+          break;
+        }
         if (Number.isNaN(phase) || phase < 0 || phase > 1) {
           actions.addLog("✗ phase must be 0..1");
           break;
@@ -1487,6 +1510,7 @@ export function App({ baseUrl }: AppProps) {
                 lfoOut={state.lfo_out}
                 patternLength={state.pattern_length}
                 currentStep={state.current_step}
+                globalStep={state.global_step}
                 isFocused={focus === "cc"}
               />
             </Box>

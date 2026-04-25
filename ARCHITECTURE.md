@@ -69,7 +69,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `vel_changed` | Server | `{track, step, value}` |
 | `random_applied` | Server | `{track, param, lo, hi}` |
 | `randbeat_applied` | Server | `{bpm, swing}` |
-| `step_changed` | Server | `{track, step, value}` |
+| `step_changed` | Player | `{step, global_step}` — `global_step` is the monotonic engine index (`loop * pattern_length + step`) for LFO phase; TUI uses it for the LFO graph |
 | `length_changed` | Server | `{steps}` |
 | `fill_started` | Player | `{}` |
 | `fill_ended` | Player | `{}` |

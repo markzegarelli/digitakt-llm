@@ -109,6 +109,7 @@ function drawLine(
  * Horizontal span = one full pattern. Faster LFO rates (shorter csn) draw multiple cycles; slower rates
  * show a partial cycle — same sampling as `lfo_w_at_step` / core/lfo.py.
  * `playheadCol` is a braille-cell column index (0..cols-1) or null; draws a full-height emphasis line.
+ * `globalStep` shifts the window so slow (multi-bar) LFOs match the engine after bar 1+.
  */
 export function lfoBrailleLines(
   shape: string,
@@ -119,11 +120,16 @@ export function lfoBrailleLines(
   cols: number,
   rowCount: number,
   playheadCol: number | null,
+  globalStep: number | null = null,
 ): string[] {
   const c = Math.max(1, cols);
   const r = Math.max(1, rowCount);
   const csn = cycleSteps(Math.max(1, patternLength), num, den);
   const pl = Math.max(1, patternLength);
+  const baseG =
+    globalStep != null && globalStep >= 0
+      ? Math.floor(globalStep / pl) * pl
+      : 0;
   const bits = new Uint8Array(c * r);
   const widthPx = c * 2;
   const heightPx = r * 4;
@@ -133,13 +139,13 @@ export function lfoBrailleLines(
   const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
 
   let prevX = 0;
-  let prevY = Math.round(mid - wAtG(0) * amp);
+  let prevY = Math.round(mid - wAtG(baseG) * amp);
   prevY = Math.max(0, Math.min(heightPx - 1, prevY));
   setBraillePixel(bits, c, r, 0, prevY);
 
   for (let px = 1; px < widthPx; px++) {
     const t = widthPx <= 1 ? 0 : px / (widthPx - 1);
-    const g = t * pl;
+    const g = baseG + t * pl;
     const w = wAtG(g);
     const y = Math.round(mid - w * amp);
     const py = Math.max(0, Math.min(heightPx - 1, y));

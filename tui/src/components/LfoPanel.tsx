@@ -28,6 +28,8 @@ interface LfoPanelProps {
   lfoOut: Record<string, { value: number; base: number }>;
   patternLength: number;
   currentStep: number | null;
+  /** Engine monotonic index while playing; shifts braille phase for multi-bar LFOs. */
+  globalStep: number | null;
   isFocused: boolean;
 }
 
@@ -39,6 +41,7 @@ export function LfoPanel({
   lfoOut,
   patternLength,
   currentStep,
+  globalStep,
   isFocused,
 }: LfoPanelProps) {
   const rows = entriesForTrack(selectedTrack, lfo);
@@ -93,6 +96,7 @@ export function LfoPanel({
           brailleCols,
           brailleRows,
           hi,
+          globalStep,
         );
         const cyc = cycleSteps(patternLength, def.rate.num, def.rate.den);
         const live = lfoOut[key];

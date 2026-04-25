@@ -75,9 +75,9 @@ class Player:
     def _play_step(self, step: int, dirty_cc: set | None = None) -> None:
         if dirty_cc is None:
             dirty_cc = set()
-        self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
         global_step = self._loop_count * self.state.pattern_length + step
+        self.bus.emit("step_changed", {"step": step, "global_step": global_step})
         lfo_map = pattern.get("lfo") or {}
         for track in TRACK_NAMES:
             base_note = self.state.track_pitch.get(track, midi_utils.NOTE_MAP.get(track, 60))
@@ -267,6 +267,22 @@ class Player:
                             self._stop_event.set()
                             return
 
+    def _restore_global_cc(self, dirty_cc: set[tuple[str, str]]) -> None:
+        """After one pattern, send static track_cc for per-step dirty params. Skips
+        LFO-routed cc:… so modulation stays continuous across bar lines."""
+        pl_now = self.state.current_pattern
+        lfo_skip = (pl_now.get("lfo") or {}) if isinstance(pl_now, dict) else {}
+        if self.port is not None:
+            for track, param in dirty_cc:
+                cc_key = f"cc:{track}:{param}"
+                if cc_key in lfo_skip and isinstance(lfo_skip[cc_key], dict):
+                    continue
+                global_val = self.state.track_cc.get(track, {}).get(param)
+                if global_val is not None and param in midi_utils.CC_MAP:
+                    midi_utils.send_cc(
+                        self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
+                    )
+
     def _loop(self) -> None:
         while not self._stop_event.is_set():
             dirty_cc: set[tuple[str, str]] = set()
@@ -307,14 +323,7 @@ class Player:
                     if sleep_time > 0:
                         self._stop_event.wait(sleep_time)
 
-            # Restore global CC for any params overridden during this loop
-            if self.port is not None:
-                for track, param in dirty_cc:
-                    global_val = self.state.track_cc.get(track, {}).get(param)
-                    if global_val is not None and param in midi_utils.CC_MAP:
-                        midi_utils.send_cc(
-                            self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
-                        )
+            self._restore_global_cc(dirty_cc)
 
             boundary = self.state.apply_bar_boundary()
             mute_changes = boundary.get("mute_changes")
