@@ -28,6 +28,10 @@ export interface EuclidDepthKeyResult {
   logNoPulsesHint: boolean;
 }
 
+export function getEuclidStepTrigExitState(): { depth: EuclidDepth; editBox: 0 } {
+  return { depth: "active-ring", editBox: 0 };
+}
+
 export function canHandleEuclidTrigShortcut(depth: EuclidDepth): boolean {
   return depth === "active-ring";
 }

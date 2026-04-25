@@ -14,6 +14,7 @@ import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
 import { EuclidTrackStrip } from "./components/EuclidTrackStrip.js";
 import {
   applyEuclidDepthKey,
+  getEuclidStepTrigExitState,
   getEuclidTrigShortcutRouting,
   getPatternMuteIntent,
   shouldRoutePatternMuteKey,
@@ -46,6 +47,9 @@ import { theme } from "./theme.js";
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const EUCLID_TRACK_STRIP_WIDTH = 12;
+const EUCLID_RING_MIN_WIDTH = 24;
+const EUCLID_SEQ_MIN_WIDTH = EUCLID_TRACK_STRIP_WIDTH + EUCLID_RING_MIN_WIDTH;
 
 // Track alias map: normalize shorthand display names to canonical API names
 const TRACK_ALIASES: Record<string, string> = { ophat: "openhat", cymbl: "cymbal" };
@@ -1075,6 +1079,11 @@ export function App({ baseUrl }: AppProps) {
           setTrigKeysActive(false);
           setTrigTrackWide(false);
           setTrigField(0);
+          if (state.seq_mode === "euclidean") {
+            const exitState = getEuclidStepTrigExitState();
+            setEuclidDepth(exitState.depth);
+            setEuclidEditBox(exitState.editBox);
+          }
           return;
         }
         if (input === "[" || input === "]") {
@@ -1283,6 +1292,7 @@ export function App({ baseUrl }: AppProps) {
     termCols,
     showLog,
     showTrig: true,
+    minSeqWidth: state.seq_mode === "euclidean" && patternStepEdit ? EUCLID_SEQ_MIN_WIDTH : undefined,
   });
   const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
@@ -1324,10 +1334,10 @@ export function App({ baseUrl }: AppProps) {
                     trackMuted={state.track_muted}
                     pendingMuteTracks={pendingMuteTracks}
                     isFocused={focus === "pattern" && euclidDepth === "track-strip"}
-                    width={12}
+                    width={EUCLID_TRACK_STRIP_WIDTH}
                   />
                   <EuclidRingPanel
-                    width={patternStepEdit ? Math.max(0, seqGridWidth - 12) : Math.max(0, stackWidth - 12)}
+                    width={patternStepEdit ? Math.max(0, seqGridWidth - EUCLID_TRACK_STRIP_WIDTH) : Math.max(0, stackWidth - EUCLID_TRACK_STRIP_WIDTH)}
                     track={TRACK_NAMES[patternTrack] as TrackName}
                     euclid={state.euclid}
                     currentStep={state.current_step}

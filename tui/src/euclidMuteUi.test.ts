@@ -3,6 +3,7 @@ import type { TrackName } from "./types.js";
 import {
   applyEuclidDepthKey,
   canHandleEuclidTrigShortcut,
+  getEuclidStepTrigExitState,
   getEuclidTrigShortcutRouting,
   getEuclidTrackStripRows,
   getPatternMuteIntent,
@@ -95,6 +96,13 @@ test("Euclidean t routing opens only from active ring but preserves TRIG toggles
       patternStepEdit: true,
     }),
   ).toBe("toggle-trig-keys");
+});
+
+test("Euclidean step+TRIG exit returns to active ring editing", () => {
+  expect(getEuclidStepTrigExitState()).toEqual({
+    depth: "active-ring",
+    editBox: 0,
+  });
 });
 
 test("m/q/Shift+Q intents target the selected track in any pattern UI mode", () => {
