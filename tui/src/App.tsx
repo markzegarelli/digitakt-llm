@@ -11,6 +11,7 @@ import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
+import { EuclidTrackStrip } from "./components/EuclidTrackStrip.js";
 import {
   applyEuclidDepthKey,
   getEuclidTrigShortcutRouting,
@@ -1117,14 +1118,14 @@ export function App({ baseUrl }: AppProps) {
           setEuclidEditBox((b) => (b === null ? 0 : null));
           return;
         }
-        if (euclidEditBox !== null && (input === "[" || input === "]")) {
+        if (euclidDepth === "active-ring" && euclidEditBox !== null && (input === "[" || input === "]")) {
           setEuclidEditBox((b) => {
             const cur = b ?? 0;
             return (input === "]" ? (cur + 1) % 3 : (cur + 2) % 3) as 0 | 1 | 2;
           });
           return;
         }
-        if (euclidEditBox !== null && (key.leftArrow || key.rightArrow) && !key.shift) {
+        if (euclidDepth === "active-ring" && euclidEditBox !== null && (key.leftArrow || key.rightArrow) && !key.shift) {
           setEuclidEditBox((b) => {
             const cur = b ?? 0;
             return (key.rightArrow ? (cur + 1) % 3 : (cur + 2) % 3) as 0 | 1 | 2;
@@ -1132,13 +1133,13 @@ export function App({ baseUrl }: AppProps) {
           return;
         }
         if (key.upArrow || key.downArrow) {
-          if (euclidEditBox !== null) {
+          if (euclidDepth === "track-strip") {
+            setPatternTrack((t) => clamp(t + (key.downArrow ? 1 : -1), 0, 7));
+          } else if (euclidDepth === "active-ring" && euclidEditBox !== null) {
             const fields = ["k", "n", "r"] as const;
             const field = fields[euclidEditBox as 0 | 1 | 2];
             const delta = (key.upArrow ? 1 : -1) * (key.shift ? 10 : 1);
             handleEuclidValueChange(field, delta);
-          } else {
-            setPatternTrack((t) => clamp(t + (key.downArrow ? 1 : -1), 0, 7));
           }
           return;
         }
@@ -1318,13 +1319,20 @@ export function App({ baseUrl }: AppProps) {
             <Box flexDirection="row" width={stackWidth}>
               {state.seq_mode === "euclidean" ? (
                 <>
+                  <EuclidTrackStrip
+                    selectedTrack={patternTrack}
+                    trackMuted={state.track_muted}
+                    pendingMuteTracks={pendingMuteTracks}
+                    isFocused={focus === "pattern" && euclidDepth === "track-strip"}
+                    width={12}
+                  />
                   <EuclidRingPanel
-                    width={patternStepEdit ? seqGridWidth : stackWidth}
+                    width={patternStepEdit ? Math.max(0, seqGridWidth - 12) : Math.max(0, stackWidth - 12)}
                     track={TRACK_NAMES[patternTrack] as TrackName}
                     euclid={state.euclid}
                     currentStep={state.current_step}
-                    isFocused={focus === "pattern"}
-                    editBox={euclidEditBox}
+                    isFocused={focus === "pattern" && euclidDepth === "active-ring"}
+                    editBox={euclidDepth === "active-ring" ? euclidEditBox : null}
                     stepTrigEdit={patternStepEdit}
                     selectedPatternStep={patternStepEdit ? patternSelectedStep : null}
                   />
