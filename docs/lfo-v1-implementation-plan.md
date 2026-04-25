@@ -27,8 +27,9 @@
 | `tests/test_server.py` (or new) | POST /lfo, roundtrip with save if applicable |
 | `tui/src/types.ts` | Type for `LfoDef`, `lfo: Record<...> \| undefined` on pattern slice |
 | `tui/src/hooks/useDigitakt.ts` | Parse `lfo` from `current_pattern` + handle `lfo_changed` |
-| `tui/src/components/CCPanel.tsx` | Second line or suffix for active LFO (shape, depth, rate label) + phase hint |
-| `tui/src/App.tsx` | `/lfo` handler → REST |
+| `tui/src/components/CCPanel.tsx` | **MIX only** (CC bars + param labels); do **not** embed the LFO graph here |
+| `tui/src/components/LfoPanel.tsx` (or `LfoVisualizer.tsx`) | **LFO visualizer** — waveform, shape/rate/depth, playhead/phase; placed **to the right of** MIX in layout |
+| `tui/src/App.tsx` | **Row layout:** horizontal pair `[ MIX (CCPanel) | LfoPanel ]` (same row, top/bottom alignment); `/lfo` handler → REST |
 
 | `ARCHITECTURE.md` | New event `lfo_changed`, LFO in pattern payload |
 
@@ -219,16 +220,19 @@ def lfo_w_at_step(
 
 ### Task 6: TUI
 
+**Layout (required):** The **LFO visualizer** is **not** inside the MIX panel. On the same row as MIX, use a **horizontal** layout: **MIX (`CCPanel`) on the left**, **LFO panel on the right** — a **distinct column** to the right of the param bar column, **same vertical bounds** as the MIX block (Ink `Box` row: `CCPanel` + `LfoPanel`). Width: MIX takes the larger share; `LfoPanel` gets a **stable minimum** width for the graph at common terminal sizes. The waveform (ASCII/Unicode/Braille or line characters), time/step axis, and playhead/phase should live in `LfoPanel` only. Optional one-line text (shape, depth, `num/den`) can sit above or below the graph inside that right column. **Match the product goal:** modulation graph sits **immediately to the right of** MIX, not under SEQ/TRIG and not as an overlay inside the MIX border.
+
 **Files:**
 - Modify: `tui/src/types.ts` — LFO types; pattern from `/state` includes `lfo` on `current_pattern`
 - Modify: `tui/src/hooks/useDigitakt.ts` — merge `lfo` into state, handle WebSocket
-- Modify: `tui/src/components/CCPanel.tsx` (and TRIG if needed) — show LFO for **selected** track + param (line like `LFO sin 50% 1/4P` and a 16-char phase strip using `currentStep`)
-- Modify: `tui/src/App.tsx` — `/lfo <target> <shape> <depth> <num>/<den> [phase]` (minimal parser) or subcommands; show errors in log
+- Create: `tui/src/components/LfoPanel.tsx` — LFO for **selected** track (and, if multiple CC LFOs per track, either pick focused param from MIX or show primary / first) — **waveform** + `currentStep` playhead, rate label, shape name, depth
+- Modify: `tui/src/components/CCPanel.tsx` — keep MIX as today (no LFO graph); optional tiny LFO “armed” hint per param is OK but **graph stays in LfoPanel**
+- Modify: `tui/src/App.tsx` — wrap MIX + LFO in a row; `/lfo <target> <shape> <depth> <num>/<den> [phase]` (minimal parser) or subcommands; show errors in log
 
 - [ ] **Step 1:** Add types + hook without UI (log on event).
-- [ ] **Step 2:** CCPanel display + phase strip (reuse `currentStep` from props).
+- [ ] **Step 2:** Build `LfoPanel` and place it **to the right of** `CCPanel` in `App` (row layout, shared height; verify at common terminal widths).
 - [ ] **Step 3:** `bun test` or `bun run` typecheck if project has it — follow `tui/package.json` scripts.
-- [ ] **Step 4: Commit** — `feat(tui): lfo state + MIX strip + /lfo`
+- [ ] **Step 4: Commit** — `feat(tui): lfo state, LfoPanel right of MIX, /lfo`
 
 ---
 
@@ -264,7 +268,7 @@ def lfo_w_at_step(
 | In pattern, save load, not in generator v1 | Task 2, 7, 5 |
 | Runtime layer, not baked | Task 3–4 |
 | API + `lfo_changed` | Task 5 |
-| TUI strip + rate label | Task 6 |
+| TUI: LFO **visualizer to the right of** MIX, waveform + rate/shape/depth | Task 6 |
 | Tests: shapes, cycle length, save roundtrip | Tasks 1–2, 7 |
 
 **Placeholder scan:** All tasks name concrete file paths; no TBD. Open design points resolved in plan: **target key grammar** (3-segment), **length change** (recalc `cycle_steps`), **phase on length** (v1: phase offset only; global step index is continuous across loops).
