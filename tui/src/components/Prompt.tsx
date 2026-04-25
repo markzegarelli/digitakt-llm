@@ -385,15 +385,13 @@ export function Prompt({
       return;
     }
 
-    if (key.backspace) {
+    // Many terminals (macOS) send 0x7f for the backspace key; Ink maps that to
+    // `key.delete`, not `key.backspace`. Treat both as “delete to the left” so
+    // the prompt behaves like a normal line editor. (True forward-delete `[3~`
+    // also sets `key.delete` in Ink; in CMD we still prefer backward delete.)
+    if (key.backspace || key.delete) {
       if (cursor > 0) {
         applyText(text.slice(0, cursor - 1) + text.slice(cursor), cursor - 1);
-      }
-      return;
-    }
-    if (key.delete) {
-      if (cursor < text.length) {
-        applyText(text.slice(0, cursor) + text.slice(cursor + 1), cursor);
       }
       return;
     }

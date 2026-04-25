@@ -45,6 +45,119 @@ export function lfoStrip(shape: string, phase: number, width: number): string {
   return s;
 }
 
+/** Braille dot bit for sub-cell (0=left column, 1=right) and row 0..3 within one character. */
+function brailleDotBit(subX: 0 | 1, subY: number): number {
+  if (subX === 0) {
+    if (subY === 0) return 0x01;
+    if (subY === 1) return 0x02;
+    if (subY === 2) return 0x04;
+    return 0x40;
+  }
+  if (subY === 0) return 0x08;
+  if (subY === 1) return 0x10;
+  if (subY === 2) return 0x20;
+  return 0x80;
+}
+
+function setBraillePixel(bits: Uint8Array, cols: number, rowCount: number, px: number, py: number): void {
+  const widthPx = cols * 2;
+  const heightPx = rowCount * 4;
+  if (px < 0 || py < 0 || px >= widthPx || py >= heightPx) return;
+  const cc = px >> 1;
+  const subX = (px & 1) as 0 | 1;
+  const cr = py >> 2;
+  const subY = py & 3;
+  const idx = cr * cols + cc;
+  bits[idx] = (bits[idx]! | brailleDotBit(subX, subY)) & 0xff;
+}
+
+function drawLine(
+  bits: Uint8Array,
+  cols: number,
+  rowCount: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): void {
+  const widthPx = cols * 2;
+  const heightPx = rowCount * 4;
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  let x = x0;
+  let y = y0;
+  for (let n = 0; n < widthPx * heightPx + 8; n++) {
+    setBraillePixel(bits, cols, rowCount, x, y);
+    if (x === x1 && y === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+}
+
+/**
+ * btop-style braille waveform: `cols` characters wide, `rowCount` lines tall (4× vertical dots per line).
+ * `playheadCol` is a braille-cell column index (0..cols-1) or null; draws a full-height emphasis line.
+ */
+export function lfoBrailleLines(
+  shape: string,
+  phase: number,
+  cols: number,
+  rowCount: number,
+  playheadCol: number | null,
+): string[] {
+  const c = Math.max(1, cols);
+  const r = Math.max(1, rowCount);
+  const bits = new Uint8Array(c * r);
+  const widthPx = c * 2;
+  const heightPx = r * 4;
+  const mid = (heightPx - 1) / 2;
+  const amp = mid;
+
+  let prevX = 0;
+  let prevY = Math.round(mid - lfoShape(shape, phase) * amp);
+  prevY = Math.max(0, Math.min(heightPx - 1, prevY));
+  setBraillePixel(bits, c, r, 0, prevY);
+
+  for (let px = 1; px < widthPx; px++) {
+    const p = widthPx <= 1 ? 0 : px / (widthPx - 1);
+    const w = lfoShape(shape, p + phase);
+    const y = Math.round(mid - w * amp);
+    const py = Math.max(0, Math.min(heightPx - 1, y));
+    drawLine(bits, c, r, prevX, prevY, px, py);
+    prevX = px;
+    prevY = py;
+  }
+
+  if (playheadCol !== null && playheadCol >= 0 && playheadCol < c) {
+    const x0 = playheadCol * 2;
+    for (let py = 0; py < heightPx; py++) {
+      setBraillePixel(bits, c, r, x0, py);
+      setBraillePixel(bits, c, r, x0 + 1, py);
+    }
+  }
+
+  const lines: string[] = [];
+  for (let row = 0; row < r; row++) {
+    let line = "";
+    for (let col = 0; col < c; col++) {
+      const v = bits[row * c + col] ?? 0;
+      line += String.fromCodePoint(0x2800 + v);
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 /** 0..width-1 playhead on strip from current in-pattern step and cycle. */
 export function lfoPlayheadIndex(
   currentStep: number,

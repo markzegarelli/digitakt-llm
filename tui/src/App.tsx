@@ -1342,8 +1342,13 @@ export function App({ baseUrl }: AppProps) {
     showTrig: true,
     minSeqWidth: state.seq_mode === "euclidean" && patternStepEdit ? EUCLID_SEQ_MIN_WIDTH : undefined,
   });
-  const lfoColW = Math.min(32, Math.max(22, Math.floor(stackWidth * 0.3)));
-  const mixContentW = Math.max(20, stackWidth - lfoColW - 1);
+  let lfoColW = Math.min(58, Math.max(28, Math.round(stackWidth * 0.46)));
+  let mixContentW = stackWidth - lfoColW - 1;
+  if (mixContentW < 20) {
+    lfoColW = Math.max(22, stackWidth - 21);
+    mixContentW = Math.max(20, stackWidth - lfoColW - 1);
+  }
+  const lfoGraphRows = Math.max(3, Math.min(5, Math.floor(termRows / 5)));
   const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
   return (
@@ -1476,6 +1481,7 @@ export function App({ baseUrl }: AppProps) {
               </Box>
               <LfoPanel
                 width={lfoColW}
+                graphBrailleRows={lfoGraphRows}
                 selectedTrack={TRACK_NAMES[ccTrack] as TrackName}
                 lfo={state.lfo}
                 lfoOut={state.lfo_out}
