@@ -39,6 +39,7 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/randbeat` — generate a random techno beat
 - `/mute <track> [on|off|toggle]` — queue a mute change to apply at the next bar boundary (default: toggle)
 - `/cc <track> <param> <value>` — global CC control (0–127)
+- `/lfo <target> <sine|square|triangle|ramp|saw> <depth> <num/den> [phase]` — tempo-synced LFO on a route (`cc:…`, `trig:…:prob|vel|gate|note`, or `pitch:…:main`); or `/lfo <target> clear`
 - `/cc-step <track> <param> <step> <v>` — per-step CC override (-1 to clear)
 - `/save <name> [#tag1 #tag2]` — save pattern with optional tags
 - `/load [name]` — without a name: open an interactive list (↑↓ Enter Esc); with a name: queue that saved pattern for the next loop (or load immediately when stopped)
@@ -155,7 +156,7 @@ Key endpoints:
 - `POST /randbeat` — generate a random techno beat (BPM 128-160, CC randomized)
 - `POST /bpm`, `POST /swing`, `POST /prob`, `POST /prob-track`, `POST /vel`, `POST /vel-track`
 - `POST /random` — randomize velocity or prob for a track
-- `POST /cc`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
+- `POST /cc`, `POST /lfo`, `POST /mute`, `POST /mute-queued`, `POST /velocity`
 - `POST /play`, `POST /stop`
 - `GET /midi/outputs`, `POST /midi/connect` — hot-plug MIDI output (`{"port": "exact name"}` optional; omit to auto-detect Digitakt)
 - `GET/POST /patterns/{name}` — save/load patterns; `DELETE /patterns/{name}` — remove a save

@@ -7,6 +7,7 @@ import { ChainPanel } from "./components/ChainPanel.js";
 import { GenerationSummary } from "./components/GenerationSummary.js";
 import { FocusRail } from "./components/FocusRail.js";
 import { CCPanel } from "./components/CCPanel.js";
+import { LfoPanel } from "./components/LfoPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
@@ -479,6 +480,43 @@ export function App({ baseUrl }: AppProps) {
       case "pitch":
         actions.setPitch(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
+      case "lfo": {
+        const target = parts[1] ?? "";
+        if (!target) {
+          actions.addLog("✗ Usage: /lfo <target> <shape> <depth> <num/den> [phase]  |  /lfo <target> clear");
+          break;
+        }
+        if (parts[2]?.toLowerCase() === "clear") {
+          actions.setLfoRoute(target, null).then(() => actions.addLog(`LFO cleared: ${target}`)).catch(dispatchError);
+          break;
+        }
+        const shape = parts[2] ?? "";
+        const depth = parseInt(parts[3] ?? "", 10);
+        const rateS = parts[4] ?? "";
+        const m = rateS.match(/^(\d+)\s*\/\s*(\d+)$/);
+        const phase = parts[5] !== undefined ? parseFloat(parts[5]) : 0;
+        const okShape = ["sine", "square", "triangle", "ramp", "saw"].includes(shape);
+        if (!okShape || Number.isNaN(depth) || !m) {
+          actions.addLog("✗ Usage: /lfo <target> <sine|square|triangle|ramp|saw> <depth> <num/den> [phase]");
+          break;
+        }
+        const num = parseInt(m[1]!, 10);
+        const den = parseInt(m[2]!, 10);
+        if (Number.isNaN(phase) || phase < 0 || phase > 1) {
+          actions.addLog("✗ phase must be 0..1");
+          break;
+        }
+        actions
+          .setLfoRoute(target, {
+            shape: shape as "sine" | "square" | "triangle" | "ramp" | "saw",
+            depth,
+            phase,
+            rate: { num, den },
+          })
+          .then(() => actions.addLog(`LFO: ${target} ${shape} ${depth}% ${num}/${den}`))
+          .catch(dispatchError);
+        break;
+      }
       case "cc":
         actions.setCC(normalizeTrack(parts[1] ?? "") as TrackName, parts[2] as CCParam, parseInt(parts[3] ?? "", 10))
           .catch(dispatchError); break;
@@ -1298,12 +1336,14 @@ export function App({ baseUrl }: AppProps) {
   const termCols = stdout?.columns ?? 120;
   const termRows = stdout?.rows ?? 28;
   const helpMaxVisibleRows = Math.max(10, Math.min(22, termRows - 20));
-  const { centerBudget, stackWidth, seqGridWidth, mixWidth, trigWidth: trigRowW } = computeSplitStackLayout({
+  const { centerBudget, stackWidth, seqGridWidth, mixWidth: _mixMax, trigWidth: trigRowW } = computeSplitStackLayout({
     termCols,
     showLog,
     showTrig: true,
     minSeqWidth: state.seq_mode === "euclidean" && patternStepEdit ? EUCLID_SEQ_MIN_WIDTH : undefined,
   });
+  const lfoColW = Math.min(32, Math.max(22, Math.floor(stackWidth * 0.3)));
+  const mixContentW = Math.max(20, stackWidth - lfoColW - 1);
   const muteCount = TRACK_NAMES.filter((t) => state.track_muted[t]).length;
 
   return (
@@ -1414,22 +1454,32 @@ export function App({ baseUrl }: AppProps) {
               )}
             </Box>
             <Box flexDirection="row" width={stackWidth}>
-              <CCPanel
-                contentWidth={mixWidth}
-                ccParams={state.ccParams}
-                trackCC={state.track_cc}
-                stepCC={state.step_cc}
-                patternTrig={state.pattern_trig}
-                patternLength={state.pattern_length}
-                currentStep={state.current_step}
-                selectedTrack={ccTrack}
-                trackMuted={state.track_muted}
-                pendingMuteTracks={pendingMuteTracks}
+              <Box width={mixContentW}>
+                <CCPanel
+                  contentWidth={mixContentW}
+                  ccParams={state.ccParams}
+                  trackCC={state.track_cc}
+                  stepCC={state.step_cc}
+                  patternTrig={state.pattern_trig}
+                  patternLength={state.pattern_length}
+                  currentStep={state.current_step}
+                  selectedTrack={ccTrack}
+                  trackMuted={state.track_muted}
+                  pendingMuteTracks={pendingMuteTracks}
                 selectedParam={ccParam}
                 isFocused={focus === "cc"}
                 stepMode={ccStepMode}
                 selectedStep={ccSelectedStep}
                 stepInputBuffer={ccStepInputBuffer}
+                />
+              </Box>
+              <LfoPanel
+                width={lfoColW}
+                selectedTrack={TRACK_NAMES[ccTrack] as TrackName}
+                lfo={state.lfo}
+                patternLength={state.pattern_length}
+                currentStep={state.current_step}
+                isFocused={focus === "cc"}
               />
             </Box>
             <GenerationSummary

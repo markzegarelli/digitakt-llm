@@ -17,6 +17,7 @@ const HELP_LINES = [
   "  random <track|all> <vel|prob> [lo-hi]  randomize",
   "  randbeat                             random techno beat",
   "  cc <track> <param> <value>           CC 0–127 globally",
+  "  lfo <t> <shape> <d> <n/m> [ph]        tempo-synced LFO (t=cc:…, trig:…, or pitch:…:main)  or  lfo <t> clear",
   "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
   "  save <name> [#tag1 #tag2]            save pattern with optional tags",
   "  load [name]                          pick saved pattern (↑↓ Enter) or queue by name for next loop",
@@ -85,7 +86,7 @@ const HELP_LINES = [
   "",
   "Activity log (view-only):",
   "  /log                                 show or hide log below the main layout",
-  "  Layout: SEQ + TRIG one row; MIX full width below; LOG full width when /log is on.",
+  "  Layout: SEQ + TRIG one row; MIX + LFO strip below; LOG full width when /log is on.",
   "",
   "── Euclidean SEQ (ring + k/n/r + TRIG) ───────────────────────",
   "  mode euclidean                         ring view replaces the step grid",
@@ -102,7 +103,7 @@ const HELP_LINES = [
 // All slash commands for autocomplete
 const COMMANDS = [
   "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "fill", "fresh", "gate",
-  "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
+  "lfo", "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
   "chain", "next", "vary", "read",

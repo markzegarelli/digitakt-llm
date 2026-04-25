@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DigitaktState, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
-import { TRACK_NAMES, emptyTrigState, parsePatternFromApi } from "../types.js";
+import type { DigitaktState, LfoDef, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
+import { TRACK_NAMES, emptyTrigState, parseLfoFromApi, parsePatternFromApi } from "../types.js";
 
 const DEFAULT_STATE: DigitaktState = {
   current_pattern: Object.fromEntries(
@@ -46,6 +46,7 @@ const DEFAULT_STATE: DigitaktState = {
   euclid: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, { k: 0, n: 16, r: 0 }])
   ) as Record<TrackName, { k: number; n: number; r: number }>,
+  lfo: {},
 };
 
 function parseEuclidBlock(
@@ -78,6 +79,13 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "playback_stopped":     return "playback stopped";
     case "midi_disconnected":    return `MIDI disconnected: ${data["port"]}`;
     case "midi_connected":       return `MIDI connected: ${data["port"]}`;
+    case "lfo_changed": {
+      const t = data["target"] as string;
+      const ld = data["lfo"] as unknown;
+      if (ld == null) return `LFO cleared: ${t}`;
+      const d = (ld as { shape: string; depth: number })["depth"];
+      return `LFO: ${t}  (${(ld as { shape: string })["shape"]}  ${d}%)`;
+    }
     case "cc_changed":           return `CC: ${data["track"]} ${data["param"]} = ${data["value"]}`;
     case "cc_step_changed":      return `CC step: ${data["track"]} ${data["param"]} step ${data["step"]} = ${data["value"]}`;
     case "mute_changed":         return `mute: ${data["track"]} = ${data["muted"]}`;
@@ -135,6 +143,7 @@ export interface DigitaktActions {
   chainFire(): Promise<void>;
   chainClear(): Promise<void>;
   setCCFocusedTrack(track: TrackName): Promise<void>;
+  setLfoRoute(target: string, lfo: LfoDef | null): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -199,6 +208,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         chain_auto: (data["chain_auto"] as boolean) ?? prev.chain_auto,
         chain_queued_index: (data["chain_queued_index"] as number | null) ?? prev.chain_queued_index,
         chain_armed: (data["chain_armed"] as boolean) ?? prev.chain_armed,
+        lfo: parseLfoFromApi(pattern["lfo"]),
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
@@ -276,6 +286,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 ...prev,
                 current_pattern: velocities,
                 pattern_trig: trig,
+                lfo: parseLfoFromApi(raw["lfo"]),
                 seq_mode: seqMode,
                 euclid,
                 log: newLog,
@@ -305,6 +316,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 generation_status: "idle",
                 current_pattern: parsed.velocities,
                 pattern_trig: parsed.trig,
+                lfo: raw ? parseLfoFromApi(raw["lfo"]) : prev.lfo,
                 seq_mode: seqMode,
                 euclid,
                 last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
@@ -399,8 +411,17 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 pattern_length: steps,
                 current_pattern: velocities,
                 pattern_trig: trig,
+                lfo: prev.lfo,
                 log: newLog,
               };
+            }
+            case "lfo_changed": {
+              const t = msg.data["target"] as string;
+              const ld = msg.data["lfo"] as LfoDef | null | undefined;
+              const next = { ...prev.lfo };
+              if (ld == null) delete next[t];
+              else next[t] = ld;
+              return { ...prev, lfo: next, log: newLog };
             }
             case "fill_started":
               return { ...prev, fill_active: true, fill_queued: false, log: newLog };
@@ -719,6 +740,13 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     setCCFocusedTrack: useCallback(async (track: TrackName) => {
       await api("POST", "/cc-focused-track", { track });
     }, [api]),
+
+    setLfoRoute: useCallback(
+      async (target: string, lfo: LfoDef | null) => {
+        await api("POST", "/lfo", { target, lfo });
+      },
+      [api],
+    ),
   };
 
   return [state, actions];

@@ -28,11 +28,9 @@ def lfo_shape(shape: str, p: float) -> float:
 
 
 def apply_depth_clamp(base: int, w: float, depth_pct: int, lo: int, hi: int) -> int:
-    """Map bipolar w in [-1, 1] and depth 0..100 to [lo, hi] via range midpoint (see LFO v1 plan)."""
-    _ = base  # reserved for static anchor when player combines LFO with per-step base CC
-    mid = (lo + hi) / 2.0
+    """LFO v1: sweep around static base by ±half of [lo,hi] at depth 100%, then clamp."""
     half = (hi - lo) / 2.0
-    v = int(round(mid + w * (depth_pct / 100.0) * half))
+    v = int(round(float(base) + w * (depth_pct / 100.0) * half))
     if v < lo:
         return lo
     if v > hi:
@@ -55,3 +53,38 @@ def lfo_w_at_step(
     p = (global_step % cycle_steps_n) / float(cycle_steps_n)
     p = _norm_p(p + phase)
     return lfo_shape(shape, p)
+
+
+def lfo_mod_w(
+    ldef: dict, pattern_length: int, global_step: int
+) -> tuple[float, int] | None:
+    """Parse a LfoDef dict into (bipolar w, depth 0..100) or None if invalid."""
+    if not isinstance(ldef, dict):
+        return None
+    rate = ldef.get("rate") if isinstance(ldef.get("rate"), dict) else {}
+    try:
+        num = int(rate.get("num", 1))
+        den = int(rate.get("den", 1))
+    except (TypeError, ValueError):
+        return None
+    try:
+        csn = cycle_steps(pattern_length, num, den)
+    except ValueError:
+        return None
+    shape = ldef.get("shape", "sine")
+    if not isinstance(shape, str):
+        return None
+    try:
+        depth = int(ldef.get("depth", 0))
+    except (TypeError, ValueError):
+        depth = 0
+    depth = max(0, min(100, depth))
+    try:
+        phase = float(ldef.get("phase", 0.0))
+    except (TypeError, ValueError):
+        phase = 0.0
+    try:
+        w = lfo_w_at_step(global_step, csn, phase, shape)
+    except ValueError:
+        return None
+    return (w, depth)

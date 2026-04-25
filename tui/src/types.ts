@@ -7,6 +7,15 @@ export const DEFAULT_GATE_PCT = 50;
 
 export type TrackName = typeof TRACK_NAMES[number];
 
+export type LfoShape = "sine" | "square" | "triangle" | "ramp" | "saw";
+
+export interface LfoDef {
+  shape: LfoShape;
+  depth: number;
+  phase: number;
+  rate: { num: number; den: number };
+}
+
 export interface CCParamDef {
   name: string;
   cc: number;
@@ -150,6 +159,40 @@ export interface DigitaktState {
   } | null;
   seq_mode: "standard" | "euclidean";
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
+  /** LFO routes keyed e.g. `cc:kick:filter`, `trig:snare:prob`, `pitch:kick:main` */
+  lfo: Record<string, LfoDef>;
+}
+
+export function parseLfoFromApi(raw: unknown): Record<string, LfoDef> {
+  if (!raw || typeof raw !== "object") return {};
+  const inBlock = raw as Record<string, unknown>;
+  const out: Record<string, LfoDef> = {};
+  for (const [k, v] of Object.entries(inBlock)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    const rate = o.rate;
+    if (typeof o.shape !== "string" || typeof o.depth !== "number" || !rate || typeof rate !== "object")
+      continue;
+    const rn = (rate as Record<string, unknown>)["num"];
+    const rd = (rate as Record<string, unknown>)["den"];
+    if (typeof rn !== "number" || typeof rd !== "number") continue;
+    if (
+      o.shape !== "sine" &&
+      o.shape !== "square" &&
+      o.shape !== "triangle" &&
+      o.shape !== "ramp" &&
+      o.shape !== "saw"
+    ) {
+      continue;
+    }
+    out[k] = {
+      shape: o.shape,
+      depth: o.depth,
+      phase: typeof o.phase === "number" ? o.phase : 0,
+      rate: { num: rn, den: rd },
+    };
+  }
+  return out;
 }
 
 export type FocusPanel = "pattern" | "cc" | "prompt";

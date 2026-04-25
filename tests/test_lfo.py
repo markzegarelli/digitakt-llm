@@ -1,6 +1,6 @@
 import pytest
 
-from core.lfo import SHAPES, apply_depth_clamp, cycle_steps, lfo_shape, lfo_w_at_step
+from core.lfo import SHAPES, apply_depth_clamp, cycle_steps, lfo_mod_w, lfo_shape, lfo_w_at_step
 from core.state import AppState, EMPTY_PATTERN
 
 
@@ -73,11 +73,28 @@ def test_unknown_shape_raises():
         lfo_shape("nope", 0.0)
 
 
+def test_lfo_mod_w_returns_w_depth():
+    m = lfo_mod_w(
+        {
+            "shape": "ramp",
+            "depth": 50,
+            "phase": 0.0,
+            "rate": {"num": 1, "den": 1},
+        },
+        16,
+        0,
+    )
+    assert m is not None
+    w, d = m
+    assert w == -1.0
+    assert d == 50
+
+
 def test_apply_depth_clamp_w_positive_full_depth():
     assert apply_depth_clamp(64, 1.0, 100, 0, 127) == 127
 
 
-def test_apply_depth_clamp_w_zero_is_midpoint():
+def test_apply_depth_clamp_w_zero_returns_base():
     assert apply_depth_clamp(64, 0, 100, 0, 127) == 64
 
 
@@ -86,12 +103,13 @@ def test_apply_depth_clamp_w_negative_full_depth():
 
 
 def test_apply_depth_clamp_zero_depth_ignores_w():
-    assert apply_depth_clamp(0, 1.0, 0, 0, 127) == 64
-    assert apply_depth_clamp(0, -1.0, 0, 0, 127) == 64
+    assert apply_depth_clamp(0, 1.0, 0, 0, 127) == 0
+    assert apply_depth_clamp(100, -1.0, 0, 0, 127) == 100
 
 
 def test_apply_depth_clamp_clamps_narrow_range():
-    assert apply_depth_clamp(50, 1.0, 200, 0, 10) == 10
+    # full swing ±5 around base 5 → 10 at w=+1, 0 at w=-1
+    assert apply_depth_clamp(5, 1.0, 100, 0, 10) == 10
     assert apply_depth_clamp(5, -1.0, 100, 0, 10) == 0
 
 

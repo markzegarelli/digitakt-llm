@@ -5,7 +5,7 @@ const KNOWN_SLASH_COMMANDS = new Set([
   "play", "stop", "new", "undo", "randbeat", "fresh", "bpm", "swing", "length",
   "prob", "vel", "gate", "pitch", "cc", "cc-step", "cond", "random", "mute",
   "save", "load", "delete", "fill", "chain", "patterns", "quit", "q", "help", "log",
-  "clear", "history", "mode", "gen", "ask", "midi",
+  "clear", "history", "mode", "gen", "ask", "midi", "lfo",
 ]);
 
 export type ParsedChainCommand =
