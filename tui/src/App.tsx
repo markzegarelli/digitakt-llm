@@ -13,7 +13,7 @@ import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
 import {
   applyEuclidDepthKey,
-  canHandleEuclidTrigShortcut,
+  getEuclidTrigShortcutRouting,
   getPatternMuteIntent,
   shouldRoutePatternMuteKey,
   togglePendingMuteTrack,
@@ -946,9 +946,12 @@ export function App({ baseUrl }: AppProps) {
         const shiftT = ch === "T" || (ch === "t" && key.shift);
 
         if (state.seq_mode === "euclidean") {
-          if (!canHandleEuclidTrigShortcut(euclidDepth)) return;
-          if (!patternStepEdit) openEuclidTrig(shiftT);
-          return;
+          const routing = getEuclidTrigShortcutRouting({ depth: euclidDepth, patternStepEdit });
+          if (routing === "ignore") return;
+          if (routing === "open-trig") {
+            openEuclidTrig(shiftT);
+            return;
+          }
         }
 
         if (!patternStepEdit) {

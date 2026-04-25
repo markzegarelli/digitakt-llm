@@ -32,6 +32,20 @@ export function canHandleEuclidTrigShortcut(depth: EuclidDepth): boolean {
   return depth === "active-ring";
 }
 
+export type EuclidTrigShortcutRouting = "ignore" | "open-trig" | "toggle-trig-keys";
+
+export function getEuclidTrigShortcutRouting({
+  depth,
+  patternStepEdit,
+}: {
+  depth: EuclidDepth;
+  patternStepEdit: boolean;
+}): EuclidTrigShortcutRouting {
+  if (patternStepEdit && depth === "trig") return "toggle-trig-keys";
+  if (!patternStepEdit && canHandleEuclidTrigShortcut(depth)) return "open-trig";
+  return "ignore";
+}
+
 export function applyEuclidDepthKey({
   depth,
   keyName,

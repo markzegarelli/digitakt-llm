@@ -3,6 +3,7 @@ import type { TrackName } from "./types.js";
 import {
   applyEuclidDepthKey,
   canHandleEuclidTrigShortcut,
+  getEuclidTrigShortcutRouting,
   getEuclidTrackStripRows,
   getPatternMuteIntent,
   shouldRoutePatternMuteKey,
@@ -69,10 +70,31 @@ test("TRIG can open only from active ring and is blocked at k=0", () => {
   });
 });
 
-test("t and Shift+T are eligible only while the active ring is selected", () => {
-  expect(canHandleEuclidTrigShortcut("track-strip")).toBe(false);
-  expect(canHandleEuclidTrigShortcut("active-ring")).toBe(true);
-  expect(canHandleEuclidTrigShortcut("trig")).toBe(false);
+test("Euclidean t routing opens only from active ring but preserves TRIG toggles", () => {
+  expect(
+    getEuclidTrigShortcutRouting({
+      depth: "track-strip",
+      patternStepEdit: false,
+    }),
+  ).toBe("ignore");
+  expect(
+    getEuclidTrigShortcutRouting({
+      depth: "track-strip",
+      patternStepEdit: true,
+    }),
+  ).toBe("ignore");
+  expect(
+    getEuclidTrigShortcutRouting({
+      depth: "active-ring",
+      patternStepEdit: false,
+    }),
+  ).toBe("open-trig");
+  expect(
+    getEuclidTrigShortcutRouting({
+      depth: "trig",
+      patternStepEdit: true,
+    }),
+  ).toBe("toggle-trig-keys");
 });
 
 test("m/q/Shift+Q intents target the selected track in any pattern UI mode", () => {
