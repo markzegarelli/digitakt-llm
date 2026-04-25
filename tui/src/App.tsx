@@ -152,6 +152,12 @@ export function App({ baseUrl }: AppProps) {
       setTrigKeysActive(false);
       setTrigTrackWide(false);
       setTrigField(0);
+      // Snap depth back to active-ring so the ring panel re-takes focus and the
+      // user can raise k. Without this, depth stays at "trig" while
+      // patternStepEdit is false, leaving every Euclidean panel unfocused.
+      const exit = getEuclidStepTrigExitState();
+      setEuclidDepth(exit.depth);
+      setEuclidEditBox(exit.editBox);
       actions.addLog("Step+TRIG closed: no Euclidean pulses (k=0). Raise k to edit per-pulse TRIG.");
       return;
     }
@@ -927,7 +933,11 @@ export function App({ baseUrl }: AppProps) {
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
       } else {
-        if (focus === "pattern" && patternStepEdit && state.seq_mode !== "euclidean") {
+        // Tab toggles TRIG keyboard focus inside step+TRIG for both standard and
+        // euclidean modes (in euclidean, patternStepEdit only ever holds while
+        // depth==="trig"). Without this, euclidean users have no way to enable
+        // ↑/↓ field navigation or ←/→ value editing inside the TRIG panel.
+        if (focus === "pattern" && patternStepEdit) {
           setTrigKeysActive((a) => !a);
           return;
         }
