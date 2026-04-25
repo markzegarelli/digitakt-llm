@@ -83,15 +83,17 @@ export function LfoPanel({
         const seg = key.split(":");
         const short = seg.length === 3 ? `${seg[0]}:${seg[2]}` : key;
         const step = currentStep === null || currentStep < 0 ? 0 : currentStep;
-        const hi = lfoPlayheadIndex(
-          step,
+        const hi = lfoPlayheadIndex(step, patternLength, brailleCols);
+        const waveLines = lfoBrailleLines(
+          def.shape,
           patternLength,
           def.rate.num,
           def.rate.den,
           def.phase,
           brailleCols,
+          brailleRows,
+          hi,
         );
-        const waveLines = lfoBrailleLines(def.shape, def.phase, brailleCols, brailleRows, hi);
         const cyc = cycleSteps(patternLength, def.rate.num, def.rate.den);
         const live = lfoOut[key];
         const header = fixedLine(innerW, [

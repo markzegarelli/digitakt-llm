@@ -106,10 +106,15 @@ function drawLine(
 
 /**
  * btop-style braille waveform: `cols` characters wide, `rowCount` lines tall (4× vertical dots per line).
+ * Horizontal span = one full pattern. Faster LFO rates (shorter csn) draw multiple cycles; slower rates
+ * show a partial cycle — same sampling as `lfo_w_at_step` / core/lfo.py.
  * `playheadCol` is a braille-cell column index (0..cols-1) or null; draws a full-height emphasis line.
  */
 export function lfoBrailleLines(
   shape: string,
+  patternLength: number,
+  num: number,
+  den: number,
   phase: number,
   cols: number,
   rowCount: number,
@@ -117,20 +122,25 @@ export function lfoBrailleLines(
 ): string[] {
   const c = Math.max(1, cols);
   const r = Math.max(1, rowCount);
+  const csn = cycleSteps(Math.max(1, patternLength), num, den);
+  const pl = Math.max(1, patternLength);
   const bits = new Uint8Array(c * r);
   const widthPx = c * 2;
   const heightPx = r * 4;
   const mid = (heightPx - 1) / 2;
   const amp = mid;
 
+  const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
+
   let prevX = 0;
-  let prevY = Math.round(mid - lfoShape(shape, phase) * amp);
+  let prevY = Math.round(mid - wAtG(0) * amp);
   prevY = Math.max(0, Math.min(heightPx - 1, prevY));
   setBraillePixel(bits, c, r, 0, prevY);
 
   for (let px = 1; px < widthPx; px++) {
-    const p = widthPx <= 1 ? 0 : px / (widthPx - 1);
-    const w = lfoShape(shape, p + phase);
+    const t = widthPx <= 1 ? 0 : px / (widthPx - 1);
+    const g = t * pl;
+    const w = wAtG(g);
     const y = Math.round(mid - w * amp);
     const py = Math.max(0, Math.min(heightPx - 1, y));
     drawLine(bits, c, r, prevX, prevY, px, py);
@@ -158,17 +168,10 @@ export function lfoBrailleLines(
   return lines;
 }
 
-/** 0..width-1 playhead on strip from current in-pattern step and cycle. */
-export function lfoPlayheadIndex(
-  currentStep: number,
-  patternLength: number,
-  num: number,
-  den: number,
-  phase: number,
-  width: number,
-): number {
-  const csn = cycleSteps(patternLength, num, den);
-  const p = (currentStep % csn) / csn;
-  const ph = normP(p + phase);
+/** 0..width-1 playhead from current in-pattern step (one pattern = full width; same speed for every LFO rate). */
+export function lfoPlayheadIndex(currentStep: number, patternLength: number, width: number): number {
+  const pl = Math.max(1, patternLength);
+  const s = currentStep % pl;
+  const ph = s / pl;
   return Math.min(width - 1, Math.max(0, Math.floor(ph * width)));
 }
