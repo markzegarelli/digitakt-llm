@@ -51,6 +51,7 @@ def test_post_seq_mode_updates_pattern(tmp_path):
     body = resp.json()
     assert body["seq_mode"] == "euclidean"
     assert "kick" in body["euclid"]
+    assert body["euclid"]["kick"] == {"k": 0, "n": 16, "r": 0}
     st = client.get("/state").json()
     assert st["current_pattern"]["seq_mode"] == "euclidean"
 

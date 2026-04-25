@@ -67,7 +67,7 @@ def test_normalize_euclid_in_pattern():
     normalize_euclid_in_pattern(p, 2, tracks)
     assert p["seq_mode"] == SEQ_MODE_STANDARD
     assert set(p["euclid"].keys()) == {"kick", "snare"}
-    assert p["euclid"]["kick"] == {"k": 2, "n": 2, "r": 0}
+    assert p["euclid"]["kick"] == {"k": 0, "n": 2, "r": 0}
 
 
 def test_track_euclidean_hit_respects_row():
@@ -84,9 +84,9 @@ def test_track_euclidean_hit_respects_row():
 
 def test_default_euclid_block():
     b = default_euclid_block(16, ("a", "b"))
-    assert b["a"] == {"k": 16, "n": 16, "r": 0}
+    assert b["a"] == {"k": 0, "n": 16, "r": 0}
 
 
 def test_default_euclid_block_caps_n_at_16_for_long_patterns():
     b = default_euclid_block(32, ("a",))
-    assert b["a"] == {"k": 16, "n": 16, "r": 0}
+    assert b["a"] == {"k": 0, "n": 16, "r": 0}

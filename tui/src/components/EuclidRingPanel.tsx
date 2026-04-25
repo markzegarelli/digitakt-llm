@@ -43,7 +43,7 @@ export function EuclidRingPanel({
   stepTrigEdit = false,
   selectedPatternStep = null,
 }: EuclidRingPanelProps) {
-  const { k, n, r } = euclid[track] ?? { k: 16, n: 16, r: 0 };
+  const { k, n, r } = euclid[track] ?? { k: 0, n: 16, r: 0 };
   const nClamped = Math.max(1, Math.min(EUCLID_N_MAX, n));
   const useWide = width >= 60;
   const gridSize = ringGridSize(useWide);
@@ -132,10 +132,10 @@ export function EuclidRingPanel({
       <Box paddingX={1}>
         <Text color={theme.textGhost}>
           {stepTrigEdit
-            ? "←→ / [ ] pulse steps only  ↑↓ track  Tab TRIG  t TRIG  Shift+t ALL  Enter/Esc done"
+            ? "←→ / [ ] pulse steps only  ↑↓ track  t TRIG keys  Shift+t ALL  Esc ring"
             : editBox !== null
-              ? "↑↓ value  Shift+↑↓ ×10  ←/→ or ]/[ field  Enter/Esc done"
-              : "↑↓ track  Enter k/n/r  t TRIG  Shift+t play+TRIG  Tab panels"}
+              ? "↑↓ value  Shift+↑↓ ×10  ←/→ or ]/[ field  Enter TRIG  Esc tracks  m/q/Q mute"
+              : "Enter from track strip to edit k/n/r"}
         </Text>
       </Box>
     </Box>

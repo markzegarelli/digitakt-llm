@@ -676,6 +676,14 @@ class Generator:
                 return
 
             pattern, bpm, cc_changes, producer_notes = result
+            # LLM tool schema cannot carry seq_mode / euclid; preserve them from the
+            # current live pattern so a generation does not silently revert the user's
+            # sequencing mode (e.g. euclidean → standard) or wipe their ring settings.
+            existing = self.state.current_pattern or {}
+            if "seq_mode" not in pattern and isinstance(existing.get("seq_mode"), str):
+                pattern["seq_mode"] = existing["seq_mode"]
+            if "euclid" not in pattern and isinstance(existing.get("euclid"), dict):
+                pattern["euclid"] = copy.deepcopy(existing["euclid"])
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
 

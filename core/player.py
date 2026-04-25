@@ -103,10 +103,13 @@ class Player:
                     continue
                 elif cond == "fill" and not self.state.is_fill_active():
                     continue
-            if pattern.get("seq_mode") == SEQ_MODE_EUCLIDEAN:
+            euclidean_mode = pattern.get("seq_mode") == SEQ_MODE_EUCLIDEAN
+            if euclidean_mode:
                 if not track_euclidean_hit(pattern, track, step):
                     continue
             velocity = pattern[track][step]
+            if euclidean_mode and velocity <= 0:
+                velocity = 127
             if velocity > 0:
                 scale = self.state.track_velocity.get(track, 127)
                 velocity = max(1, (velocity * scale) // 127)
