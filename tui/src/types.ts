@@ -7,6 +7,15 @@ export const DEFAULT_GATE_PCT = 50;
 
 export type TrackName = typeof TRACK_NAMES[number];
 
+export type LfoShape = "sine" | "square" | "triangle" | "ramp" | "saw";
+
+export interface LfoDef {
+  shape: LfoShape;
+  depth: number;
+  phase: number;
+  rate: { num: number; den: number };
+}
+
 export interface CCParamDef {
   name: string;
   cc: number;
@@ -112,6 +121,35 @@ export function parsePatternFromApi(
   return { velocities, trig };
 }
 
+/** Derive step count from a `current_pattern` API object when WebSocket frames omit `pattern_length`. */
+export function inferPatternLengthFromApi(
+  raw: Record<string, unknown> | undefined,
+  fallback: number,
+): number {
+  if (!raw || typeof raw !== "object") return fallback;
+  const explicit = raw["pattern_length"];
+  if (typeof explicit === "number" && Number.isFinite(explicit)) {
+    const e = Math.round(explicit);
+    if (e >= 1 && e <= 64) return e;
+  }
+  let max = 0;
+  for (const t of TRACK_NAMES) {
+    const arr = raw[t];
+    if (Array.isArray(arr)) max = Math.max(max, arr.length);
+  }
+  for (const key of ["prob", "gate", "cond", "note"] as const) {
+    const block = raw[key];
+    if (!block || typeof block !== "object") continue;
+    const o = block as Record<string, unknown>;
+    for (const t of TRACK_NAMES) {
+      const arr = o[t];
+      if (Array.isArray(arr)) max = Math.max(max, arr.length);
+    }
+  }
+  if (max >= 1) return max;
+  return fallback;
+}
+
 export interface DigitaktState {
   current_pattern: Record<TrackName, number[]>;
   /** Parsed from the same document as `current_pattern` on the server. */
@@ -135,6 +173,8 @@ export interface DigitaktState {
   midi_connected: boolean;
   log: string[];
   current_step: number | null;
+  /** Monotonic step index from engine while playing (`step_changed.global_step`); null when stopped. */
+  global_step: number | null;
   last_prompt: string | null;
   pattern_history: Array<{ prompt: string; timestamp: number; bpm?: number; length?: number; swing?: number }>;
   chain: string[];
@@ -150,6 +190,45 @@ export interface DigitaktState {
   } | null;
   seq_mode: "standard" | "euclidean";
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
+  /** LFO routes keyed e.g. `cc:kick:filter`, `trig:snare:prob`, `pitch:kick:main` */
+  lfo: Record<string, LfoDef>;
+  /**
+   * Live modulated output from the engine (CC LFO) while playing, keyed by LFO `target`.
+   * Cleared when playback stops. Not persisted — WebSocket `lfo_value` only.
+   */
+  lfo_out: Record<string, { value: number; base: number }>;
+}
+
+export function parseLfoFromApi(raw: unknown): Record<string, LfoDef> {
+  if (!raw || typeof raw !== "object") return {};
+  const inBlock = raw as Record<string, unknown>;
+  const out: Record<string, LfoDef> = {};
+  for (const [k, v] of Object.entries(inBlock)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    const rate = o.rate;
+    if (typeof o.shape !== "string" || typeof o.depth !== "number" || !rate || typeof rate !== "object")
+      continue;
+    const rn = (rate as Record<string, unknown>)["num"];
+    const rd = (rate as Record<string, unknown>)["den"];
+    if (typeof rn !== "number" || typeof rd !== "number") continue;
+    if (
+      o.shape !== "sine" &&
+      o.shape !== "square" &&
+      o.shape !== "triangle" &&
+      o.shape !== "ramp" &&
+      o.shape !== "saw"
+    ) {
+      continue;
+    }
+    out[k] = {
+      shape: o.shape,
+      depth: o.depth,
+      phase: typeof o.phase === "number" ? o.phase : 0,
+      rate: { num: rn, den: rd },
+    };
+  }
+  return out;
 }
 
 export type FocusPanel = "pattern" | "cc" | "prompt";

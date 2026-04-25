@@ -16,6 +16,8 @@ from cli.commands import (
     apply_gate_track,
     apply_note_step,
     apply_cond_step,
+    set_lfo,
+    validate_lfo_target_key,
 )
 from core.state import TRACK_NAMES
 
@@ -352,3 +354,38 @@ def test_apply_cond_step_rejects_unknown_condition():
     pattern = {k: [0] * 16 for k in TRACK_NAMES}
     with pytest.raises(ValueError):
         apply_cond_step(pattern, "kick", 0, "bogus")
+
+
+# ── LFO target / set_lfo ───────────────────────────────────────────────────────
+
+def test_validate_lfo_target_accepts_cc_trig_pitch():
+    validate_lfo_target_key("cc:kick:filter")
+    validate_lfo_target_key("trig:snare:prob")
+    validate_lfo_target_key("pitch:kick:main")
+
+
+def test_validate_lfo_target_rejects_bad_grammar():
+    with pytest.raises(ValueError):
+        validate_lfo_target_key("nope")
+    with pytest.raises(ValueError):
+        validate_lfo_target_key("cc:kick:bogus_param")
+
+
+def test_set_lfo_last_write_replaces():
+    p = {k: [0] * 16 for k in TRACK_NAMES}
+    a = {"shape": "sine", "depth": 10, "phase": 0, "rate": {"num": 1, "den": 1}}
+    p1 = set_lfo(p, "cc:kick:filter", a)
+    b = {**a, "depth": 20}
+    p2 = set_lfo(p1, "cc:kick:filter", b)
+    assert p2["lfo"]["cc:kick:filter"]["depth"] == 20
+
+
+def test_set_lfo_clear_removes_key():
+    p = {k: [0] * 16 for k in TRACK_NAMES}
+    p1 = set_lfo(
+        p,
+        "cc:kick:filter",
+        {"shape": "sine", "depth": 10, "phase": 0, "rate": {"num": 1, "den": 1}},
+    )
+    p2 = set_lfo(p1, "cc:kick:filter", None)
+    assert "lfo" not in p2 or "cc:kick:filter" not in p2.get("lfo", {})

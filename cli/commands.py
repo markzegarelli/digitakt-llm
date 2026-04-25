@@ -5,9 +5,12 @@ import copy
 import random
 import re
 
+from core.midi_utils import CC_MAP
 from core.state import DEFAULT_GATE_PCT
 
 TRACK_NAMES = ["kick", "snare", "tom", "clap", "bell", "hihat", "openhat", "cymbal"]
+
+LFO_TRIG_FIELDS = frozenset({"prob", "vel", "gate", "note"})
 
 
 def _pattern_length(pattern: dict) -> int:
@@ -426,3 +429,44 @@ def generate_random_beat() -> tuple[dict, int, int, dict]:
         }
 
     return pattern, bpm, swing, cc_changes
+
+
+def validate_lfo_target_key(key: str) -> None:
+    """Validate v1 LFO target (cc:track:param, trig:track:field, pitch:track:main)."""
+    parts = key.split(":")
+    if len(parts) != 3:
+        raise ValueError(
+            "LFO target must have three : segments (e.g. cc:kick:filter, trig:snare:prob)"
+        )
+    kind, track, rest = parts
+    if track not in TRACK_NAMES:
+        raise ValueError("unknown track in LFO target")
+    if kind == "cc":
+        if rest not in CC_MAP:
+            raise ValueError("unknown CC param in LFO target")
+    elif kind == "trig":
+        if rest not in LFO_TRIG_FIELDS:
+            raise ValueError("unknown trig field (use prob, vel, gate, or note)")
+    elif kind == "pitch":
+        if rest != "main":
+            raise ValueError("pitch LFO must use pitch:<track>:main")
+    else:
+        raise ValueError("LFO target must start with cc:, trig:, or pitch:")
+
+
+def set_lfo(pattern: dict, target: str, lfo: dict | None) -> dict:
+    """Last-write: replace or clear one LFO route on a deep-copied pattern."""
+    p = copy.deepcopy(pattern)
+    if lfo is None:
+        m = p.get("lfo")
+        if isinstance(m, dict) and target in m:
+            m = {k: v for k, v in m.items() if k != target}
+            if m:
+                p["lfo"] = m
+            else:
+                p.pop("lfo", None)
+        return p
+    if "lfo" not in p or not isinstance(p.get("lfo"), dict):
+        p["lfo"] = {}
+    p["lfo"][target] = copy.deepcopy(lfo)
+    return p

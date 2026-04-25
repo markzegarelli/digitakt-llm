@@ -17,6 +17,7 @@ const HELP_LINES = [
   "  random <track|all> <vel|prob> [lo-hi]  randomize",
   "  randbeat                             random techno beat",
   "  cc <track> <param> <value>           CC 0–127 globally",
+  "  lfo <t> <shape> <d> <n/m> [ph]        tempo-synced LFO (t=cc:…, trig:…, or pitch:…:main)  or  lfo <t> clear",
   "  cc-step <track> <param> <step> <v>  per-step CC override (-1 to clear)",
   "  save <name> [#tag1 #tag2]            save pattern with optional tags",
   "  load [name]                          pick saved pattern (↑↓ Enter) or queue by name for next loop",
@@ -85,7 +86,7 @@ const HELP_LINES = [
   "",
   "Activity log (view-only):",
   "  /log                                 show or hide log below the main layout",
-  "  Layout: SEQ + TRIG one row; MIX full width below; LOG full width when /log is on.",
+  "  Layout: SEQ + TRIG one row; MIX + LFO strip below; LOG full width when /log is on.",
   "",
   "── Euclidean SEQ (ring + k/n/r + TRIG) ───────────────────────",
   "  mode euclidean                         ring view replaces the step grid",
@@ -102,7 +103,7 @@ const HELP_LINES = [
 // All slash commands for autocomplete
 const COMMANDS = [
   "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "fill", "fresh", "gate",
-  "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
+  "lfo", "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",
   "chain", "next", "vary", "read",
@@ -200,6 +201,8 @@ export function Prompt({
 }: PromptProps) {
   const { stdout } = useStdout();
   const [text, setText] = useState("");
+  /** Caret index 0…text.length (block cursor sits before the character at this index). */
+  const [cursor, setCursor] = useState(0);
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -229,13 +232,22 @@ export function Prompt({
     setHelpScroll((s) => Math.min(s, helpMaxScroll));
   }, [showHelp, helpMaxScroll]);
 
-  // Update text + autocomplete state atomically
-  function updateText(newText: string) {
+  // Update text, caret, and autocomplete state atomically
+  function applyText(newText: string, nextCursor?: number) {
+    const c =
+      nextCursor !== undefined
+        ? Math.max(0, Math.min(nextCursor, newText.length))
+        : newText.length;
     const suggs = getSuggestions(newText);
     setText(newText);
+    setCursor(c);
     setAcSuggestions(suggs);
     setAcIdx(-1);
     acActiveRef.current = suggs.length > 0;
+  }
+
+  function updateText(newText: string) {
+    applyText(newText, newText.length);
   }
 
   useEffect(() => {
@@ -341,6 +353,17 @@ export function Prompt({
       return;
     }
 
+    if (acSuggestions.length === 0 && (key.leftArrow || key.rightArrow)) {
+      if (key.leftArrow) {
+        setCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setCursor((c) => Math.min(text.length, c + 1));
+        return;
+      }
+    }
+
     if (key.return) {
       // If a suggestion is highlighted, complete the command (don't submit yet)
       if (acSuggestions.length > 0 && acIdx >= 0) {
@@ -362,8 +385,14 @@ export function Prompt({
       return;
     }
 
+    // Many terminals (macOS) send 0x7f for the backspace key; Ink maps that to
+    // `key.delete`, not `key.backspace`. Treat both as “delete to the left” so
+    // the prompt behaves like a normal line editor. (True forward-delete `[3~`
+    // also sets `key.delete` in Ink; in CMD we still prefer backward delete.)
     if (key.backspace || key.delete) {
-      updateText(text.slice(0, -1));
+      if (cursor > 0) {
+        applyText(text.slice(0, cursor - 1) + text.slice(cursor), cursor - 1);
+      }
       return;
     }
 
@@ -375,7 +404,8 @@ export function Prompt({
       }
       setHistIdx((idx) => {
         const next = Math.min(idx + 1, history.length - 1);
-        setText(history[next] ?? "");
+        const line = history[next] ?? "";
+        applyText(line);
         return next;
       });
       return;
@@ -388,12 +418,16 @@ export function Prompt({
       }
       setHistIdx((idx) => {
         const next = Math.max(idx - 1, -1);
-        setText(next === -1 ? "" : (history[next] ?? ""));
+        const line = next === -1 ? "" : (history[next] ?? "");
+        applyText(line);
         return next;
       });
       return;
     }
-    if (input && !key.ctrl && !key.meta) { updateText(text + input); return; }
+    if (input && !key.ctrl && !key.meta) {
+      applyText(text.slice(0, cursor) + input + text.slice(cursor), cursor + input.length);
+      return;
+    }
   }, { isActive: isFocused });
 
   if (patternModal) {
@@ -590,8 +624,9 @@ export function Prompt({
         <Text>{" "}</Text>
         <Text bold color={theme.accent}>{">"}</Text>
         <Text> </Text>
-        <Text color={theme.text}>{text}</Text>
+        <Text color={theme.text}>{text.slice(0, cursor)}</Text>
         {isFocused && <Text backgroundColor={theme.accent} color="#0A0A0A"> </Text>}
+        <Text color={theme.text}>{text.slice(cursor)}</Text>
       </Box>
       {statusLine
         ? <Text color={askPending ? theme.warn : generationStatus === "failed" ? theme.error : theme.accentMuted}>{statusLine}</Text>

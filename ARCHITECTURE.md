@@ -60,6 +60,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `midi_disconnected` | Player | `{port}` |
 | `midi_connected` | Server | `{port}` — after `POST /midi/connect` hot-plugs an output |
 | `cc_changed` | Server | `{track, param, value}` |
+| `lfo_changed` | Server | `{target, lfo}` — `lfo` is a dict or `null` when the route is cleared (see LFO in `current_pattern` below) |
 | `cc_step_changed` | Server | `{track, param, step, value}` |
 | `mute_changed` | Server / Player | `{track, muted}` |
 | `velocity_changed` | Server | `{track, value}` |
@@ -68,7 +69,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | `vel_changed` | Server | `{track, step, value}` |
 | `random_applied` | Server | `{track, param, lo, hi}` |
 | `randbeat_applied` | Server | `{bpm, swing}` |
-| `step_changed` | Server | `{track, step, value}` |
+| `step_changed` | Player | `{step, global_step}` — `global_step` is the monotonic engine index (`loop * pattern_length + step`) for LFO phase; TUI uses it for the LFO graph |
 | `length_changed` | Server | `{steps}` |
 | `fill_started` | Player | `{}` |
 | `fill_ended` | Player | `{}` |
@@ -140,7 +141,7 @@ slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
-`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, optional `seq_mode` and `euclid` for Euclidean sequencing, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, optional `lfo` — map of LFO routes keyed e.g. `cc:kick:filter` / `trig:snare:prob` / `pitch:kick:main` —, optional `seq_mode` and `euclid` for Euclidean sequencing, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
 
 Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `null` to inherit `track_pitch` for that step) is edited from the TRIG panel or `POST /note`; playback uses the step override when set, otherwise `track_pitch` (or the default note map).
 
@@ -389,6 +390,7 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | `POST` | `/random` | Randomize velocity or probability for a track or all |
 | `POST` | `/randbeat` | Generate random techno beat (BPM 128–160, CC randomized) |
 | `POST` | `/cc` | Set global CC parameter for a track |
+| `POST` | `/lfo` | Set or clear one LFO route: JSON `{"target":"cc:kick:filter", "lfo":{...}}` or `{"target":"...","lfo":null}`; emitted `lfo_changed`. LLM does not emit LFOs in v1. |
 | `GET` | `/cc` | Get all track CC values |
 | `POST` | `/cc-step` | Set per-step CC override (-1 to clear) |
 | `POST` | `/gate` | Set per-step gate length (0–100%) |
