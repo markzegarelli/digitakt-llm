@@ -133,3 +133,8 @@ test("track strip rows include all 8 tracks and standard M/Q/MQ badge language",
   expect(rows[1]).toMatchObject({ cursor: ">", label: "SD", badge: "MQ" });
   expect(rows[2]).toMatchObject({ cursor: " ", label: "LT", badge: "Q" });
 });
+
+test("EuclidTrackStrip component is importable", async () => {
+  const mod = await import("./components/EuclidTrackStrip.js");
+  expect(typeof mod.EuclidTrackStrip).toBe("function");
+});
