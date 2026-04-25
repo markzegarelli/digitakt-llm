@@ -102,12 +102,16 @@ class Player:
                     note = apply_depth_clamp(int(note), w, depth, 0, 127)
             if self.state.track_muted.get(track, False):
                 continue
-            # Check per-step probability
+            # Check per-step probability (LFO on prob may apply with implicit 100% if no prob row)
             prob_track = pattern.get("prob", {}).get(track)
-            if prob_track is not None:
-                step_prob = prob_track[step]
-                prk = f"trig:{track}:prob"
-                if prk in lfo_map and isinstance(lfo_map[prk], dict):
+            prk = f"trig:{track}:prob"
+            lfo_prob = prk in lfo_map and isinstance(lfo_map[prk], dict)
+            if prob_track is not None or lfo_prob:
+                if prob_track is not None and 0 <= step < len(prob_track):
+                    step_prob = prob_track[step]
+                else:
+                    step_prob = 100
+                if lfo_prob:
                     mod = lfo_mod_w(lfo_map[prk], self.state.pattern_length, global_step)
                     if mod:
                         w, depth = mod

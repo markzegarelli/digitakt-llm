@@ -1,7 +1,7 @@
 # tests/test_player_lfo.py
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -95,3 +95,44 @@ def test_lfo_marks_dirty_cc_for_bar_restore(player_kick_lfo):
     dirty: set = set()
     player._play_step(0, dirty)
     assert ("kick", "filter") in dirty
+
+
+def test_trig_prob_lfo_uses_default_100_when_no_prob_map():
+    """`trig:*:prob` LFO modulates a 100% base when the pattern omits a prob row (matches gate: implicit base)."""
+    state = AppState()
+    state.pattern_length = 16
+    state._loop_count = 0
+    pat: dict = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    # ramp at p=0 → w = -1; depth 100% → 50% effective probability
+    pat["lfo"] = {
+        "trig:kick:prob": {
+            "shape": "ramp",
+            "depth": 100,
+            "phase": 0.0,
+            "rate": {"num": 1, "den": 1},
+        }
+    }
+    state.current_pattern = pat
+    bus = EventBus()
+    port = MagicMock()
+    player = Player(state, bus, port)
+    ch = TRACK_CHANNELS["kick"]
+    with patch("core.player.random.random", return_value=0.6):
+        player._play_step(0, set())
+    n_high = [
+        c
+        for c in port.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].channel == ch
+    ]
+    assert len(n_high) == 0
+    port2 = MagicMock()
+    player2 = Player(state, bus, port2)
+    with patch("core.player.random.random", return_value=0.4):
+        player2._play_step(0, set())
+    n_lo = [
+        c
+        for c in port2.send.call_args_list
+        if c[0][0].type == "note_on" and c[0][0].channel == ch
+    ]
+    assert len(n_lo) >= 1
