@@ -200,6 +200,8 @@ export function Prompt({
 }: PromptProps) {
   const { stdout } = useStdout();
   const [text, setText] = useState("");
+  /** Caret index 0…text.length (block cursor sits before the character at this index). */
+  const [cursor, setCursor] = useState(0);
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -229,13 +231,22 @@ export function Prompt({
     setHelpScroll((s) => Math.min(s, helpMaxScroll));
   }, [showHelp, helpMaxScroll]);
 
-  // Update text + autocomplete state atomically
-  function updateText(newText: string) {
+  // Update text, caret, and autocomplete state atomically
+  function applyText(newText: string, nextCursor?: number) {
+    const c =
+      nextCursor !== undefined
+        ? Math.max(0, Math.min(nextCursor, newText.length))
+        : newText.length;
     const suggs = getSuggestions(newText);
     setText(newText);
+    setCursor(c);
     setAcSuggestions(suggs);
     setAcIdx(-1);
     acActiveRef.current = suggs.length > 0;
+  }
+
+  function updateText(newText: string) {
+    applyText(newText, newText.length);
   }
 
   useEffect(() => {
@@ -341,6 +352,17 @@ export function Prompt({
       return;
     }
 
+    if (acSuggestions.length === 0 && (key.leftArrow || key.rightArrow)) {
+      if (key.leftArrow) {
+        setCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setCursor((c) => Math.min(text.length, c + 1));
+        return;
+      }
+    }
+
     if (key.return) {
       // If a suggestion is highlighted, complete the command (don't submit yet)
       if (acSuggestions.length > 0 && acIdx >= 0) {
@@ -362,8 +384,16 @@ export function Prompt({
       return;
     }
 
-    if (key.backspace || key.delete) {
-      updateText(text.slice(0, -1));
+    if (key.backspace) {
+      if (cursor > 0) {
+        applyText(text.slice(0, cursor - 1) + text.slice(cursor), cursor - 1);
+      }
+      return;
+    }
+    if (key.delete) {
+      if (cursor < text.length) {
+        applyText(text.slice(0, cursor) + text.slice(cursor + 1), cursor);
+      }
       return;
     }
 
@@ -375,7 +405,8 @@ export function Prompt({
       }
       setHistIdx((idx) => {
         const next = Math.min(idx + 1, history.length - 1);
-        setText(history[next] ?? "");
+        const line = history[next] ?? "";
+        applyText(line);
         return next;
       });
       return;
@@ -388,12 +419,16 @@ export function Prompt({
       }
       setHistIdx((idx) => {
         const next = Math.max(idx - 1, -1);
-        setText(next === -1 ? "" : (history[next] ?? ""));
+        const line = next === -1 ? "" : (history[next] ?? "");
+        applyText(line);
         return next;
       });
       return;
     }
-    if (input && !key.ctrl && !key.meta) { updateText(text + input); return; }
+    if (input && !key.ctrl && !key.meta) {
+      applyText(text.slice(0, cursor) + input + text.slice(cursor), cursor + input.length);
+      return;
+    }
   }, { isActive: isFocused });
 
   if (patternModal) {
@@ -590,8 +625,9 @@ export function Prompt({
         <Text>{" "}</Text>
         <Text bold color={theme.accent}>{">"}</Text>
         <Text> </Text>
-        <Text color={theme.text}>{text}</Text>
+        <Text color={theme.text}>{text.slice(0, cursor)}</Text>
         {isFocused && <Text backgroundColor={theme.accent} color="#0A0A0A"> </Text>}
+        <Text color={theme.text}>{text.slice(cursor)}</Text>
       </Box>
       {statusLine
         ? <Text color={askPending ? theme.warn : generationStatus === "failed" ? theme.error : theme.accentMuted}>{statusLine}</Text>
