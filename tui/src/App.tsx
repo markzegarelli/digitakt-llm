@@ -359,6 +359,31 @@ export function App({ baseUrl }: AppProps) {
     trigField,
   ]);
 
+  const postSeqMode = useCallback((mode: "standard" | "euclidean") => {
+    fetch(`${baseUrl}/seq-mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const b = await r.json().catch(() => ({})) as { detail?: unknown };
+          const d = b.detail;
+          actions.addLog(
+            typeof d === "string" ? `✗ ${d}` : `✗ /seq-mode failed (${r.status})`,
+          );
+          return;
+        }
+        actions.addLog(`Sequencing mode → ${mode}`);
+      })
+      .catch((err: Error) => actions.addLog(`✗ /seq-mode: ${err.message}`));
+  }, [baseUrl, actions]);
+
+  const toggleSeqMode = useCallback(() => {
+    const next = state.seq_mode === "standard" ? "euclidean" : "standard";
+    postSeqMode(next);
+  }, [state.seq_mode, postSeqMode]);
+
   const handleCommand = useCallback((cmd: string) => {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
     const parts = stripped.trim().split(/\s+/);
@@ -379,23 +404,7 @@ export function App({ baseUrl }: AppProps) {
           return;
         }
         if (m === "standard" || m === "euclidean") {
-          fetch(`${baseUrl}/seq-mode`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: m }),
-          })
-            .then(async (r) => {
-              if (!r.ok) {
-                const b = await r.json().catch(() => ({})) as { detail?: unknown };
-                const d = b.detail;
-                actions.addLog(
-                  typeof d === "string" ? `✗ ${d}` : `✗ /seq-mode failed (${r.status})`,
-                );
-                return;
-              }
-              actions.addLog(`Sequencing mode → ${m}`);
-            })
-            .catch((err: Error) => actions.addLog(`✗ /seq-mode: ${err.message}`));
+          postSeqMode(m);
           return;
         }
         actions.addLog("✗ Usage: /mode chat|beat|standard|euclidean");
@@ -734,6 +743,7 @@ export function App({ baseUrl }: AppProps) {
     actions,
     baseUrl,
     exit,
+    postSeqMode,
     fetchPatternNamesAndOpenPicker,
     inputMode,
     runPatternLoadByName,
@@ -941,6 +951,16 @@ export function App({ baseUrl }: AppProps) {
         setImplementableHint(false);
         actions.generate(lastAnswerRef.current);
       }
+      return;
+    }
+    if (
+      focus !== "prompt" &&
+      key.shift &&
+      !key.ctrl &&
+      !key.meta &&
+      (input === "m" || input === "M")
+    ) {
+      toggleSeqMode();
       return;
     }
     if (focus !== "prompt" && input === "?" && !key.ctrl && !key.meta) {
@@ -1524,6 +1544,7 @@ export function App({ baseUrl }: AppProps) {
               generationStatus={state.generation_status}
               generationError={state.generation_error}
               onCommand={handleCommand}
+              onToggleSeqMode={toggleSeqMode}
               patternModal={patternModal}
               onPatternModalClose={() => setPatternModal(null)}
               onPatternModalNav={(dir) => {
@@ -1574,7 +1595,7 @@ export function App({ baseUrl }: AppProps) {
             />
             <Box paddingX={1}>
               <Text color={theme.textFaint}>
-                {"? help  /help  Tab panels  Shift+Tab mode  c chain strip  n/N chain  Space transport  Ctrl+C quit"}
+                {"? help  /help  Tab panels  Shift+Tab input mode  Shift+M seq mode  c chain  n/N chain  Space transport  Ctrl+C quit"}
               </Text>
             </Box>
           </Box>

@@ -8,12 +8,14 @@ import re
 import threading
 import time
 import anthropic
+from core.euclidean import SEQ_MODE_EUCLIDEAN, SEQ_MODE_STANDARD, clamp_euclid_triplet
 from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
 from core.events import EventBus
 from core.logging_config import get_logger
 from core.midi_utils import CC_MAP
 from core.tracing import tracer
 from core.injectable_profiles import build_injectable_context_prefix
+from core.lfo import sanitize_lfo_in_pattern
 
 logger = get_logger("generator")
 
@@ -117,6 +119,35 @@ def _coerce_pattern_dict(
                     continue
                 cc_changes.setdefault(track, {})[param] = value
 
+    sm = data.get("seq_mode")
+    if sm == SEQ_MODE_EUCLIDEAN:
+        pattern["seq_mode"] = SEQ_MODE_EUCLIDEAN
+    elif sm == SEQ_MODE_STANDARD:
+        pattern["seq_mode"] = SEQ_MODE_STANDARD
+
+    raw_eu = data.get("euclid")
+    if isinstance(raw_eu, dict) and raw_eu:
+        merged_eu: dict[str, dict[str, int]] = {}
+        for t in TRACK_NAMES:
+            row = raw_eu.get(t)
+            if not isinstance(row, dict):
+                continue
+            try:
+                k_i = int(row["k"])
+                n_i = int(row["n"])
+                r_i = int(row["r"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            k_i, n_i, r_i = clamp_euclid_triplet(k_i, n_i, r_i)
+            merged_eu[t] = {"k": k_i, "n": n_i, "r": r_i}
+        if merged_eu:
+            pattern["euclid"] = merged_eu
+
+    raw_lfo = data.get("lfo")
+    if isinstance(raw_lfo, dict) and raw_lfo:
+        pattern["lfo"] = copy.deepcopy(raw_lfo)
+        sanitize_lfo_in_pattern(pattern, steps)
+
     return pattern, bpm, cc_changes, producer_notes
 
 
@@ -129,20 +160,62 @@ def _emit_pattern_tool_schema(steps: int) -> dict:
         "items": {"type": "integer", "minimum": 0, "maximum": 127},
     }
     track_props = {t: step_arr for t in TRACK_NAMES}
+    euclid_row = {
+        "type": "object",
+        "properties": {
+            "k": {"type": "integer", "minimum": 0, "maximum": 16},
+            "n": {"type": "integer", "minimum": 1, "maximum": 16},
+            "r": {"type": "integer", "minimum": 0, "maximum": 15},
+        },
+        "required": ["k", "n", "r"],
+    }
+    euclid_props = {t: euclid_row for t in TRACK_NAMES}
+    lfo_def_schema = {
+        "type": "object",
+        "properties": {
+            "shape": {
+                "type": "string",
+                "enum": ["sine", "square", "triangle", "ramp", "saw"],
+            },
+            "depth": {"type": "integer", "minimum": 0, "maximum": 100},
+            "phase": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "rate": {
+                "type": "object",
+                "properties": {
+                    "num": {"type": "integer", "minimum": 1, "maximum": 256},
+                    "den": {"type": "integer", "minimum": 1, "maximum": 256},
+                },
+                "required": ["num", "den"],
+            },
+        },
+        "required": ["shape", "depth", "rate"],
+    }
     return {
         "name": "emit_pattern",
         "description": (
             "Submit the complete drum pattern as structured data. "
-            "Include all eight tracks; use optional prob/swing/cc/producer_notes when relevant."
+            "Include all eight tracks; use optional prob/swing/cc/lfo/producer_notes when relevant. "
+            "When the user wants Euclidean (Bjorklund) ring gating, set seq_mode to euclidean and "
+            "include euclid per track (k pulses, n ring length 1–16, r rotation 0…n−1)."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "bpm": {"type": "integer", "minimum": 20, "maximum": 400},
                 **track_props,
+                "seq_mode": {"type": "string", "enum": [SEQ_MODE_STANDARD, SEQ_MODE_EUCLIDEAN]},
+                "euclid": {"type": "object", "properties": euclid_props},
                 "prob": {"type": "object", "additionalProperties": step_arr},
                 "swing": {"type": "integer", "minimum": 0, "maximum": 100},
                 "cc": {"type": "object", "additionalProperties": {"type": "object"}},
+                "lfo": {
+                    "type": "object",
+                    "additionalProperties": lfo_def_schema,
+                    "description": (
+                        "Tempo-synced LFOs; keys are route targets "
+                        "(cc:<track>:<param>, trig:<track>:prob|vel|gate|note, pitch:<track>:main)."
+                    ),
+                },
                 "producer_notes": {"type": "string", "maxLength": _PRODUCER_NOTES_MAX_LEN},
             },
             "required": list(TRACK_NAMES),
@@ -275,9 +348,11 @@ def _build_system_prompt(steps: int = 16) -> str:
         "  - Good fits: hypnotic / minimal / trance techno (hats, openhat, bell, tom, cymbal as cyclic tension against a steady kick); "
         "experimental or IDM accents; long-phase feel when peripheral voices use a different n than the main grid.\n"
         "  - Use sparingly or not at all: club four-on-the-floor where every kick downbeat must hit; dense DnB/jungle grids unless the user wants deliberate unevenness; "
-        "ambient/drone requests — if you mention Euclidean there, keep it to subtle shimmer voices only.\n"
+        "ambient/drone — if Euclidean is requested, keep kick/snare anchored when needed and use rings mainly on hats/perc/shimmer.\n"
         "  - In Euclidean sequencing mode, velocity rows still set timbre and ghosts; the ring only gates whether a step may fire.\n"
-        "  - Recommend concrete triplets in producer_notes (e.g. \"hihat E(5,12,3)\" meaning k=5,n=12,r=3) and note the user can enable gating with /mode euclidean in the TUI.\n\n"
+        "  - When the user explicitly asks for Euclidean / Bjorklund / ring / (k,n,r) patterns: you MUST set emit_pattern's optional "
+        "\"seq_mode\" to \"euclidean\" and include \"euclid\" with concrete {k,n,r} for each track that should use a ring (omit tracks that stay straight grid). "
+        "Still recommend triplets in producer_notes for readability. The TUI can also switch with /mode euclidean, but the pattern should carry seq_mode/euclid when they asked.\n\n"
         f"Generate {steps}-step drum patterns as strict JSON. Each step is an integer 0–127 (velocity), 0 = silent.\n\n"
         "DIGITAKT SOUND DESIGN GUIDANCE:\n"
         "Each track maps to a Digitakt audio track with one-shot sample playback. The CC parameters\n"
@@ -302,6 +377,13 @@ def _build_system_prompt(steps: int = 16) -> str:
         "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
         "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
         "reverb, delay, velocity. All values 0–127. velocity scales the track's overall strike intensity.\n\n"
+        "OPTIONAL TEMPO-SYNCED LFO (lfo) — use emit_pattern's structured \"lfo\" object (not producer_notes alone):\n"
+        "- Keys are route targets: cc:<track>:<param> (e.g. cc:clap:filter), trig:<track>:prob|vel|gate|note, pitch:<track>:main.\n"
+        "- Each value: {\"shape\":\"sine\"|\"square\"|\"triangle\"|\"ramp\"|\"saw\", \"depth\":0–100, \"phase\":0–1, \"rate\":{\"num\":N,\"den\":D}}.\n"
+        "- rate is a reduced fraction (coprime N,D ≥ 1) vs one pattern length: one full LFO cycle spans (D/N) patterns when N<D, "
+        "or a fraction of one pattern when N≥D (e.g. N=1,D=2 → half a cycle per pattern).\n"
+        "- Example (half-cycle sine on clap filter, 50% depth): "
+        "\"lfo\":{\"cc:clap:filter\":{\"shape\":\"sine\",\"depth\":50,\"phase\":0,\"rate\":{\"num\":1,\"den\":2}}}\n\n"
         "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
         "{\n"
         '  "bpm":     <integer from subgenre range>,\n'
@@ -313,7 +395,10 @@ def _build_system_prompt(steps: int = 16) -> str:
         f'  "hihat":   [{steps} integers 0-127],\n'
         f'  "openhat": [{steps} integers 0-127],\n'
         f'  "cymbal":  [{steps} integers 0-127],\n'
+        '  "seq_mode": "standard" | "euclidean"  (optional; set euclidean when the user wants Bjorklund ring gating)\n'
+        '  "euclid": {"<track>": {"k": <pulses>, "n": <1-16>, "r": <rotation>}, ...}  (optional; per-track ring; use with seq_mode euclidean)\n'
         '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
+        '  "lfo": {"cc:clap:filter": {"shape":"sine","depth":50,"phase":0,"rate":{"num":1,"den":2}}, ...}  (optional)\n'
         '  "producer_notes": "<plain text, no markdown; optional>"  (optional)\n'
         "}"
         "\n\nOPTIONAL: Per-step probability (prob):\n"
@@ -329,9 +414,13 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- Swing delays the even 16th-note positions (the \"and\" of each beat).\n"
         "- Use swing for: shuffle techno (20–35), house groove (30–45), funk/break feel (40–55).\n"
         "- Omit \"swing\" for straight, mechanical patterns (industrial, hard techno).\n\n"
+        "OPTIONAL: Euclidean sequencing (seq_mode, euclid) — use emit_pattern fields, not text alone:\n"
+        "- If the user wants Euclidean / Bjorklund / evenly spaced pulses on a ring: set \"seq_mode\" to \"euclidean\".\n"
+        "- Add \"euclid\" with per-track objects {\"k\", \"n\", \"r\"} for tracks that use a ring (k pulses, n ring length 1–16, r rotation). "
+        "Omitted tracks get k=0 until edited. Kick/snare can stay on a full grid with high k=n if you need every step eligible.\n\n"
         "OPTIONAL: producer_notes (string, plain text, no markdown, max ~1200 chars):\n"
         "- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), include producer_notes with 4–8 short sentences of Eurorack/modular guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.\n"
-        "- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, add 1–3 concrete Euclidean (k,n,r) suggestions per named track and mention /mode euclidean if gating those rings would help.\n"
+        "- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, add 1–3 concrete Euclidean (k,n,r) suggestions per named track; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).\n"
         "- For simple drum-only tweaks (e.g. denser hats, more kick), omit producer_notes to save tokens.\n\n"
         "TARGETED UPDATES:\n"
         "When the user prompt contains a TARGETED UPDATE block:\n"
@@ -676,14 +765,15 @@ class Generator:
                 return
 
             pattern, bpm, cc_changes, producer_notes = result
-            # LLM tool schema cannot carry seq_mode / euclid; preserve them from the
-            # current live pattern so a generation does not silently revert the user's
-            # sequencing mode (e.g. euclidean → standard) or wipe their ring settings.
+            # If emit_pattern omits seq_mode / euclid, preserve them from the live pattern so a
+            # generation does not silently revert the user's sequencing mode or wipe ring settings.
             existing = self.state.current_pattern or {}
             if "seq_mode" not in pattern and isinstance(existing.get("seq_mode"), str):
                 pattern["seq_mode"] = existing["seq_mode"]
             if "euclid" not in pattern and isinstance(existing.get("euclid"), dict):
                 pattern["euclid"] = copy.deepcopy(existing["euclid"])
+            if "lfo" not in pattern and isinstance(existing.get("lfo"), dict):
+                pattern["lfo"] = copy.deepcopy(existing["lfo"])
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
 
