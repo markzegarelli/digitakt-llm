@@ -58,6 +58,7 @@ test("Tab does not traverse Euclidean horizontal depth", () => {
 test("TRIG can open only from active ring and is blocked at k=0", () => {
   expect(canHandleEuclidTrigShortcut("track-strip")).toBe(false);
   expect(canHandleEuclidTrigShortcut("active-ring")).toBe(true);
+  expect(canHandleEuclidTrigShortcut("trig")).toBe(false);
 
   expect(applyEuclidDepthKey({ depth: "active-ring", keyName: "enter", k: 0 })).toEqual({
     depth: "active-ring",
@@ -86,11 +87,14 @@ test("m/q/Shift+Q intents target the selected track in any pattern UI mode", () 
 });
 
 test("pending mute toggles selected track and Shift+Q snapshots staged tracks", () => {
-  const first = togglePendingMuteTrack(new Set<TrackName>(), "hihat");
+  const original = new Set<TrackName>();
+  const first = togglePendingMuteTrack(original, "hihat");
   expect(Array.from(first)).toEqual(["hihat"]);
+  expect(Array.from(original)).toEqual([]);
 
   const second = togglePendingMuteTrack(first, "hihat");
   expect(Array.from(second)).toEqual([]);
+  expect(Array.from(first)).toEqual(["hihat"]);
 
   const queued = tracksToQueueAndClear(new Set<TrackName>(["kick", "snare"]));
   expect(queued.tracks).toEqual(["kick", "snare"]);
@@ -123,6 +127,8 @@ test("track strip rows include all 8 tracks and standard M/Q/MQ badge language",
     "openhat",
     "cymbal",
   ]);
+  expect(rows.map((row) => row.label)).toEqual(["BD", "SD", "LT", "CL", "BL", "CH", "OH", "CY"]);
+  expect(rows.map((row) => row.badge)).toEqual(["M", "MQ", "Q", "", "", "", "", ""]);
   expect(rows[0]).toMatchObject({ cursor: " ", label: "BD", badge: "M" });
   expect(rows[1]).toMatchObject({ cursor: ">", label: "SD", badge: "MQ" });
   expect(rows[2]).toMatchObject({ cursor: " ", label: "LT", badge: "Q" });
