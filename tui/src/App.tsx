@@ -343,7 +343,7 @@ export function App({ baseUrl }: AppProps) {
     setPatternStepEdit(true);
     setEuclidDepth("trig");
     setPatternSelectedStep(selected);
-    setTrigKeysActive(false);
+    setTrigKeysActive(true);
     setTrigTrackWide(shiftT && canFieldUseTrackWide(trigField));
     setTrigField(0);
     setTrigInputBuffer("");
@@ -1170,7 +1170,7 @@ export function App({ baseUrl }: AppProps) {
       if (key.return) {
         setPatternStepEdit(true);
         setPatternSelectedStep(0);
-        setTrigKeysActive(false);
+        setTrigKeysActive(true);
         setTrigField(0);
         setTrigTrackWide(false);
         return;
