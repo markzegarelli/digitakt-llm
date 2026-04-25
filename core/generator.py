@@ -15,6 +15,7 @@ from core.logging_config import get_logger
 from core.midi_utils import CC_MAP
 from core.tracing import tracer
 from core.injectable_profiles import build_injectable_context_prefix
+from core.lfo import sanitize_lfo_in_pattern
 
 logger = get_logger("generator")
 
@@ -142,6 +143,11 @@ def _coerce_pattern_dict(
         if merged_eu:
             pattern["euclid"] = merged_eu
 
+    raw_lfo = data.get("lfo")
+    if isinstance(raw_lfo, dict) and raw_lfo:
+        pattern["lfo"] = copy.deepcopy(raw_lfo)
+        sanitize_lfo_in_pattern(pattern, steps)
+
     return pattern, bpm, cc_changes, producer_notes
 
 
@@ -164,11 +170,31 @@ def _emit_pattern_tool_schema(steps: int) -> dict:
         "required": ["k", "n", "r"],
     }
     euclid_props = {t: euclid_row for t in TRACK_NAMES}
+    lfo_def_schema = {
+        "type": "object",
+        "properties": {
+            "shape": {
+                "type": "string",
+                "enum": ["sine", "square", "triangle", "ramp", "saw"],
+            },
+            "depth": {"type": "integer", "minimum": 0, "maximum": 100},
+            "phase": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "rate": {
+                "type": "object",
+                "properties": {
+                    "num": {"type": "integer", "minimum": 1, "maximum": 256},
+                    "den": {"type": "integer", "minimum": 1, "maximum": 256},
+                },
+                "required": ["num", "den"],
+            },
+        },
+        "required": ["shape", "depth", "rate"],
+    }
     return {
         "name": "emit_pattern",
         "description": (
             "Submit the complete drum pattern as structured data. "
-            "Include all eight tracks; use optional prob/swing/cc/producer_notes when relevant. "
+            "Include all eight tracks; use optional prob/swing/cc/lfo/producer_notes when relevant. "
             "When the user wants Euclidean (Bjorklund) ring gating, set seq_mode to euclidean and "
             "include euclid per track (k pulses, n ring length 1–16, r rotation 0…n−1)."
         ),
@@ -182,6 +208,14 @@ def _emit_pattern_tool_schema(steps: int) -> dict:
                 "prob": {"type": "object", "additionalProperties": step_arr},
                 "swing": {"type": "integer", "minimum": 0, "maximum": 100},
                 "cc": {"type": "object", "additionalProperties": {"type": "object"}},
+                "lfo": {
+                    "type": "object",
+                    "additionalProperties": lfo_def_schema,
+                    "description": (
+                        "Tempo-synced LFOs; keys are route targets "
+                        "(cc:<track>:<param>, trig:<track>:prob|vel|gate|note, pitch:<track>:main)."
+                    ),
+                },
                 "producer_notes": {"type": "string", "maxLength": _PRODUCER_NOTES_MAX_LEN},
             },
             "required": list(TRACK_NAMES),
@@ -343,6 +377,13 @@ def _build_system_prompt(steps: int = 16) -> str:
         "When a request adjusts sound parameters or velocity, include an optional \"cc\" key with only the\n"
         "tracks and params that should change. Valid params: tune, filter, resonance, attack, decay, volume,\n"
         "reverb, delay, velocity. All values 0–127. velocity scales the track's overall strike intensity.\n\n"
+        "OPTIONAL TEMPO-SYNCED LFO (lfo) — use emit_pattern's structured \"lfo\" object (not producer_notes alone):\n"
+        "- Keys are route targets: cc:<track>:<param> (e.g. cc:clap:filter), trig:<track>:prob|vel|gate|note, pitch:<track>:main.\n"
+        "- Each value: {\"shape\":\"sine\"|\"square\"|\"triangle\"|\"ramp\"|\"saw\", \"depth\":0–100, \"phase\":0–1, \"rate\":{\"num\":N,\"den\":D}}.\n"
+        "- rate is a reduced fraction (coprime N,D ≥ 1) vs one pattern length: one full LFO cycle spans (D/N) patterns when N<D, "
+        "or a fraction of one pattern when N≥D (e.g. N=1,D=2 → half a cycle per pattern).\n"
+        "- Example (half-cycle sine on clap filter, 50% depth): "
+        "\"lfo\":{\"cc:clap:filter\":{\"shape\":\"sine\",\"depth\":50,\"phase\":0,\"rate\":{\"num\":1,\"den\":2}}}\n\n"
         "Respond ONLY with valid JSON in this exact format — no explanation, no markdown:\n"
         "{\n"
         '  "bpm":     <integer from subgenre range>,\n'
@@ -357,6 +398,7 @@ def _build_system_prompt(steps: int = 16) -> str:
         '  "seq_mode": "standard" | "euclidean"  (optional; set euclidean when the user wants Bjorklund ring gating)\n'
         '  "euclid": {"<track>": {"k": <pulses>, "n": <1-16>, "r": <rotation>}, ...}  (optional; per-track ring; use with seq_mode euclidean)\n'
         '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
+        '  "lfo": {"cc:clap:filter": {"shape":"sine","depth":50,"phase":0,"rate":{"num":1,"den":2}}, ...}  (optional)\n'
         '  "producer_notes": "<plain text, no markdown; optional>"  (optional)\n'
         "}"
         "\n\nOPTIONAL: Per-step probability (prob):\n"
@@ -730,6 +772,8 @@ class Generator:
                 pattern["seq_mode"] = existing["seq_mode"]
             if "euclid" not in pattern and isinstance(existing.get("euclid"), dict):
                 pattern["euclid"] = copy.deepcopy(existing["euclid"])
+            if "lfo" not in pattern and isinstance(existing.get("lfo"), dict):
+                pattern["lfo"] = copy.deepcopy(existing["lfo"])
             self.state.update_pattern(pattern, prompt)
             self.state.pending_pattern = pattern
 
