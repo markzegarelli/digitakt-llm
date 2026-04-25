@@ -1471,12 +1471,14 @@ export function App({ baseUrl }: AppProps) {
                 stepMode={ccStepMode}
                 selectedStep={ccSelectedStep}
                 stepInputBuffer={ccStepInputBuffer}
+                lfoOut={state.lfo_out}
                 />
               </Box>
               <LfoPanel
                 width={lfoColW}
                 selectedTrack={TRACK_NAMES[ccTrack] as TrackName}
                 lfo={state.lfo}
+                lfoOut={state.lfo_out}
                 patternLength={state.pattern_length}
                 currentStep={state.current_step}
                 isFocused={focus === "cc"}

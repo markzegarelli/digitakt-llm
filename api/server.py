@@ -96,8 +96,8 @@ _ALL_EVENTS = [
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "note_changed", "cond_changed", "state_reset",
-    "ask_complete", "pattern_loaded", "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
-    "lfo_changed",
+    "ask_complete", "pattern_loaded",     "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
+    "lfo_changed", "lfo_value",
 ]
 
 

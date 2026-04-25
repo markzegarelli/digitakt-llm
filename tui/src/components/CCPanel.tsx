@@ -22,6 +22,8 @@ interface CCPanelProps {
   stepMode: boolean;
   selectedStep: number;        // 0–15 (only relevant when stepMode=true)
   stepInputBuffer: string;     // digits being typed in step-edit mode
+  /** Live CC after LFO (`lfo_value` while playing); keyed `cc:<track>:<param>`. */
+  lfoOut: Record<string, { value: number; base: number }>;
 }
 
 /** Border+pad (4) + fixed row chrome before/after the `[` … `]` bar (~24). */
@@ -55,6 +57,7 @@ export function CCPanel({
   stepMode,
   selectedStep,
   stepInputBuffer,
+  lfoOut,
 }: CCPanelProps) {
   const barSlots = Math.max(16, Math.min(96, contentWidth - MIX_BAR_OVERHEAD));
   const trackName = TRACK_NAMES[selectedTrack] as TrackName;
@@ -67,11 +70,16 @@ export function CCPanel({
     `s${playIdx + 1} prob ${probHere}% gate ${gateHere}%` +
     (condHere ? ` cond ${condHere}` : "");
 
-  const rows: Array<{ key: string; label: string; value: number }> = ccParams.map((def) => ({
-    key: def.name,
-    label: def.name,
-    value: cc?.[def.name] ?? def.default,
-  }));
+  const rows: Array<{ key: string; label: string; value: number; lfoLive: boolean }> =
+    ccParams.map((def) => {
+      const lfoKey = `cc:${trackName}:${def.name}`;
+      const live = lfoOut[lfoKey];
+      const base = cc?.[def.name] ?? def.default;
+      if (live !== undefined) {
+        return { key: def.name, label: def.name, value: live.value, lfoLive: true };
+      }
+      return { key: def.name, label: def.name, value: base, lfoLive: false };
+    });
 
   const hintText = stepMode
     ? "←→: step  Shift+←→: ±10 value  ↑↓: ±1  Shift+↑↓: ±10  0-9: type  ⌫: del/global  Enter: confirm  Esc: exit"
@@ -113,7 +121,7 @@ export function CCPanel({
         <Text color={theme.textDim}>TRIG </Text>
         <Text color={theme.accentMuted}>{trigSummary}</Text>
       </Box>
-      {rows.map(({ key, label, value }, i) => {
+      {rows.map(({ key, label, value, lfoLive }, i) => {
         const isSelected = i === selectedParam;
         const col = isSelected && isFocused ? theme.accent : theme.text;
         const isStepEditing = isSelected && isFocused && stepMode;
@@ -168,6 +176,14 @@ export function CCPanel({
           );
         }
 
+        const barColor =
+          lfoLive
+            ? theme.accent
+            : isSelected && isFocused
+              ? theme.accent
+              : theme.accentSubtle;
+        const numColor = lfoLive ? theme.accent : col;
+
         return (
           <Box key={key}>
             <Text color={theme.textFaint}>{`[${i}]`}</Text>
@@ -178,10 +194,10 @@ export function CCPanel({
             <Text>{" "}</Text>
             <Text bold={isSelected} color={col}>{label.padEnd(10)}</Text>
             <Text color={theme.textFaint}>{"["}</Text>
-            <Text color={isSelected && isFocused ? theme.accent : theme.accentSubtle}>{barGraph(value, barSlots)}</Text>
+            <Text color={barColor}>{barGraph(value, barSlots)}</Text>
             <Text color={theme.textFaint}>{"]"}</Text>
             <Text>{"  "}</Text>
-            <Text bold={isSelected} color={col}>{String(value).padStart(3)}</Text>
+            <Text bold={lfoLive || isSelected} color={numColor}>{String(value).padStart(3)}</Text>
             {/* Fixed-width tail: space + ASCII char — matches the > prefix width */}
             <Text>{" "}</Text>
             <Text color={isSelected && isFocused ? theme.warn : undefined}>

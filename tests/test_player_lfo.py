@@ -24,6 +24,40 @@ def _pattern_with_lfo() -> dict:
     return pat
 
 
+def test_cc_lfo_emits_lfo_value_per_step():
+    state = AppState()
+    state.pattern_length = 16
+    state.current_pattern = _pattern_with_lfo()
+    state.update_cc("kick", "filter", 64)
+    bus = EventBus()
+    lfo_telemetry: list[dict] = []
+    bus.subscribe("lfo_value", lfo_telemetry.append)
+    port = MagicMock()
+    player = Player(state, bus, port)
+    player._play_step(0, set())
+    assert len(lfo_telemetry) == 1
+    p0 = lfo_telemetry[0]
+    assert p0["target"] == "cc:kick:filter"
+    assert p0["step"] == 0
+    assert "value" in p0 and "base" in p0
+    assert p0["base"] == 64
+    assert 0 <= p0["value"] <= 127
+
+
+def test_cc_lfo_emits_lfo_value_without_midi_port():
+    """UI can show modulated CC even when no output device is open."""
+    state = AppState()
+    state.pattern_length = 16
+    state.current_pattern = _pattern_with_lfo()
+    state.update_cc("kick", "filter", 64)
+    bus = EventBus()
+    seen: list[dict] = []
+    bus.subscribe("lfo_value", seen.append)
+    player = Player(state, bus, None)
+    player._play_step(0, set())
+    assert len(seen) == 1 and seen[0]["target"] == "cc:kick:filter"
+
+
 def test_cc_lfo_sends_varying_filter_values():
     state = AppState()
     state.pattern_length = 16

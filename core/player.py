@@ -209,6 +209,15 @@ class Player:
             else:
                 base_cc = int(self.state.track_cc.get(track, {}).get(param, 0))
             val = apply_depth_clamp(base_cc, w, depth, 0, 127)
+            self.bus.emit(
+                "lfo_value",
+                {
+                    "target": key,
+                    "value": int(val),
+                    "base": int(base_cc),
+                    "step": step,
+                },
+            )
             channel = TRACK_CHANNELS[track]
             cc_lfo_handled.add((track, param))
             dirty_cc.add((track, param))

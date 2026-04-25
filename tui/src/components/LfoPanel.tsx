@@ -15,6 +15,8 @@ interface LfoPanelProps {
   width: number;
   selectedTrack: TrackName;
   lfo: Record<string, LfoDef>;
+  /** Live CC output (modulated value + static base) from `lfo_value` while playing. */
+  lfoOut: Record<string, { value: number; base: number }>;
   patternLength: number;
   currentStep: number | null;
   isFocused: boolean;
@@ -24,6 +26,7 @@ export function LfoPanel({
   width,
   selectedTrack,
   lfo,
+  lfoOut,
   patternLength,
   currentStep,
   isFocused,
@@ -78,11 +81,21 @@ export function LfoPanel({
         );
         const visual = base.slice(0, hi) + "●" + base.slice(hi + 1);
         const cyc = cycleSteps(patternLength, def.rate.num, def.rate.den);
+        const live = lfoOut[key];
+        const liveLine =
+          key.startsWith("cc:") && live
+            ? `out ${live.value}  (base ${live.base})`
+            : null;
         return (
           <Box key={key} flexDirection="column" marginBottom={0}>
             <Text color={theme.textFaint} wrap="truncate">
               {short} · {def.shape} {def.depth}%
             </Text>
+            {liveLine && (
+              <Text color={theme.accent} wrap="truncate" bold>
+                {liveLine}
+              </Text>
+            )}
             <Text color={theme.text}>
               {visual}
             </Text>

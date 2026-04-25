@@ -161,6 +161,11 @@ export interface DigitaktState {
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
   /** LFO routes keyed e.g. `cc:kick:filter`, `trig:snare:prob`, `pitch:kick:main` */
   lfo: Record<string, LfoDef>;
+  /**
+   * Live modulated output from the engine (CC LFO) while playing, keyed by LFO `target`.
+   * Cleared when playback stops. Not persisted — WebSocket `lfo_value` only.
+   */
+  lfo_out: Record<string, { value: number; base: number }>;
 }
 
 export function parseLfoFromApi(raw: unknown): Record<string, LfoDef> {
