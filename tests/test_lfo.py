@@ -1,6 +1,7 @@
 import pytest
 
-from core.lfo import SHAPES, cycle_steps, lfo_shape, lfo_w_at_step
+from core.lfo import SHAPES, apply_depth_clamp, cycle_steps, lfo_shape, lfo_w_at_step
+from core.state import AppState, EMPTY_PATTERN
 
 
 def test_sine_0_is_zero():
@@ -70,3 +71,40 @@ def test_shapes_tuple():
 def test_unknown_shape_raises():
     with pytest.raises(ValueError, match="unknown shape"):
         lfo_shape("nope", 0.0)
+
+
+def test_apply_depth_clamp_w_positive_full_depth():
+    assert apply_depth_clamp(64, 1.0, 100, 0, 127) == 127
+
+
+def test_apply_depth_clamp_w_zero_is_midpoint():
+    assert apply_depth_clamp(64, 0, 100, 0, 127) == 64
+
+
+def test_apply_depth_clamp_w_negative_full_depth():
+    assert apply_depth_clamp(64, -1.0, 100, 0, 127) == 0
+
+
+def test_apply_depth_clamp_zero_depth_ignores_w():
+    assert apply_depth_clamp(0, 1.0, 0, 0, 127) == 64
+    assert apply_depth_clamp(0, -1.0, 0, 0, 127) == 64
+
+
+def test_apply_depth_clamp_clamps_narrow_range():
+    assert apply_depth_clamp(50, 1.0, 200, 0, 10) == 10
+    assert apply_depth_clamp(5, -1.0, 100, 0, 10) == 0
+
+
+def test_lfo_preserved_in_replace_current_pattern():
+    lfo = {
+        "cc:kick:filter": {
+            "shape": "sine",
+            "depth": 50,
+            "phase": 0.0,
+            "rate": {"num": 1, "den": 1},
+        }
+    }
+    pat = {**EMPTY_PATTERN, "lfo": lfo}
+    state = AppState()
+    state.replace_current_pattern(pat)
+    assert state.current_pattern["lfo"] == lfo

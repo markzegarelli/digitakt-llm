@@ -27,6 +27,19 @@ def lfo_shape(shape: str, p: float) -> float:
     raise ValueError(f"unknown shape: {shape!r}")
 
 
+def apply_depth_clamp(base: int, w: float, depth_pct: int, lo: int, hi: int) -> int:
+    """Map bipolar w in [-1, 1] and depth 0..100 to [lo, hi] via range midpoint (see LFO v1 plan)."""
+    _ = base  # reserved for static anchor when player combines LFO with per-step base CC
+    mid = (lo + hi) / 2.0
+    half = (hi - lo) / 2.0
+    v = int(round(mid + w * (depth_pct / 100.0) * half))
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+
+
 def cycle_steps(pattern_length: int, num: int, den: int) -> int:
     if num < 1 or den < 1:
         raise ValueError("num and den must be >= 1")
