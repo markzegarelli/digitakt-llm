@@ -5,6 +5,7 @@ import {
   canHandleEuclidTrigShortcut,
   getEuclidTrackStripRows,
   getPatternMuteIntent,
+  shouldRoutePatternMuteKey,
   togglePendingMuteTrack,
   tracksToQueueAndClear,
 } from "./euclidMuteUi.js";
@@ -98,6 +99,110 @@ test("standard mode can use the same mute intent helper without changing behavio
     track: "clap",
   });
   expect(getPatternMuteIntent("Q", "clap", pending)).toEqual({ kind: "queue-all" });
+});
+
+test("App mute routing only handles plain pattern row mute keys", () => {
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "q",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "Q",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(true);
+
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "prompt",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "cc",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "pattern",
+      ctrl: true,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "pattern",
+      ctrl: false,
+      meta: true,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: true,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: true,
+      trigKeysActive: true,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "n",
+      focus: "pattern",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+    }),
+  ).toBe(false);
 });
 
 test("pending mute toggles selected track and Shift+Q snapshots staged tracks", () => {

@@ -76,6 +76,33 @@ export interface EuclidTrackStripRow {
   badge: "" | "M" | "Q" | "MQ";
 }
 
+export type PatternMuteRouteFocus = "pattern" | "cc" | "prompt";
+
+export function shouldRoutePatternMuteKey({
+  input,
+  focus,
+  ctrl,
+  meta,
+  patternStepEdit,
+  trigKeysActive,
+}: {
+  input: string;
+  focus: PatternMuteRouteFocus;
+  ctrl: boolean | undefined;
+  meta: boolean | undefined;
+  patternStepEdit: boolean;
+  trigKeysActive: boolean;
+}): boolean {
+  return (
+    focus === "pattern" &&
+    !ctrl &&
+    !meta &&
+    !patternStepEdit &&
+    !trigKeysActive &&
+    (input === "m" || input === "q" || input === "Q")
+  );
+}
+
 export function getPatternMuteIntent(
   input: string,
   selectedTrack: TrackName,

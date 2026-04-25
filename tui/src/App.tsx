@@ -13,10 +13,10 @@ import { TrigEditPanel } from "./components/TrigEditPanel.js";
 import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
 import {
   getPatternMuteIntent,
+  shouldRoutePatternMuteKey,
   togglePendingMuteTrack,
   tracksToQueueAndClear,
 } from "./euclidMuteUi.js";
-import type { EuclidDepth } from "./euclidMuteUi.js";
 import {
   EUCLID_N_MAX,
   advanceEuclideanHitMasterStep,
@@ -90,7 +90,6 @@ export function App({ baseUrl }: AppProps) {
   const [trigInputBuffer, setTrigInputBuffer] = useState("");
   const [trigTrackWide, setTrigTrackWide] = useState(false);
   const [euclidEditBox, setEuclidEditBox] = useState<number | null>(null);
-  const [euclidDepth, setEuclidDepth] = useState<EuclidDepth>("track-strip");
   // 0=k, 1=n, 2=r; null = no box focused
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
@@ -117,11 +116,9 @@ export function App({ baseUrl }: AppProps) {
       setPatternStepEdit(false);
       setTrigKeysActive(false);
       setTrigTrackWide(false);
-      setEuclidDepth("track-strip");
       setEuclidEditBox(null);
     } else {
       setEuclidEditBox(null);
-      setEuclidDepth("track-strip");
     }
   }, [state.seq_mode]);
 
@@ -129,7 +126,6 @@ export function App({ baseUrl }: AppProps) {
   useEffect(() => {
     if (focus !== "pattern") {
       setEuclidEditBox(null);
-      setEuclidDepth("track-strip");
     }
   }, [focus]);
 
@@ -965,12 +961,14 @@ export function App({ baseUrl }: AppProps) {
 
     if (focus === "prompt") return;  // Prompt handles its own keys
 
-    if (
-      focus === "pattern" &&
-      !key.ctrl &&
-      !key.meta &&
-      (input === "m" || input === "q" || input === "Q")
-    ) {
+    if (shouldRoutePatternMuteKey({
+      input,
+      focus,
+      ctrl: key.ctrl,
+      meta: key.meta,
+      patternStepEdit,
+      trigKeysActive,
+    })) {
       if (handlePatternMuteKey(input)) return;
     }
 
