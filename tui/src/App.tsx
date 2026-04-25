@@ -87,7 +87,7 @@ export function App({ baseUrl }: AppProps) {
   // 0=k, 1=n, 2=r; null = no box focused
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
-  const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 16, n: 16, r: 0 };
+  const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 0, n: 16, r: 0 };
   const euclidSnapK = euclidSnapRow.k;
   const euclidSnapN = euclidSnapRow.n;
   const euclidSnapR = euclidSnapRow.r;
@@ -124,7 +124,7 @@ export function App({ baseUrl }: AppProps) {
   useEffect(() => {
     if (state.seq_mode !== "euclidean" || !patternStepEdit) return;
     const track = TRACK_NAMES[patternTrack] as TrackName;
-    const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+    const row = state.euclid[track] ?? { k: 0, n: 16, r: 0 };
     const pl = state.pattern_length;
     const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, pl);
     if (hits.length === 0) {
@@ -282,7 +282,7 @@ export function App({ baseUrl }: AppProps) {
 
   const handleEuclidValueChange = useCallback((field: "k" | "n" | "r", delta: number) => {
     const track = TRACK_NAMES[patternTrack] as TrackName;
-    const current = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+    const current = state.euclid[track] ?? { k: 0, n: 16, r: 0 };
     const raw = current[field] + delta;
     const clamped =
       field === "k" ? Math.max(0, Math.min(raw, current.n)) :
@@ -701,7 +701,7 @@ export function App({ baseUrl }: AppProps) {
       commitTrigBuffer(trigInputBuffer);
       setTrigInputBuffer("");
       if (state.seq_mode === "euclidean") {
-        const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+        const row = state.euclid[track] ?? { k: 0, n: 16, r: 0 };
         const d = input === "]" ? 1 : (-1 as const);
         setPatternSelectedStep((s) =>
           advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),
@@ -866,7 +866,7 @@ export function App({ baseUrl }: AppProps) {
             let selected = step;
             if (state.seq_mode === "euclidean") {
               const tr = TRACK_NAMES[patternTrack] as TrackName;
-              const row = state.euclid[tr] ?? { k: 16, n: 16, r: 0 };
+              const row = state.euclid[tr] ?? { k: 0, n: 16, r: 0 };
               const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, state.pattern_length);
               if (hits.length === 0) {
                 actions.addLog("No Euclidean pulses on this track (k=0). Raise k to use step+TRIG.");
@@ -890,7 +890,7 @@ export function App({ baseUrl }: AppProps) {
             !key.shift
           ) {
             const tr = TRACK_NAMES[patternTrack] as TrackName;
-            const row = state.euclid[tr] ?? { k: 16, n: 16, r: 0 };
+            const row = state.euclid[tr] ?? { k: 0, n: 16, r: 0 };
             const hits = listEuclideanHitMasterSteps(row.k, row.n, row.r, state.pattern_length);
             if (hits.length === 0) {
               actions.addLog("No Euclidean pulses on this track (k=0). Raise k to use step+TRIG.");
@@ -965,7 +965,7 @@ export function App({ baseUrl }: AppProps) {
         if (input === "[" || input === "]") {
           if (state.seq_mode === "euclidean") {
             const track = TRACK_NAMES[patternTrack] as TrackName;
-            const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+            const row = state.euclid[track] ?? { k: 0, n: 16, r: 0 };
             const d = input === "]" ? 1 : (-1 as const);
             setPatternSelectedStep((s) =>
               advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),
@@ -978,7 +978,7 @@ export function App({ baseUrl }: AppProps) {
         if (key.leftArrow || key.rightArrow) {
           if (state.seq_mode === "euclidean") {
             const track = TRACK_NAMES[patternTrack] as TrackName;
-            const row = state.euclid[track] ?? { k: 16, n: 16, r: 0 };
+            const row = state.euclid[track] ?? { k: 0, n: 16, r: 0 };
             const d = key.rightArrow ? 1 : (-1 as const);
             setPatternSelectedStep((s) =>
               advanceEuclideanHitMasterStep(s, d, row.k, row.n, row.r, plen),

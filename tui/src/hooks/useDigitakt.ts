@@ -44,7 +44,7 @@ const DEFAULT_STATE: DigitaktState = {
   generation_summary: null,
   seq_mode: "standard" as const,
   euclid: Object.fromEntries(
-    TRACK_NAMES.map((t) => [t, { k: 16, n: 16, r: 0 }])
+    TRACK_NAMES.map((t) => [t, { k: 0, n: 16, r: 0 }])
   ) as Record<TrackName, { k: number; n: number; r: number }>,
 };
 

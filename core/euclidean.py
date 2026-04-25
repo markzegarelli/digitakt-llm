@@ -61,9 +61,9 @@ def clamp_euclid_triplet(k: int, n: int, r: int) -> tuple[int, int, int]:
 
 
 def default_euclid_block(pattern_length: int, track_names: tuple[str, ...]) -> dict[str, dict[str, int]]:
-    """Default Euclidean params: full hits on a ring of size pattern_length (all steps active)."""
+    """Default Euclidean params: silent rings until a track is explicitly armed."""
     n = max(_EUCLID_N_MIN, min(int(pattern_length), _EUCLID_N_MAX))
-    return {t: {"k": n, "n": n, "r": 0} for t in track_names}
+    return {t: {"k": 0, "n": n, "r": 0} for t in track_names}
 
 
 def normalize_seq_mode(raw: Any) -> str:

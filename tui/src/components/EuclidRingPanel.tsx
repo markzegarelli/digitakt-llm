@@ -43,7 +43,7 @@ export function EuclidRingPanel({
   stepTrigEdit = false,
   selectedPatternStep = null,
 }: EuclidRingPanelProps) {
-  const { k, n, r } = euclid[track] ?? { k: 16, n: 16, r: 0 };
+  const { k, n, r } = euclid[track] ?? { k: 0, n: 16, r: 0 };
   const nClamped = Math.max(1, Math.min(EUCLID_N_MAX, n));
   const useWide = width >= 60;
   const gridSize = ringGridSize(useWide);
