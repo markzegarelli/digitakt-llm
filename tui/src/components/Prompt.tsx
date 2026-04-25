@@ -56,6 +56,7 @@ const HELP_LINES = [
   "  quit / q                             exit",
   "  Tab                                  focus rail: SEQ → MIX → CMD",
   "  Shift+Tab                            toggle Chat/Beat mode",
+  "  Shift+M (global)                     toggle pattern seq mode standard ↔ euclidean",
   "  m (Pattern panel)                    toggle mute on selected track",
   "  q (Pattern panel)                    stage selected track for queued mute (toggle)",
   "  Q (Pattern panel)                    fire all staged mutes at next bar boundary (Shift+Q)",
@@ -152,6 +153,8 @@ interface PromptProps {
   generationStatus: "idle" | "generating" | "failed";
   generationError: string | null;
   onCommand(cmd: string): void;
+  /** Shift+M — toggle standard ↔ euclidean (global; CMD focus handled here so “M” is not inserted). */
+  onToggleSeqMode(): void;
   patternModal: PatternModalState | null;
   onPatternModalClose(): void;
   onPatternModalNav(dir: number): void;
@@ -179,6 +182,7 @@ export function Prompt({
   generationStatus,
   generationError,
   onCommand,
+  onToggleSeqMode,
   patternModal,
   onPatternModalClose,
   onPatternModalNav,
@@ -265,6 +269,11 @@ export function Prompt({
 
   useInput((input, key) => {
     if (!isFocused) return;
+
+    if (key.shift && !key.ctrl && !key.meta && (input === "m" || input === "M")) {
+      onToggleSeqMode();
+      return;
+    }
 
     if (patternModal) {
       if (patternModal.phase === "pick") {
@@ -630,7 +639,7 @@ export function Prompt({
       </Box>
       {statusLine
         ? <Text color={askPending ? theme.warn : generationStatus === "failed" ? theme.error : theme.accentMuted}>{statusLine}</Text>
-        : <Text color={theme.textFaint}>{"/help  ?  Tab  Shift+Tab  Space transport"}</Text>
+        : <Text color={theme.textFaint}>{"/help  ?  Tab  Shift+Tab  Shift+M  Space transport"}</Text>
       }
       <Text color={implementableHint ? theme.accent : theme.textFaint}>
         {implementableHint ? "HINT Ctrl+G /gen from last reply" : " "}

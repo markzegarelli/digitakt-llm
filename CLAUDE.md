@@ -63,7 +63,14 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/midi` — connect MIDI output after hot-plug (auto-finds a port whose name contains `Digitakt`); flushes CC and sends MIDI start if playback is already running
 - `/midi list` — list MIDI output port names (when auto-detect fails)
 
-Keyboard shortcuts (Pattern panel):
+Keyboard shortcuts:
+
+**Global (Shift+… for app-wide settings; unmodified keys stay contextual to the focused panel.)**
+
+- `Shift+M` — toggle pattern sequencing mode `standard` ↔ `euclidean` (any focus, including CMD; same as `/mode standard` / `/mode euclidean`)
+
+**Pattern panel**
+
 - `?` — open the help overlay (also works from MIX/LOG focus, or from CMD when the input line is empty)
 - `m` — immediate mute toggle on selected track
 - `q` — stage selected track for queued mute (toggle; **MQ** badges on SEQ/MIX: `Q` = queued, `M` = muted)
