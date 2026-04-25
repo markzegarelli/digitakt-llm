@@ -220,6 +220,108 @@ def test_save_load_round_trip_preserves_bpm_and_cc(tmp_path):
     assert st["pattern_length"] == 32
 
 
+def test_post_lfo_sets_pattern_and_emits_event(tmp_path):
+    client = _make_test_client(tmp_path)
+    events: list = []
+    server_module._bus.subscribe("lfo_changed", events.append)
+    payload = {
+        "target": "cc:kick:filter",
+        "lfo": {
+            "shape": "sine",
+            "depth": 50,
+            "phase": 0.0,
+            "rate": {"num": 1, "den": 1},
+        },
+    }
+    resp = client.post("/lfo", json=payload)
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["target"] == "cc:kick:filter"
+    assert out["lfo"]["shape"] == "sine"
+    st = client.get("/state").json()["current_pattern"]
+    assert st.get("lfo", {}).get("cc:kick:filter", {}).get("depth") == 50
+    assert len(events) == 1
+    assert events[0] == {
+        "target": "cc:kick:filter",
+        "lfo": out["lfo"],
+    }
+
+
+def test_post_lfo_clears_route(tmp_path):
+    client = _make_test_client(tmp_path)
+    client.post(
+        "/lfo",
+        json={
+            "target": "cc:kick:filter",
+            "lfo": {
+                "shape": "sine",
+                "depth": 10,
+                "phase": 0.0,
+                "rate": {"num": 1, "den": 1},
+            },
+        },
+    )
+    r2 = client.post("/lfo", json={"target": "cc:kick:filter", "lfo": None})
+    assert r2.status_code == 200
+    st = client.get("/state").json()["current_pattern"]
+    assert "lfo" not in st or "cc:kick:filter" not in st.get("lfo", {})
+
+
+def test_post_lfo_invalid_target_422(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post(
+        "/lfo",
+        json={
+            "target": "invalid",
+            "lfo": {
+                "shape": "sine",
+                "depth": 10,
+                "phase": 0.0,
+                "rate": {"num": 1, "den": 1},
+            },
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_post_lfo_rate_must_be_reduced(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post(
+        "/lfo",
+        json={
+            "target": "cc:kick:filter",
+            "lfo": {
+                "shape": "sine",
+                "depth": 10,
+                "phase": 0.0,
+                "rate": {"num": 2, "den": 2},
+            },
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_save_pattern_roundtrips_lfo_in_pattern(tmp_path: Path):
+    client = _make_test_client(tmp_path)
+    client.post(
+        "/lfo",
+        json={
+            "target": "trig:snare:prob",
+            "lfo": {
+                "shape": "square",
+                "depth": 100,
+                "phase": 0.0,
+                "rate": {"num": 1, "den": 2},
+            },
+        },
+    )
+    client.post("/patterns/my_lfo", json={"tags": []})
+    p = tmp_path / "my_lfo.json"
+    data = json.loads(p.read_text())
+    lfo = data["pattern"].get("lfo", {})
+    assert lfo.get("trig:snare:prob", {}).get("shape") == "square"
+
+
 def test_load_nonexistent_pattern_returns_404(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.get("/patterns/does-not-exist")

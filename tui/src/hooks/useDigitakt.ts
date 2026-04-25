@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DigitaktState, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
-import { TRACK_NAMES, emptyTrigState, parsePatternFromApi } from "../types.js";
+import type { DigitaktState, LfoDef, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
+import {
+  TRACK_NAMES,
+  emptyTrigState,
+  inferPatternLengthFromApi,
+  parseLfoFromApi,
+  parsePatternFromApi,
+} from "../types.js";
 
 const DEFAULT_STATE: DigitaktState = {
   current_pattern: Object.fromEntries(
@@ -34,6 +40,7 @@ const DEFAULT_STATE: DigitaktState = {
   midi_connected: false,
   log: [],
   current_step: null,
+  global_step: null,
   last_prompt: null,
   pattern_history: [],
   chain: [],
@@ -46,6 +53,8 @@ const DEFAULT_STATE: DigitaktState = {
   euclid: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, { k: 0, n: 16, r: 0 }])
   ) as Record<TrackName, { k: number; n: number; r: number }>,
+  lfo: {},
+  lfo_out: {},
 };
 
 function parseEuclidBlock(
@@ -78,6 +87,13 @@ function formatLogEntry(event: string, data: Record<string, unknown>): string {
     case "playback_stopped":     return "playback stopped";
     case "midi_disconnected":    return `MIDI disconnected: ${data["port"]}`;
     case "midi_connected":       return `MIDI connected: ${data["port"]}`;
+    case "lfo_changed": {
+      const t = data["target"] as string;
+      const ld = data["lfo"] as unknown;
+      if (ld == null) return `LFO cleared: ${t}`;
+      const d = (ld as { shape: string; depth: number })["depth"];
+      return `LFO: ${t}  (${(ld as { shape: string })["shape"]}  ${d}%)`;
+    }
     case "cc_changed":           return `CC: ${data["track"]} ${data["param"]} = ${data["value"]}`;
     case "cc_step_changed":      return `CC step: ${data["track"]} ${data["param"]} step ${data["step"]} = ${data["value"]}`;
     case "mute_changed":         return `mute: ${data["track"]} = ${data["muted"]}`;
@@ -135,6 +151,7 @@ export interface DigitaktActions {
   chainFire(): Promise<void>;
   chainClear(): Promise<void>;
   setCCFocusedTrack(track: TrackName): Promise<void>;
+  setLfoRoute(target: string, lfo: LfoDef | null): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -199,6 +216,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         chain_auto: (data["chain_auto"] as boolean) ?? prev.chain_auto,
         chain_queued_index: (data["chain_queued_index"] as number | null) ?? prev.chain_queued_index,
         chain_armed: (data["chain_armed"] as boolean) ?? prev.chain_armed,
+        lfo: parseLfoFromApi(pattern["lfo"]),
+        lfo_out: {},
+        global_step: null,
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
       }));
@@ -260,22 +280,25 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
         setState((prev) => {
           const newLog =
-            msg.event === "step_changed"
+            msg.event === "step_changed" || msg.event === "lfo_value"
               ? prev.log
               : [...prev.log, formatLogEntry(msg.event, msg.data)].slice(-50);
           switch (msg.event) {
             case "pattern_changed": {
               const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
               if (!raw) return { ...prev, log: newLog };
-              const plen = prev.pattern_length;
+              const plen = inferPatternLengthFromApi(raw, prev.pattern_length);
               const { velocities, trig } = parsePatternFromApi(raw, plen);
               const seqMode = raw["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
               const rawEuclid = raw["euclid"];
               const euclid = parseEuclidBlock(rawEuclid, prev.euclid);
               return {
                 ...prev,
+                pattern_length: plen,
                 current_pattern: velocities,
                 pattern_trig: trig,
+                lfo: parseLfoFromApi(raw["lfo"]),
+                lfo_out: {},
                 seq_mode: seqMode,
                 euclid,
                 log: newLog,
@@ -286,15 +309,27 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
             case "playback_started":
               return { ...prev, is_playing: true, log: newLog };
             case "playback_stopped":
-              return { ...prev, is_playing: false, current_step: null, log: newLog };
-            case "step_changed":
-              return { ...prev, current_step: msg.data["step"] as number, log: newLog };
+              return {
+                ...prev,
+                is_playing: false,
+                current_step: null,
+                global_step: null,
+                lfo_out: {},
+                log: newLog,
+              };
+            case "step_changed": {
+              const st = msg.data["step"] as number;
+              const gsRaw = msg.data["global_step"];
+              const global_step =
+                typeof gsRaw === "number" && Number.isFinite(gsRaw) ? gsRaw : st;
+              return { ...prev, current_step: st, global_step, log: newLog };
+            }
             case "generation_started":
               return { ...prev, generation_status: "generating", generation_error: null, log: newLog };
             case "generation_complete": {
               const genBpm = msg.data["bpm"] as number | undefined;
               const raw = msg.data["pattern"] as Record<string, unknown> | undefined;
-              const plen = prev.pattern_length;
+              const plen = raw ? inferPatternLengthFromApi(raw, prev.pattern_length) : prev.pattern_length;
               const parsed = raw
                 ? parsePatternFromApi(raw, plen)
                 : { velocities: prev.current_pattern, trig: prev.pattern_trig };
@@ -303,8 +338,11 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return {
                 ...prev,
                 generation_status: "idle",
+                pattern_length: plen,
                 current_pattern: parsed.velocities,
                 pattern_trig: parsed.trig,
+                lfo: raw ? parseLfoFromApi(raw["lfo"]) : prev.lfo,
+                lfo_out: raw ? {} : prev.lfo_out,
                 seq_mode: seqMode,
                 euclid,
                 last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
@@ -399,6 +437,31 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 pattern_length: steps,
                 current_pattern: velocities,
                 pattern_trig: trig,
+                lfo: prev.lfo,
+                log: newLog,
+              };
+            }
+            case "lfo_changed": {
+              const t = msg.data["target"] as string;
+              const ld = msg.data["lfo"] as LfoDef | null | undefined;
+              const next = { ...prev.lfo };
+              const nextOut = { ...prev.lfo_out };
+              if (ld == null) {
+                delete next[t];
+                delete nextOut[t];
+              } else {
+                next[t] = ld;
+                delete nextOut[t];
+              }
+              return { ...prev, lfo: next, lfo_out: nextOut, log: newLog };
+            }
+            case "lfo_value": {
+              const t = msg.data["target"] as string;
+              const v = msg.data["value"] as number;
+              const b = msg.data["base"] as number;
+              return {
+                ...prev,
+                lfo_out: { ...prev.lfo_out, [t]: { value: v, base: b } },
                 log: newLog,
               };
             }
@@ -719,6 +782,13 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
     setCCFocusedTrack: useCallback(async (track: TrackName) => {
       await api("POST", "/cc-focused-track", { track });
     }, [api]),
+
+    setLfoRoute: useCallback(
+      async (target: string, lfo: LfoDef | null) => {
+        await api("POST", "/lfo", { target, lfo });
+      },
+      [api],
+    ),
   };
 
   return [state, actions];

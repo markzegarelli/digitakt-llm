@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import time
 import threading
+from core.lfo import apply_depth_clamp, lfo_mod_w
 from core.state import AppState, DEFAULT_GATE_PCT, TRACK_NAMES
 from core.euclidean import SEQ_MODE_EUCLIDEAN, track_euclidean_hit
 from core.events import EventBus
@@ -74,10 +75,18 @@ class Player:
     def _play_step(self, step: int, dirty_cc: set | None = None) -> None:
         if dirty_cc is None:
             dirty_cc = set()
-        self.bus.emit("step_changed", {"step": step})
         pattern = self.state.current_pattern
+        global_step = self._loop_count * self.state.pattern_length + step
+        self.bus.emit("step_changed", {"step": step, "global_step": global_step})
+        lfo_map = pattern.get("lfo") or {}
         for track in TRACK_NAMES:
             base_note = self.state.track_pitch.get(track, midi_utils.NOTE_MAP.get(track, 60))
+            pk = f"pitch:{track}:main"
+            if pk in lfo_map and isinstance(lfo_map[pk], dict):
+                mod = lfo_mod_w(lfo_map[pk], self.state.pattern_length, global_step)
+                if mod:
+                    w, depth = mod
+                    base_note = apply_depth_clamp(int(base_note), w, depth, 0, 127)
             note_row = pattern.get("note", {}).get(track) if isinstance(pattern.get("note"), dict) else None
             step_note = None
             if isinstance(note_row, list) and 0 <= step < len(note_row):
@@ -85,12 +94,28 @@ class Player:
             note = base_note if step_note is None else int(step_note)
             if note is None or track not in pattern:
                 continue
+            tk = f"trig:{track}:note"
+            if tk in lfo_map and isinstance(lfo_map[tk], dict):
+                mod = lfo_mod_w(lfo_map[tk], self.state.pattern_length, global_step)
+                if mod:
+                    w, depth = mod
+                    note = apply_depth_clamp(int(note), w, depth, 0, 127)
             if self.state.track_muted.get(track, False):
                 continue
-            # Check per-step probability
+            # Check per-step probability (LFO on prob may apply with implicit 100% if no prob row)
             prob_track = pattern.get("prob", {}).get(track)
-            if prob_track is not None:
-                step_prob = prob_track[step]
+            prk = f"trig:{track}:prob"
+            lfo_prob = prk in lfo_map and isinstance(lfo_map[prk], dict)
+            if prob_track is not None or lfo_prob:
+                if prob_track is not None and 0 <= step < len(prob_track):
+                    step_prob = prob_track[step]
+                else:
+                    step_prob = 100
+                if lfo_prob:
+                    mod = lfo_mod_w(lfo_map[prk], self.state.pattern_length, global_step)
+                    if mod:
+                        w, depth = mod
+                        step_prob = apply_depth_clamp(int(step_prob), w, depth, 0, 100)
                 if random.random() * 100 >= step_prob:
                     continue
             # Check conditional trig
@@ -110,6 +135,12 @@ class Player:
             velocity = pattern[track][step]
             if euclidean_mode and velocity <= 0:
                 velocity = 127
+            vtk = f"trig:{track}:vel"
+            if vtk in lfo_map and isinstance(lfo_map[vtk], dict):
+                mod = lfo_mod_w(lfo_map[vtk], self.state.pattern_length, global_step)
+                if mod:
+                    w, depth = mod
+                    velocity = apply_depth_clamp(int(velocity), w, depth, 0, 127)
             if velocity > 0:
                 scale = self.state.track_velocity.get(track, 127)
                 velocity = max(1, (velocity * scale) // 127)
@@ -133,6 +164,14 @@ class Player:
                     # Schedule note_off if gate < 100
                     gate_track = pattern.get("gate", {}).get(track)
                     gate_pct = gate_track[step] if gate_track is not None else DEFAULT_GATE_PCT
+                    gtk = f"trig:{track}:gate"
+                    if gtk in lfo_map and isinstance(lfo_map[gtk], dict):
+                        mod = lfo_mod_w(lfo_map[gtk], self.state.pattern_length, global_step)
+                        if mod:
+                            w, depth = mod
+                            gate_pct = apply_depth_clamp(
+                                int(gate_pct), w, depth, 0, 100
+                            )
                     if gate_pct < 100:
                         note_off_delay = max(0.001, gate_pct / 100.0 * self._step_duration())
                         port_ref = self.port
@@ -144,11 +183,69 @@ class Player:
                             except Exception:
                                 pass
                         threading.Timer(note_off_delay, _send_off).start()
-        # Send per-step CC overrides
+        # Tempo-synced LFO on CC targets (base = per-step override or track CC)
         step_cc = pattern.get("step_cc", {})
+        cc_lfo_handled: set[tuple[str, str]] = set()
+        for key, ldef in lfo_map.items():
+            if not isinstance(ldef, dict) or not key.startswith("cc:"):
+                continue
+            parts = key.split(":", 2)
+            if len(parts) != 3:
+                continue
+            _, track, param = parts
+            if track not in TRACK_NAMES or param not in midi_utils.CC_MAP:
+                continue
+            mod = lfo_mod_w(ldef, self.state.pattern_length, global_step)
+            if not mod:
+                continue
+            w, depth = mod
+            sc_row = step_cc.get(track, {}).get(param) if isinstance(step_cc.get(track), dict) else None
+            if (
+                isinstance(sc_row, list)
+                and 0 <= step < len(sc_row)
+                and sc_row[step] is not None
+            ):
+                base_cc = int(sc_row[step])
+            else:
+                base_cc = int(self.state.track_cc.get(track, {}).get(param, 0))
+            val = apply_depth_clamp(base_cc, w, depth, 0, 127)
+            self.bus.emit(
+                "lfo_value",
+                {
+                    "target": key,
+                    "value": int(val),
+                    "base": int(base_cc),
+                    "step": step,
+                },
+            )
+            channel = TRACK_CHANNELS[track]
+            cc_lfo_handled.add((track, param))
+            dirty_cc.add((track, param))
+            if self.port is not None:
+                try:
+                    midi_utils.send_cc(
+                        self.port, channel, midi_utils.CC_MAP[param], val
+                    )
+                except Exception:
+                    logger.error(
+                        "MIDI send failed during CC LFO",
+                        extra={"error_type": "midi_disconnect"},
+                        exc_info=True,
+                    )
+                    self.state.set_playing(False)
+                    self.bus.emit("playback_stopped", {})
+                    self.bus.emit(
+                        "midi_disconnected",
+                        {"port": self.state.midi_port_name},
+                    )
+                    self._stop_event.set()
+                    return
+        # Send per-step CC overrides (skip params handled by LFO — already sent)
         for track in TRACK_NAMES:
             channel = TRACK_CHANNELS[track]
             for param, steps in step_cc.get(track, {}).items():
+                if (track, param) in cc_lfo_handled:
+                    continue
                 override = steps[step]
                 if override is not None and param in midi_utils.CC_MAP:
                     dirty_cc.add((track, param))
@@ -169,6 +266,22 @@ class Player:
                             )
                             self._stop_event.set()
                             return
+
+    def _restore_global_cc(self, dirty_cc: set[tuple[str, str]]) -> None:
+        """After one pattern, send static track_cc for per-step dirty params. Skips
+        LFO-routed cc:… so modulation stays continuous across bar lines."""
+        pl_now = self.state.current_pattern
+        lfo_skip = (pl_now.get("lfo") or {}) if isinstance(pl_now, dict) else {}
+        if self.port is not None:
+            for track, param in dirty_cc:
+                cc_key = f"cc:{track}:{param}"
+                if cc_key in lfo_skip and isinstance(lfo_skip[cc_key], dict):
+                    continue
+                global_val = self.state.track_cc.get(track, {}).get(param)
+                if global_val is not None and param in midi_utils.CC_MAP:
+                    midi_utils.send_cc(
+                        self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
+                    )
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
@@ -210,14 +323,7 @@ class Player:
                     if sleep_time > 0:
                         self._stop_event.wait(sleep_time)
 
-            # Restore global CC for any params overridden during this loop
-            if self.port is not None:
-                for track, param in dirty_cc:
-                    global_val = self.state.track_cc.get(track, {}).get(param)
-                    if global_val is not None and param in midi_utils.CC_MAP:
-                        midi_utils.send_cc(
-                            self.port, TRACK_CHANNELS[track], midi_utils.CC_MAP[param], global_val
-                        )
+            self._restore_global_cc(dirty_cc)
 
             boundary = self.state.apply_bar_boundary()
             mute_changes = boundary.get("mute_changes")

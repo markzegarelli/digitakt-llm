@@ -1,9 +1,10 @@
 # api/schemas.py
 from __future__ import annotations
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GenerateRequest(BaseModel):
@@ -278,3 +279,34 @@ class MidiConnectResponse(BaseModel):
 
 class MidiOutputsResponse(BaseModel):
     ports: list[str]
+
+
+LfoShape = Literal["sine", "square", "triangle", "ramp", "saw"]
+
+
+class LfoRateModel(BaseModel):
+    num: int = Field(..., ge=1, description="Numerator of rate vs one pattern")
+    den: int = Field(..., ge=1, description="Denominator of rate vs one pattern")
+
+    @model_validator(mode="after")
+    def coprime(self) -> "LfoRateModel":
+        if math.gcd(self.num, self.den) != 1:
+            raise ValueError("rate num and den must be coprime (reduced fraction)")
+        return self
+
+
+class LfoDefModel(BaseModel):
+    shape: LfoShape
+    depth: int = Field(..., ge=0, le=100)
+    phase: float = Field(0.0, ge=0.0, le=1.0)
+    rate: LfoRateModel
+
+
+class LfoSetRequest(BaseModel):
+    target: str = Field(..., min_length=3, description="e.g. cc:kick:filter or trig:snare:prob")
+    lfo: LfoDefModel | None = None
+
+
+class LfoSetResponse(BaseModel):
+    target: str
+    lfo: dict | None = None

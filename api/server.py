@@ -37,6 +37,7 @@ from api.schemas import (
     MidiConnectRequest,
     MidiConnectResponse,
     MidiOutputsResponse,
+    LfoSetRequest, LfoSetResponse,
 )
 from cli.commands import (
     apply_prob_step, apply_vel_step, apply_swing, apply_random_velocity,
@@ -44,6 +45,7 @@ from cli.commands import (
     apply_gate_step, apply_gate_track, apply_cond_step,
     apply_prob_track, apply_vel_track,
     apply_note_step,
+    set_lfo, validate_lfo_target_key,
 )
 from core.events import EventBus
 from core import midi_utils
@@ -58,6 +60,7 @@ from core.pattern_snapshot import (
 )
 from core.tracing import tracer
 from core.euclidean import normalize_euclid_in_pattern
+from core.lfo import cycle_steps
 
 
 @asynccontextmanager
@@ -93,7 +96,8 @@ _ALL_EVENTS = [
     "swing_changed", "prob_changed", "vel_changed", "random_applied", "randbeat_applied",
     "step_changed", "length_changed", "fill_started", "fill_ended",
     "gate_changed", "pitch_changed", "note_changed", "cond_changed", "state_reset",
-    "ask_complete", "pattern_loaded", "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
+    "ask_complete", "pattern_loaded",     "chain_updated", "chain_queued", "chain_armed", "chain_advanced",
+    "lfo_changed", "lfo_value",
 ]
 
 
@@ -311,6 +315,28 @@ def post_undo():
         raise HTTPException(status_code=404, detail="No pattern history to undo")
     _broadcast_event("pattern_changed", {})
     return {"status": "ok"}
+
+
+@app.post("/lfo", response_model=LfoSetResponse)
+def post_lfo(req: LfoSetRequest):
+    try:
+        validate_lfo_target_key(req.target)
+    except ValueError as e:
+        raise HTTPException(422, detail=str(e)) from e
+    lfo_dict: dict | None = None
+    if req.lfo is not None:
+        lfo_dict = req.lfo.model_dump()
+        csn = cycle_steps(
+            _state.pattern_length, lfo_dict["rate"]["num"], lfo_dict["rate"]["den"]
+        )
+        if csn > 32 * 8:
+            raise HTTPException(422, detail="LFO rate: cycle too long (max 256 steps)")
+    _mutator.apply(
+        lambda p, t=req.target, ld=lfo_dict: set_lfo(p, t, ld),
+        event="lfo_changed",
+        payload={"target": req.target, "lfo": lfo_dict},
+    )
+    return LfoSetResponse(target=req.target, lfo=lfo_dict)
 
 
 @app.post("/cc", response_model=CCResponse)
