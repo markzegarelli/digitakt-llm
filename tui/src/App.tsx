@@ -32,6 +32,9 @@ import {
 } from "./euclidRing.js";
 import { computeSplitStackLayout } from "./layout.js";
 import {
+  normalizeCcParamAlias,
+  normalizeLfoTarget,
+  normalizeTrackAlias,
   isKnownSlashCommand,
   parseChainCommand,
   validateTrackValueArity,
@@ -53,8 +56,7 @@ const EUCLID_RING_MIN_WIDTH = 24;
 const EUCLID_SEQ_MIN_WIDTH = EUCLID_TRACK_STRIP_WIDTH + EUCLID_RING_MIN_WIDTH;
 
 // Track alias map: normalize shorthand display names to canonical API names
-const TRACK_ALIASES: Record<string, string> = { ophat: "openhat", cymbl: "cymbal" };
-const normalizeTrack = (raw: string) => TRACK_ALIASES[raw.toLowerCase()] ?? raw.toLowerCase();
+const normalizeTrack = (raw: string) => normalizeTrackAlias(raw);
 
 // Accept common shorthand for the two /random param values
 const normalizeRandomParam = (raw: string): string => {
@@ -86,7 +88,7 @@ export function App({ baseUrl }: AppProps) {
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
   const [implementableHint, setImplementableHint] = useState(false);
   const [barCount, setBarCount] = useState(0);
-  const acActiveRef = useRef(false);
+  const promptTabCaptureRef = useRef(false);
   const [patternModal, setPatternModal] = useState<PatternModalState | null>(null);
   const [chainStripFocused, setChainStripFocused] = useState(false);
   const [chainSlotIdx, setChainSlotIdx] = useState(0);
@@ -490,7 +492,7 @@ export function App({ baseUrl }: AppProps) {
         actions.setPitch(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10))
           .catch(dispatchError); break;
       case "lfo": {
-        const target = parts[1] ?? "";
+        const target = normalizeLfoTarget(parts[1] ?? "");
         if (!target) {
           actions.addLog("✗ Usage: /lfo <target> <shape> <depth> <num/den> [phase]  |  /lfo <target> clear");
           break;
@@ -550,10 +552,19 @@ export function App({ baseUrl }: AppProps) {
         break;
       }
       case "cc":
-        actions.setCC(normalizeTrack(parts[1] ?? "") as TrackName, parts[2] as CCParam, parseInt(parts[3] ?? "", 10))
+        actions.setCC(
+          normalizeTrack(parts[1] ?? "") as TrackName,
+          normalizeCcParamAlias(parts[2] ?? "") as CCParam,
+          parseInt(parts[3] ?? "", 10),
+        )
           .catch(dispatchError); break;
       case "cc-step":
-        actions.setCCStep(normalizeTrack(parts[1] ?? "") as TrackName, parts[2] as CCParam, parseInt(parts[3] ?? "", 10), parseInt(parts[4] ?? "", 10) === -1 ? null : parseInt(parts[4] ?? "", 10))
+        actions.setCCStep(
+          normalizeTrack(parts[1] ?? "") as TrackName,
+          normalizeCcParamAlias(parts[2] ?? "") as CCParam,
+          parseInt(parts[3] ?? "", 10),
+          parseInt(parts[4] ?? "", 10) === -1 ? null : parseInt(parts[4] ?? "", 10),
+        )
           .catch(dispatchError); break;
       case "cond":
         actions.setCond(normalizeTrack(parts[1] ?? ""), parseInt(parts[2] ?? "", 10), parts[3] === "clear" ? null : (parts[3] ?? null))
@@ -1016,7 +1027,7 @@ export function App({ baseUrl }: AppProps) {
     }
 
     if (key.tab) {
-      if (acActiveRef.current) return;  // let Prompt handle Tab for autocomplete
+      if (promptTabCaptureRef.current) return;  // let Prompt handle command input tab navigation
       if (chainStripFocused) setChainStripFocused(false);
       if (key.shift) {
         setInputMode((m) => m === "beat" ? "chat" : "beat");
@@ -1598,7 +1609,7 @@ export function App({ baseUrl }: AppProps) {
               onClearHistory={() => setShowHistory(false)}
               implementableHint={implementableHint}
               onDismissHint={() => setImplementableHint(false)}
-              acActiveRef={acActiveRef}
+              tabCaptureRef={promptTabCaptureRef}
             />
             <Box paddingX={1}>
               <Text color={theme.textFaint}>
