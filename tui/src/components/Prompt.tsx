@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { theme } from "../theme.js";
 import type { PatternModalState, PatternListEntry } from "../types.js";
+import { getCommandSpec, parseSlashDraft } from "../commandParsing.js";
 
 const HELP_LINES = [
   "── Playback & Pattern ─────────────────────────────────────────",
@@ -128,11 +129,95 @@ function helpTotalRows(): number {
   return HELP_LINES.length + HELP_LEGEND_ROW_COUNT;
 }
 
-function getSuggestions(text: string): string[] {
+export function getPromptSuggestions(text: string): string[] {
   if (!text.startsWith("/")) return [];
+  const draft = parseSlashDraft(text);
+  if (draft.isExactCommand) return [];
   const query = text.slice(1);
   if (query.includes(" ")) return [];  // past the command name
   return COMMANDS.filter((c) => c.startsWith(query)).slice(0, 7);
+}
+
+export function getParamHintState(text: string): { active: boolean; paramCount: number } {
+  const draft = parseSlashDraft(text);
+  if (!draft.command || !draft.isExactCommand) return { active: false, paramCount: 0 };
+  const spec = getCommandSpec(draft.command);
+  const count = spec?.params.length ?? 0;
+  return { active: count > 0, paramCount: count };
+}
+
+export function nextParamFocusIndex(current: number, total: number, reverse: boolean): number {
+  if (total <= 0) return 0;
+  if (reverse) return (current - 1 + total) % total;
+  return (current + 1) % total;
+}
+
+export function isInputAssistDismissedForText(text: string): boolean {
+  return text.trim().length > 0;
+}
+
+type InlineEditState = { text: string; cursor: number };
+
+export function moveCursorLeft(state: InlineEditState): InlineEditState {
+  return { text: state.text, cursor: Math.max(0, state.cursor - 1) };
+}
+
+export function moveCursorRight(state: InlineEditState): InlineEditState {
+  return { text: state.text, cursor: Math.min(state.text.length, state.cursor + 1) };
+}
+
+export function insertAtCursor(state: InlineEditState, input: string): InlineEditState {
+  return {
+    text: state.text.slice(0, state.cursor) + input + state.text.slice(state.cursor),
+    cursor: state.cursor + input.length,
+  };
+}
+
+export function backspaceAtCursor(state: InlineEditState): InlineEditState {
+  if (state.cursor <= 0) return state;
+  return {
+    text: state.text.slice(0, state.cursor - 1) + state.text.slice(state.cursor),
+    cursor: state.cursor - 1,
+  };
+}
+
+export function getFocusedParamSuggestions(text: string, focusIdx: number): string[] {
+  const draft = parseSlashDraft(text);
+  if (!draft.command || !draft.isExactCommand) return [];
+  const spec = getCommandSpec(draft.command);
+  const param = spec?.params[focusIdx];
+  if (!param) return [];
+  const value = draft.args[focusIdx] ?? "";
+  return [
+    ...(param.defaultValue ? [param.defaultValue] : []),
+    ...(param.suggestions ?? []),
+  ]
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .filter((v) => v.toLowerCase().startsWith(value.toLowerCase()))
+    .slice(0, 7);
+}
+
+function buildSlashText(command: string, args: string[], focusIdx: number): string {
+  const lastNonEmpty = args.reduce((acc, v, i) => (v.trim().length > 0 ? i : acc), -1);
+  const visibleCount = Math.max(lastNonEmpty + 1, focusIdx + 1);
+  const shownArgs = args.slice(0, visibleCount);
+  return `/${command}${shownArgs.length ? ` ${shownArgs.join(" ")}` : " "}`;
+}
+
+export function applyParamSuggestionAndAdvance(
+  text: string,
+  focusIdx: number,
+  paramCount: number,
+  suggestion: string,
+): { text: string; nextFocusIdx: number } {
+  const draft = parseSlashDraft(text);
+  if (!draft.command) return { text, nextFocusIdx: focusIdx };
+  const nextArgs = [...draft.args];
+  nextArgs[focusIdx] = suggestion;
+  return {
+    text: buildSlashText(draft.command, nextArgs, focusIdx),
+    nextFocusIdx: Math.min(Math.max(0, paramCount - 1), focusIdx + 1),
+  };
 }
 
 function shapePreviewForEntry(entry: PatternListEntry): string {
@@ -185,7 +270,7 @@ interface PromptProps {
   onClearHistory(): void;
   implementableHint: boolean;
   onDismissHint(): void;
-  acActiveRef: React.MutableRefObject<boolean>;
+  tabCaptureRef: React.MutableRefObject<boolean>;
 }
 
 export function Prompt({
@@ -212,7 +297,7 @@ export function Prompt({
   onClearHistory,
   implementableHint,
   onDismissHint,
-  acActiveRef,
+  tabCaptureRef,
 }: PromptProps) {
   const { stdout } = useStdout();
   const [text, setText] = useState("");
@@ -223,8 +308,17 @@ export function Prompt({
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [acSuggestions, setAcSuggestions] = useState<string[]>([]);
   const [acIdx, setAcIdx] = useState(-1);
+  const [paramFocusIdx, setParamFocusIdx] = useState(0);
+  const [paramModeDismissed, setParamModeDismissed] = useState(false);
   const [helpScroll, setHelpScroll] = useState(0);
   const genStartRef = useRef<number | null>(null);
+  const slashDraft = parseSlashDraft(text);
+  const activeCommandSpec =
+    slashDraft.command && slashDraft.isExactCommand ? getCommandSpec(slashDraft.command) : null;
+  const commandParams = activeCommandSpec?.params ?? [];
+  const paramHintsActive = commandParams.length > 0 && !paramModeDismissed;
+  const paramSuggestions = paramHintsActive ? getFocusedParamSuggestions(text, paramFocusIdx) : [];
+  const activeSuggestions = paramHintsActive ? paramSuggestions : (paramModeDismissed ? [] : acSuggestions);
 
   const termRows = stdout?.rows ?? 24;
   const panelBudget =
@@ -253,17 +347,35 @@ export function Prompt({
       nextCursor !== undefined
         ? Math.max(0, Math.min(nextCursor, newText.length))
         : newText.length;
-    const suggs = getSuggestions(newText);
+    const suggs = getPromptSuggestions(newText);
+    const draft = parseSlashDraft(newText);
+    const spec = draft.command && draft.isExactCommand ? getCommandSpec(draft.command) : null;
+    const paramMode = (spec?.params.length ?? 0) > 0;
+    const nextDismissed = paramModeDismissed && isInputAssistDismissedForText(newText);
     setText(newText);
     setCursor(c);
-    setAcSuggestions(suggs);
+    setAcSuggestions(nextDismissed ? [] : suggs);
     setAcIdx(-1);
-    acActiveRef.current = suggs.length > 0;
+    setParamModeDismissed(nextDismissed);
+    tabCaptureRef.current = !nextDismissed && (suggs.length > 0 || paramMode);
   }
 
   function updateText(newText: string) {
     applyText(newText, newText.length);
   }
+
+  useEffect(() => {
+    const maxIdx = Math.max(0, commandParams.length - 1);
+    if (!paramHintsActive) {
+      setParamFocusIdx(0);
+      return;
+    }
+    setParamFocusIdx((idx) => Math.max(0, Math.min(idx, maxIdx)));
+  }, [paramHintsActive, commandParams.length]);
+
+  useEffect(() => {
+    tabCaptureRef.current = acSuggestions.length > 0 || paramHintsActive;
+  }, [acSuggestions.length, paramHintsActive, tabCaptureRef]);
 
   useEffect(() => {
     if (generationStatus === "generating" || askPending) {
@@ -357,34 +469,61 @@ export function Prompt({
 
     // Escape: dismiss autocomplete
     if (key.escape) {
-      if (acSuggestions.length > 0) {
+      if (paramHintsActive || acSuggestions.length > 0 || acIdx >= 0) {
+        setParamModeDismissed(true);
         setAcSuggestions([]);
         setAcIdx(-1);
-        acActiveRef.current = false;
+        tabCaptureRef.current = false;
+        return;
       }
       return;
     }
 
     // Tab: cycle autocomplete suggestions (App.tsx Tab guard prevents focus switch)
     if (key.tab) {
+      if (paramHintsActive) {
+        const total = commandParams.length;
+        if (total > 0) {
+          setParamFocusIdx((idx) => {
+            const next = nextParamFocusIndex(idx, total, !!key.shift);
+            setAcIdx(-1);
+            return next;
+          });
+        }
+        return;
+      }
       if (acSuggestions.length > 0) {
         setAcIdx((i) => (i + 1) % acSuggestions.length);
       }
       return;
     }
 
-    if (acSuggestions.length === 0 && (key.leftArrow || key.rightArrow)) {
+    if (key.leftArrow || key.rightArrow) {
       if (key.leftArrow) {
-        setCursor((c) => Math.max(0, c - 1));
+        setCursor((c) => moveCursorLeft({ text, cursor: c }).cursor);
         return;
       }
       if (key.rightArrow) {
-        setCursor((c) => Math.min(text.length, c + 1));
+        setCursor((c) => moveCursorRight({ text, cursor: c }).cursor);
         return;
       }
     }
 
     if (key.return) {
+      if (paramHintsActive && slashDraft.command) {
+        if (activeSuggestions.length > 0 && acIdx >= 0) {
+          const applied = applyParamSuggestionAndAdvance(
+            text,
+            paramFocusIdx,
+            commandParams.length,
+            activeSuggestions[acIdx]!,
+          );
+          applyText(applied.text);
+          setParamFocusIdx(applied.nextFocusIdx);
+          setAcIdx(-1);
+          return;
+        }
+      }
       // If a suggestion is highlighted, complete the command (don't submit yet)
       if (acSuggestions.length > 0 && acIdx >= 0) {
         const chosen = acSuggestions[acIdx]!;
@@ -410,15 +549,23 @@ export function Prompt({
     // the prompt behaves like a normal line editor. (True forward-delete `[3~`
     // also sets `key.delete` in Ink; in CMD we still prefer backward delete.)
     if (key.backspace || key.delete) {
+      if (paramHintsActive && slashDraft.command) {
+        const nextArgs = [...slashDraft.args];
+        const cur = nextArgs[paramFocusIdx] ?? "";
+        nextArgs[paramFocusIdx] = cur.slice(0, -1);
+        applyText(buildSlashText(slashDraft.command, nextArgs, paramFocusIdx));
+        return;
+      }
       if (cursor > 0) {
-        applyText(text.slice(0, cursor - 1) + text.slice(cursor), cursor - 1);
+        const next = backspaceAtCursor({ text, cursor });
+        applyText(next.text, next.cursor);
       }
       return;
     }
 
     if (key.upArrow) {
       // Navigate autocomplete suggestions upward
-      if (acSuggestions.length > 0) {
+      if (activeSuggestions.length > 0) {
         setAcIdx((i) => Math.max(i - 1, -1));
         return;
       }
@@ -432,8 +579,8 @@ export function Prompt({
     }
     if (key.downArrow) {
       // Navigate autocomplete suggestions downward
-      if (acSuggestions.length > 0) {
-        setAcIdx((i) => Math.min(i + 1, acSuggestions.length - 1));
+      if (activeSuggestions.length > 0) {
+        setAcIdx((i) => Math.min(i + 1, activeSuggestions.length - 1));
         return;
       }
       setHistIdx((idx) => {
@@ -445,7 +592,15 @@ export function Prompt({
       return;
     }
     if (input && !key.ctrl && !key.meta) {
-      applyText(text.slice(0, cursor) + input + text.slice(cursor), cursor + input.length);
+      if (paramHintsActive && slashDraft.command) {
+        const nextArgs = [...slashDraft.args];
+        const cur = nextArgs[paramFocusIdx] ?? "";
+        nextArgs[paramFocusIdx] = `${cur}${input}`;
+        applyText(buildSlashText(slashDraft.command, nextArgs, paramFocusIdx));
+        return;
+      }
+      const next = insertAtCursor({ text, cursor }, input);
+      applyText(next.text, next.cursor);
       return;
     }
   }, { isActive: isFocused });
@@ -626,15 +781,37 @@ export function Prompt({
         <Text color={theme.textFaint}>{"claude · slash commands · bare text"}</Text>
       </Box>
       {/* Autocomplete suggestions — shown above the input line */}
-      {acSuggestions.length > 0 && (
+      {activeSuggestions.length > 0 && (
         <Box flexDirection="column">
-          {acSuggestions.map((cmd, i) => (
+          {activeSuggestions.map((item, i) => (
             <Text
-              key={cmd}
+              key={`${item}-${i}`}
               color={i === acIdx ? "#0A0A0A" : theme.textDim}
               backgroundColor={i === acIdx ? theme.accent : undefined}
-            >{`  /${cmd}`}</Text>
+            >{`  ${paramHintsActive ? item : `/${item}`}`}</Text>
           ))}
+        </Box>
+      )}
+      {paramHintsActive && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color={theme.textDim}>
+            {`/${slashDraft.command ?? ""}${activeCommandSpec?.formHint ? ` ${activeCommandSpec.formHint}` : ""}`}
+          </Text>
+          <Box flexDirection="row" flexWrap="wrap">
+            {commandParams.map((param, i) => {
+              const token = param.required ? `<${param.label}>` : `[${param.label}]`;
+              const display = slashDraft.args[i] && slashDraft.args[i]!.length > 0
+                ? `${token}=${slashDraft.args[i]}`
+                : token;
+              const color = i === paramFocusIdx ? "#0A0A0A" : param.required ? theme.text : theme.textDim;
+              const bg = i === paramFocusIdx ? theme.accent : undefined;
+              return (
+                <Text key={`${param.label}-${i}`} color={color} backgroundColor={bg}>
+                  {` ${display} `}
+                </Text>
+              );
+            })}
+          </Box>
         </Box>
       )}
       <Box>
