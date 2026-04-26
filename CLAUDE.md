@@ -65,39 +65,74 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 
 Keyboard shortcuts:
 
-**Global (Shift+… for app-wide settings; unmodified keys stay contextual to the focused panel.)**
+**Global**
 
-- `Shift+M` — toggle pattern sequencing mode `standard` ↔ `euclidean` (any focus, including CMD; same as `/mode standard` / `/mode euclidean`)
+- `?` — open help (SEQ/MIX/LOG focus, or CMD when input is empty)
+- `Shift+M` — toggle sequencing mode `standard` ↔ `euclidean`
+- `m` / `q` / `Shift+Q` — immediate mute, stage queued mute, fire queued mutes at next bar
+- `c` / `n` / `Shift+N` — if a chain exists: focus chain strip, queue chain next, arm chain fire on next downbeat
 
-**Pattern panel**
+**Interaction contract**
 
-- `?` — open the help overlay (also works from MIX/LOG focus, or from CMD when the input line is empty)
-- `m` — immediate mute toggle on selected track
-- `q` — stage selected track for queued mute (toggle; **MQ** badges on SEQ/MIX: `Q` = queued, `M` = muted)
-- `Q` (Shift+Q) — fire all staged mutes at next bar boundary via `/mute-queued`
-- `c` — when a chain is set, focus the **chain strip** (under the status bar); `←`/`→` move a highlight across slots; `Esc` returns focus to SEQ; `c` again exits strip focus
-- `n` — queue next chain candidate (same as `/chain next`; also works while the chain strip is focused)
-- `N` (Shift+N) — arm queued chain change for next downbeat (same as `/chain fire`; also works while the chain strip is focused)
-- `Enter` (SEQ focused) — **standard:** enter/exit SEQ step edit on the selected track; **euclidean:** enter/exit **k/n/r** (ring) edit for the focused track (not used for TRIG in euclidean — use **`t`** / **`Shift+t`** below)
-- `]` / `[` or `←` / `→` (SEQ focused, euclidean, k/n/r edit open, **without Shift**) — next / previous k/n/r field (`Esc` also exits edit)
-- `↑/↓` (SEQ focused, **euclidean**, ring view) — change focused track when k/n/r edit is closed; adjust the focused k/n/r value when edit is open (`Shift+↑/↓` = ±10)
-- Euclidean **ring** (TUI): the 16-dot perimeter is drawn with a **+15 slot rotation** so **step 1** (0-based pattern step index `1`) aligns with the **top** cell when the ring has 16 positions; the playhead still follows `step % n` on the same logical vertices as the engine
-- **`t`** (SEQ focused, **euclidean**, ring view) — enter **step + TRIG** edit: TRIG panel beside the ring; initial step snaps to the **first Euclidean pulse** on the pattern (not necessarily step 1); **`←`/`→`** and **`[`/`]`** move only among **pulse steps** (same count as **k**); TRIG keyplane starts **off** (**`Tab`** enables value keys); ring **◆** = edit step, **`●`** = playhead when it differs; closes **k/n/r** edit if it was open; **`k = 0`** means **no pulses** — **`t`** / **`Shift+t`** do nothing (log hint) and step+TRIG **auto-closes** if **`k`** is reduced to **0** while editing
-- **`Shift+t`** (SEQ focused, **euclidean**, ring view) — like **`t`**, but the starting step snaps to the **playhead** when playing (otherwise first pulse); **ALL** (track-wide) armed for prob/vel/gate; TRIG keyplane starts **off**; step motion is still **pulse-only**
-- `Space` (in SEQ step edit, **standard or euclidean**) — toggle selected step on/off (uses per-track default velocity when enabling)
-- `Tab` (SEQ focused, **euclidean**, ring view only) — panel rotation (SEQ → MIX → prompt); k/n/r fields use `Enter` and `]` / `[`, not Tab
-- `Tab` (in SEQ step edit, **standard or euclidean**) — toggle TRIG **keyboard** focus vs step/ring navigation (`Shift+Tab` still toggles Chat/Beat)
-- `[` / `]` (SEQ step edit, **standard**) — move selected step left/right (with or without TRIG open)
-- `[` / `]` (SEQ step edit, **euclidean**) — move among **pulse steps only** (same as **`←`/`→`** when TRIG keys are off)
-- `↑/↓` (TRIG panel) — move between trig fields (probability, velocity, note, length, condition)
-- `←/→` (TRIG panel) — adjust selected value by ±1 (`Shift+←/→` = ±10 for numeric fields). **Note** row: per-step MIDI note only (does not change track-wide `/pitch`); other tracks’ steps are unchanged.
-- **`t`** (SEQ step edit) — toggle TRIG **keyboard** focus on/off (panel remains visible)
-- **`Shift+t`** (SEQ focused, **not** in step edit) — enter step edit, open TRIG, and turn **ALL** (track-wide) on; selected step follows the **playhead** when playing, otherwise step 1
-- **`Shift+t`** (SEQ step edit, TRIG open, not on condition row) — toggle **track-wide** (ALL) for probability, velocity, and gate; with TRIG **closed** in step edit, **`Shift+t`** opens TRIG **and** turns track-wide on. Note/pitch stays per-track; condition stays per-step only
-- `[` / `]` (TRIG panel, **standard**) — move selected step left/right while keeping TRIG panel open
-- `[` / `]` (TRIG panel, **euclidean**) — move among **pulse steps only** while TRIG keys are active
-- `0-9` then `Enter` (TRIG panel) — type and apply numeric value directly
-- `Esc` (TRIG keys active) — return to step-column keys (TRIG panel stays visible)
+- `Tab` — rotate panel focus `SEQ → MIX → CMD`
+- `Shift+Tab` — toggle input mode `beat` ↔ `chat`
+- `/` — jump focus to CMD input
+- `Enter` / `Esc` — enter/exit the active edit context in focused panel
+
+**SEQ browse**
+
+- `↑/↓` — select track
+- `Enter` — standard: enter/exit SEQ step edit; euclidean: enter/exit `k/n/r` edit
+- `Space` — play/stop transport when not in SEQ step edit
+
+**SEQ step edit**
+
+- `Space` — toggle selected step on/off
+- `[` / `]` or `←/→` — move step (euclidean: pulse steps only)
+- `t` — toggle TRIG keyboard focus (TRIG panel remains visible)
+- `Shift+t` — from browse: open step edit + TRIG + ALL; from TRIG active: toggle ALL for prob/vel/gate
+- `Tab` — toggle step/ring navigation keys vs TRIG value keys
+
+**Euclidean ring (k/n/r)**
+
+- `Enter` / `Esc` — open/close `k/n/r` boxes
+- `[` / `]` or `←/→` (box open) — cycle `k`, `n`, `r` field
+- `↑/↓` — track select when box closed, value adjust when open (`Shift+↑/↓` = ±10)
+- `t` / `Shift+t` — open step+TRIG at first pulse / playhead pulse (`Shift+t` arms ALL)
+- Ring rendering note: the 16-dot perimeter uses `+15` slot rotation so logical step `1` sits at top
+
+**TRIG panel**
+
+- `↑/↓` — choose field (prob, vel, note, gate, cond)
+- `←/→` — adjust selected value (`Shift+←/→` = ±10 for numeric fields)
+- `[` / `]` — move steps while TRIG panel stays open (euclidean: pulse-only)
+- `0-9`, then `Enter` — type and commit numeric value
+- `Esc` — leave TRIG keys (or exit euclidean step+TRIG context)
+
+**MIX/CC normal + per-step**
+
+- `↑/↓` — select CC parameter
+- `[` / `]` — select track
+- `←/→` — adjust global CC value (`Shift+←/→` = ±10)
+- `Enter` — enter per-step CC edit
+- Per-step mode: `←/→` step, `↑/↓` value (`Shift` = ±10), digits then `Enter` set value, `Backspace` clear override, `Esc` exit
+
+**CMD input**
+
+- `Enter` — submit command/input (or accept autocomplete completion first)
+- `Tab` — cycle slash command suggestions
+- `↑/↓` — command history when autocomplete is inactive
+- `?` — open help when CMD input is empty
+
+**Pattern picker/delete confirm**
+
+- Picker (`/load`, `/delete` without name): `↑/↓` choose, `Enter` pick, `Esc` cancel
+- Delete confirm: `Y` confirm, `N` or `Esc` cancel
+
+**Footer legend**
+
+- Dot legend: `·` off, `○` low velocity, `●` high velocity
+- Status marks: dimmed dots = muted, `▼` ruler playhead, `◆` conditional trig marker
 
 > **Note:** `cli/main.py` and `cli/tui.py` are a deprecated Textual-based TUI. They are no longer the entry point. Do not use or modify them.
 

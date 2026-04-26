@@ -940,6 +940,16 @@ export function App({ baseUrl }: AppProps) {
   }, [actions, patternTrack, pendingMuteTracks, state.track_muted]);
 
   useInput((input, key) => {
+    const isUnmodified = !key.ctrl && !key.meta;
+    const lowerInput = input.toLowerCase();
+    const isShiftShortcut = (ch: string) => isUnmodified && key.shift && lowerInput === ch;
+    const isPlainShortcut = (ch: string) => isUnmodified && !key.shift && lowerInput === ch;
+    const shortcutInput =
+      isShiftShortcut("m") ? "M" :
+      isShiftShortcut("n") ? "N" :
+      isShiftShortcut("q") ? "Q" :
+      input;
+
     if (key.ctrl && input === "c") {
       exit();
       setTimeout(() => process.exit(0), 50);
@@ -955,10 +965,7 @@ export function App({ baseUrl }: AppProps) {
     }
     if (
       focus !== "prompt" &&
-      key.shift &&
-      !key.ctrl &&
-      !key.meta &&
-      (input === "m" || input === "M")
+      isShiftShortcut("m")
     ) {
       toggleSeqMode();
       return;
@@ -980,7 +987,7 @@ export function App({ baseUrl }: AppProps) {
         setFocus("pattern");
         return;
       }
-      if (input === "c" && !key.ctrl && !key.meta) {
+      if (isPlainShortcut("c")) {
         setChainStripFocused(false);
         return;
       }
@@ -992,17 +999,17 @@ export function App({ baseUrl }: AppProps) {
         setChainSlotIdx((i) => Math.min(Math.max(0, state.chain.length - 1), i + 1));
         return;
       }
-      if (input === "n" && !key.ctrl && !key.meta) {
+      if (shortcutInput === "n" && isUnmodified) {
         actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
         return;
       }
-      if (input === "N" && !key.ctrl && !key.meta) {
+      if (shortcutInput === "N" && isUnmodified) {
         actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
         return;
       }
     }
 
-    if (!chainStripFocused && focus !== "prompt" && input === "c" && !key.ctrl && !key.meta && state.chain.length > 0) {
+    if (!chainStripFocused && focus !== "prompt" && isPlainShortcut("c") && state.chain.length > 0) {
       setChainStripFocused(true);
       setChainSlotIdx(state.chain_index >= 0 ? state.chain_index : 0);
       return;
@@ -1085,14 +1092,14 @@ export function App({ baseUrl }: AppProps) {
     if (focus === "prompt") return;  // Prompt handles its own keys
 
     if (shouldRoutePatternMuteKey({
-      input,
+      input: shortcutInput,
       focus,
       ctrl: key.ctrl,
       meta: key.meta,
       patternStepEdit,
       trigKeysActive,
     })) {
-      if (handlePatternMuteKey(input)) return;
+      if (handlePatternMuteKey(shortcutInput)) return;
     }
 
     if (input === " ") {
@@ -1256,10 +1263,10 @@ export function App({ baseUrl }: AppProps) {
         setTrigTrackWide(false);
         return;
       }
-      if (input === "n") {
+      if (shortcutInput === "n" && isUnmodified) {
         actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
       }
-      if (input === "N") {
+      if (shortcutInput === "N" && isUnmodified) {
         actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
       }
       return;
@@ -1595,7 +1602,7 @@ export function App({ baseUrl }: AppProps) {
             />
             <Box paddingX={1}>
               <Text color={theme.textFaint}>
-                {"? help  /help  Tab panels  Shift+Tab input mode  Shift+M seq mode  c chain  n/N chain  Space transport  Ctrl+C quit"}
+                {"? Help  Tab Focus  Shift+Tab Mode  / Cmd  Enter Edit  t TRIG  Esc Back  Space Play/Stop"}
               </Text>
             </Box>
           </Box>
