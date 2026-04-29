@@ -107,7 +107,8 @@ export function App({ baseUrl }: AppProps) {
   const [lfoEditDraft, setLfoEditDraft] = useState<LfoEditDraft>({ shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
   // 0=k, 1=n, 2=r; null = no box focused
 
-  const lfoTargetKey = `cc:${TRACK_NAMES[ccTrack]}:${state.ccParams[ccParam]?.name ?? ""}`;
+  const lfoParamName = state.ccParams[ccParam]?.name ?? "";
+  const lfoTargetKey = `cc:${TRACK_NAMES[ccTrack]}:${lfoParamName}`;
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
   const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 0, n: 16, r: 0 };
@@ -1380,6 +1381,10 @@ export function App({ baseUrl }: AppProps) {
 
       // Enter LFO edit for the selected param
       if (input === "l") {
+        if (!lfoParamName) {
+          actions.addLog("✗ LFO target unavailable: select a CC parameter first.");
+          return;
+        }
         const def = state.lfo[lfoTargetKey];
         setLfoEditDraft(def
           ? { shape: def.shape as LfoShape, depth: def.depth, num: def.rate.num, den: def.rate.den, phase: def.phase }
@@ -1434,6 +1439,9 @@ export function App({ baseUrl }: AppProps) {
               next.phase = p;
               break;
             }
+          }
+          if (!lfoParamName) {
+            return next;
           }
           if (next.shape === "off") {
             void actions.setLfoRoute(lfoTargetKey, null);
