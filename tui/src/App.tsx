@@ -44,8 +44,9 @@ import {
   shouldClearNoteOverrideOnCommit,
   shouldClearNoteOverrideOnDelete,
 } from "./trigEditing.js";
-import type { FocusPanel, TrackName, CCParam, PatternModalState, PatternListEntry } from "./types.js";
+import type { FocusPanel, LfoShape, TrackName, CCParam, PatternModalState, PatternListEntry } from "./types.js";
 import { DEFAULT_GATE_PCT, TRACK_NAMES } from "./types.js";
+import { type LfoEditDraft, SHAPES_WITH_OFF } from "./components/LfoPanel.js";
 import { theme } from "./theme.js";
 
 interface AppProps { baseUrl: string; }
@@ -102,7 +103,11 @@ export function App({ baseUrl }: AppProps) {
   const [trigTrackWide, setTrigTrackWide] = useState(false);
   const [euclidEditBox, setEuclidEditBox] = useState<number | null>(null);
   const [euclidDepth, setEuclidDepth] = useState<EuclidDepth>("track-strip");
+  const [lfoEditField, setLfoEditField] = useState(0);
+  const [lfoEditDraft, setLfoEditDraft] = useState<LfoEditDraft>({ shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
   // 0=k, 1=n, 2=r; null = no box focused
+
+  const lfoTargetKey = `cc:${TRACK_NAMES[ccTrack]}:${state.ccParams[ccParam]?.name ?? ""}`;
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
   const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 0, n: 16, r: 0 };
@@ -1373,6 +1378,17 @@ export function App({ baseUrl }: AppProps) {
       if (input === "[") { const next = clamp(ccTrack - 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
       if (input === "]") { const next = clamp(ccTrack + 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
 
+      // Enter LFO edit for the selected param
+      if (input === "l") {
+        const def = state.lfo[lfoTargetKey];
+        setLfoEditDraft(def
+          ? { shape: def.shape as LfoShape, depth: def.depth, num: def.rate.num, den: def.rate.den, phase: def.phase }
+          : { shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
+        setLfoEditField(0);
+        setFocus("lfo");
+        return;
+      }
+
       // Enter step-edit mode for the selected CC param
       if ((input === "e" || key.return) && state.ccParams.length > 0) {
         setCCStepMode(true);
@@ -1389,6 +1405,49 @@ export function App({ baseUrl }: AppProps) {
           const current = state.track_cc[track][param] ?? 64;
           actions.setCC(track, param as CCParam, clamp(current + sign, 0, 127));
         }
+      }
+      return;
+    }
+
+    if (focus === "lfo") {
+      if (key.escape) { setFocus("cc"); return; }
+      if (key.upArrow) { setLfoEditField((f) => Math.max(0, f - 1)); return; }
+      if (key.downArrow) { setLfoEditField((f) => Math.min(4, f + 1)); return; }
+      if (key.leftArrow || key.rightArrow) {
+        const dir = key.rightArrow ? 1 : -1;
+        const big = key.shift ? 10 : 1;
+        setLfoEditDraft((prev) => {
+          const next = { ...prev };
+          switch (lfoEditField) {
+            case 0: {
+              const idx = SHAPES_WITH_OFF.indexOf(prev.shape);
+              next.shape = SHAPES_WITH_OFF[(idx + dir + SHAPES_WITH_OFF.length) % SHAPES_WITH_OFF.length];
+              break;
+            }
+            case 1: next.depth = clamp(prev.depth + dir * big, 0, 100); break;
+            case 2: next.num = clamp(prev.num + dir, 1, 32); break;
+            case 3: next.den = clamp(prev.den + dir, 1, 32); break;
+            case 4: {
+              let p = Math.round((prev.phase + dir * 0.05) * 100) / 100;
+              if (p < 0) p += 1.0;
+              if (p >= 1.0) p -= 1.0;
+              next.phase = p;
+              break;
+            }
+          }
+          if (next.shape === "off") {
+            void actions.setLfoRoute(lfoTargetKey, null);
+          } else {
+            void actions.setLfoRoute(lfoTargetKey, {
+              shape: next.shape,
+              depth: next.depth,
+              rate: { num: next.num, den: next.den },
+              phase: next.phase,
+            });
+          }
+          return next;
+        });
+        return;
       }
       return;
     }
@@ -1543,13 +1602,16 @@ export function App({ baseUrl }: AppProps) {
               <LfoPanel
                 width={lfoColW}
                 graphBrailleRows={lfoGraphRows}
-                selectedTrack={TRACK_NAMES[ccTrack] as TrackName}
+                targetKey={lfoTargetKey}
                 lfo={state.lfo}
                 lfoOut={state.lfo_out}
                 patternLength={state.pattern_length}
                 currentStep={state.current_step}
                 globalStep={state.global_step}
-                isFocused={focus === "cc"}
+                isFocused={focus === "cc" || focus === "lfo"}
+                isEditing={focus === "lfo"}
+                editField={lfoEditField}
+                editDraft={lfoEditDraft}
               />
             </Box>
             <GenerationSummary
