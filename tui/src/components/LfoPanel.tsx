@@ -22,13 +22,13 @@ function fixedLine(w: number, parts: string[]): string {
   return s.padEnd(w, " ");
 }
 
-function formatFieldValue(draft: LfoEditDraft, field: number): string {
+function formatFieldValue(vals: LfoEditDraft, field: number): string {
   switch (field) {
-    case 0: return draft.shape;
-    case 1: return `${draft.depth}%`;
-    case 2: return String(draft.num);
-    case 3: return String(draft.den);
-    case 4: return draft.phase.toFixed(2);
+    case 0: return vals.shape;
+    case 1: return `${vals.depth}%`;
+    case 2: return String(vals.num);
+    case 3: return String(vals.den);
+    case 4: return vals.phase.toFixed(2);
     default: return "";
   }
 }
@@ -43,7 +43,7 @@ interface LfoPanelProps {
   patternLength: number;
   currentStep: number | null;
   globalStep: number | null;
-  /** True when MIX or LFO panel is active (border highlight). */
+  /** True when LFO panel itself has keyboard focus (edit mode). */
   isFocused: boolean;
   /** True when LFO panel itself has keyboard focus (edit mode). */
   isEditing: boolean;
@@ -68,164 +68,101 @@ export function LfoPanel({
   const innerW = Math.max(8, width - 4);
   const brailleCols = innerW;
   const brailleRows = Math.max(2, Math.min(6, graphBrailleRows));
-  const labelColor = isFocused ? theme.accent : theme.textDim;
-  const border = isEditing ? theme.borderActive : isFocused ? theme.accent : theme.border;
+  // Fixed panel height = border(2) + header(1) + fields(5) + wave(brailleRows) + hint(1)
+  const panelHeight = 9 + brailleRows;
 
-  // Derive a short display label from the target key: "cc:kick:filter" → "filter"
   const seg = targetKey.split(":");
   const paramShort = seg.length === 3 ? `${seg[0]}:${seg[2]}` : targetKey;
 
-  if (isEditing) {
-    const isOff = editDraft.shape === "off";
-
-    // Build braille graph from draft values when active
-    let waveLines: string[] = [];
-    if (!isOff) {
-      const step = currentStep === null || currentStep < 0 ? 0 : currentStep;
-      const hi = lfoPlayheadIndex(step, patternLength, brailleCols);
-      waveLines = lfoBrailleLines(
-        editDraft.shape,
-        patternLength,
-        editDraft.num,
-        editDraft.den,
-        editDraft.phase,
-        brailleCols,
-        brailleRows,
-        hi,
-        globalStep,
-      );
-    }
-
-    return (
-      <Box
-        flexDirection="column"
-        width={width}
-        borderStyle="round"
-        borderColor={border}
-        paddingX={1}
-      >
-        <Text color={labelColor} bold>
-          LFO  <Text color={theme.textFaint}>{paramShort}</Text>
-        </Text>
-        {FIELD_LABELS.map((label, i) => {
-          const isSel = i === editField;
-          const isOffAndNotShape = isOff && i !== 0;
-          const valColor = isOffAndNotShape
-            ? theme.textGhost
-            : isSel
-              ? theme.accent
-              : theme.text;
-          const val = formatFieldValue(editDraft, i);
-          return (
-            <Box key={label} flexDirection="row">
-              <Text color={isSel ? theme.accent : theme.textFaint}>
-                {isSel ? ">" : " "}
-              </Text>
-              <Text>{" "}</Text>
-              <Text color={isOffAndNotShape ? theme.textGhost : isSel ? theme.accent : theme.textDim}>
-                {label.padEnd(6)}
-              </Text>
-              <Text bold={isSel} color={valColor}>
-                {val}
-              </Text>
-            </Box>
-          );
-        })}
-        {!isOff && waveLines.map((ln, i) => (
-          <Text key={`g${i}`} color={theme.accent}>{ln}</Text>
-        ))}
-        <Text color={theme.textGhost} wrap="truncate">
-          {fixedLine(innerW, ["←→ adjust", "↑↓ field", "Esc: back"])}
-        </Text>
-      </Box>
-    );
-  }
-
-  // Display mode
   const def = lfo[targetKey];
-  const live = lfoOut[targetKey];
 
-  if (!def) {
-    return (
-      <Box
-        flexDirection="column"
-        width={width}
-        borderStyle="round"
-        borderColor={border}
-        paddingX={1}
-      >
-        <Text color={labelColor} bold>
-          LFO  <Text color={theme.textFaint}>{paramShort}</Text>
-        </Text>
-        <Text color={theme.textFaint} wrap="truncate">
-          {fixedLine(innerW, ["(none)"])}
-        </Text>
-        {isFocused && (
-          <Text color={theme.textGhost} wrap="truncate">
-            {fixedLine(innerW, ["l: edit"])}
-          </Text>
-        )}
-      </Box>
+  // Values to show in the 5 fields — always visible, source depends on mode.
+  const vals: LfoEditDraft = isEditing
+    ? editDraft
+    : def
+      ? { shape: def.shape, depth: def.depth, num: def.rate.num, den: def.rate.den, phase: def.phase }
+      : { shape: "off", depth: 0, num: 1, den: 1, phase: 0 };
+
+  const isOff = vals.shape === "off";
+
+  // Waveform lines
+  const step = currentStep === null || currentStep < 0 ? 0 : currentStep;
+  let waveLines: string[] = [];
+  if (!isOff) {
+    const hi = lfoPlayheadIndex(step, patternLength, brailleCols);
+    waveLines = lfoBrailleLines(
+      vals.shape,
+      patternLength,
+      vals.num,
+      vals.den,
+      vals.phase,
+      brailleCols,
+      brailleRows,
+      hi,
+      globalStep,
     );
   }
 
-  const step = currentStep === null || currentStep < 0 ? 0 : currentStep;
-  const hi = lfoPlayheadIndex(step, patternLength, brailleCols);
-  const waveLines = lfoBrailleLines(
-    def.shape,
-    patternLength,
-    def.rate.num,
-    def.rate.den,
-    def.phase,
-    brailleCols,
-    brailleRows,
-    hi,
-    globalStep,
-  );
-  const cyc = cycleSteps(patternLength, def.rate.num, def.rate.den);
-  const header = fixedLine(innerW, [
-    paramShort.length > 13 ? `${paramShort.slice(0, 12)}…` : paramShort,
-    def.shape,
-    `${String(def.depth).padStart(3)}%`,
-  ]);
-  const liveRowText = fixedLine(
-    innerW,
-    live
-      ? ["out", String(live.value).padStart(3, "0"), "base", String(live.base).padStart(3, "0")]
-      : ["out", "   ", "base", "   "],
-  );
-  const rateLine = fixedLine(innerW, [
-    `${String(def.rate.num).padStart(3)}/${String(def.rate.den).padStart(3)} pat`,
-    "·",
-    `${String(cyc).padStart(3)} st/cyc`,
-  ]);
+  // Footer — always exactly 1 line
+  let footerText: string;
+  if (isEditing) {
+    footerText = fixedLine(innerW, ["←→ adjust", "↑↓ field", "Esc: back"]);
+  } else if (def) {
+    const cyc = cycleSteps(patternLength, def.rate.num, def.rate.den);
+    footerText = fixedLine(innerW, [
+      `${String(def.rate.num).padStart(3)}/${String(def.rate.den).padStart(3)} pat`,
+      "·",
+      `${String(cyc).padStart(3)} st/cyc`,
+    ]);
+  } else {
+    footerText = fixedLine(innerW, ["l: edit"]);
+  }
+
+  const border = isEditing ? theme.borderActive : isFocused ? theme.accent : theme.border;
+  const headerColor = isFocused ? theme.accent : theme.textDim;
 
   return (
     <Box
       flexDirection="column"
       width={width}
+      height={panelHeight}
       borderStyle="round"
       borderColor={border}
       paddingX={1}
     >
-      <Text color={labelColor} bold>
+      <Text color={headerColor} bold>
         LFO  <Text color={theme.textFaint}>{paramShort}</Text>
       </Text>
-      <Text color={theme.textFaint} wrap="truncate">{header}</Text>
-      {targetKey.startsWith("cc:") && (
-        <Text color={live ? theme.accent : theme.textGhost} wrap="truncate" bold={!!live}>
-          {liveRowText}
+      {FIELD_LABELS.map((label, i) => {
+        const isSel = isEditing && i === editField;
+        const isGhosted = isOff && i !== 0;
+        const labelCol = isGhosted
+          ? theme.textGhost
+          : isEditing
+            ? isSel ? theme.accent : theme.textDim
+            : theme.textGhost;
+        const valCol = isGhosted
+          ? theme.textGhost
+          : isEditing
+            ? isSel ? theme.accent : theme.text
+            : theme.textFaint;
+        return (
+          <Box key={label} flexDirection="row">
+            <Text color={isSel ? theme.accent : theme.textFaint}>
+              {isSel ? ">" : " "}
+            </Text>
+            <Text>{" "}</Text>
+            <Text color={labelCol}>{label.padEnd(6)}</Text>
+            <Text bold={isSel} color={valCol}>{formatFieldValue(vals, i)}</Text>
+          </Box>
+        );
+      })}
+      {Array.from({ length: brailleRows }, (_, i) => (
+        <Text key={`g${i}`} color={theme.accent}>
+          {waveLines[i] ?? " ".repeat(brailleCols)}
         </Text>
-      )}
-      {waveLines.map((ln, i) => (
-        <Text key={`g${i}`} color={theme.accent}>{ln}</Text>
       ))}
-      <Text color={theme.textGhost} wrap="truncate">{rateLine}</Text>
-      {isFocused && (
-        <Text color={theme.textGhost} wrap="truncate">
-          {fixedLine(innerW, ["l: edit"])}
-        </Text>
-      )}
+      <Text color={theme.textGhost} wrap="truncate">{footerText}</Text>
     </Box>
   );
 }

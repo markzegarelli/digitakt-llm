@@ -1639,7 +1639,7 @@ export function App({ baseUrl }: AppProps) {
                 patternLength={state.pattern_length}
                 currentStep={state.current_step}
                 globalStep={state.global_step}
-                isFocused={focus === "cc" || focus === "lfo"}
+                isFocused={focus === "lfo"}
                 isEditing={focus === "lfo"}
                 editField={lfoEditField}
                 editDraft={lfoEditDraft}
