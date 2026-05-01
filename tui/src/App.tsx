@@ -11,8 +11,7 @@ import { LfoPanel } from "./components/LfoPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
-import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
-import { EuclidTrackStrip } from "./components/EuclidTrackStrip.js";
+import { EuclidGridPanel, euclidPanelMinWidth } from "./components/EuclidGridPanel.js";
 import {
   applyEuclidDepthKey,
   getEuclidStepTrigExitState,
@@ -52,9 +51,6 @@ import { theme } from "./theme.js";
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const EUCLID_TRACK_STRIP_WIDTH = 12;
-const EUCLID_RING_MIN_WIDTH = 24;
-const EUCLID_SEQ_MIN_WIDTH = EUCLID_TRACK_STRIP_WIDTH + EUCLID_RING_MIN_WIDTH;
 
 // Track alias map: normalize shorthand display names to canonical API names
 const normalizeTrack = (raw: string) => normalizeTrackAlias(raw);
@@ -105,10 +101,13 @@ export function App({ baseUrl }: AppProps) {
   const [euclidDepth, setEuclidDepth] = useState<EuclidDepth>("track-strip");
   const [lfoEditField, setLfoEditField] = useState(0);
   const [lfoEditDraft, setLfoEditDraft] = useState<LfoEditDraft>({ shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
+  const [lfoEditTargetKey, setLfoEditTargetKey] = useState<string | null>(null);
+  const [lfoReturnFocus, setLfoReturnFocus] = useState<"cc" | "pattern">("cc");
   // 0=k, 1=n, 2=r; null = no box focused
 
   const lfoParamName = state.ccParams[ccParam]?.name ?? "";
-  const lfoTargetKey = `cc:${TRACK_NAMES[ccTrack]}:${lfoParamName}`;
+  const ccLfoTargetKey = `cc:${TRACK_NAMES[ccTrack]}:${lfoParamName}`;
+  const lfoPanelTargetKey = focus === "lfo" && lfoEditTargetKey ? lfoEditTargetKey : ccLfoTargetKey;
 
   const euclidSnapTrack = TRACK_NAMES[patternTrack] as TrackName;
   const euclidSnapRow = state.euclid[euclidSnapTrack] ?? { k: 0, n: 16, r: 0 };
@@ -366,6 +365,17 @@ export function App({ baseUrl }: AppProps) {
     state.pattern_length,
     trigField,
   ]);
+
+  const openLfoEditor = useCallback((targetKey: string, returnFocus: "cc" | "pattern") => {
+    const def = state.lfo[targetKey];
+    setLfoEditDraft(def
+      ? { shape: def.shape as LfoShape, depth: def.depth, num: def.rate.num, den: def.rate.den, phase: def.phase }
+      : { shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
+    setLfoEditField(0);
+    setLfoEditTargetKey(targetKey);
+    setLfoReturnFocus(returnFocus);
+    setFocus("lfo");
+  }, [state.lfo]);
 
   const postSeqMode = useCallback((mode: "standard" | "euclidean") => {
     fetch(`${baseUrl}/seq-mode`, {
@@ -925,6 +935,20 @@ export function App({ baseUrl }: AppProps) {
       return true;
     }
 
+    if (input === "l" || input === "L") {
+      if (trigField === 4) {
+        actions.addLog("✗ LFO unsupported for cond. Select prob, vel, note, or gate.");
+        return true;
+      }
+      const trigFieldTarget =
+        trigField === 0 ? "prob" :
+        trigField === 1 ? "vel" :
+        trigField === 2 ? "note" :
+        "gate";
+      openLfoEditor(`trig:${track}:${trigFieldTarget}`, "pattern");
+      return true;
+    }
+
     return true;
   };
 
@@ -1379,18 +1403,13 @@ export function App({ baseUrl }: AppProps) {
       if (input === "[") { const next = clamp(ccTrack - 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
       if (input === "]") { const next = clamp(ccTrack + 1, 0, 7); setCCTrack(next); void actions.setCCFocusedTrack(TRACK_NAMES[next]); return; }
 
-      // Enter LFO edit for the selected param
+      // Enter LFO edit for the selected MIX param
       if (input === "l") {
         if (!lfoParamName) {
           actions.addLog("✗ LFO target unavailable: select a CC parameter first.");
           return;
         }
-        const def = state.lfo[lfoTargetKey];
-        setLfoEditDraft(def
-          ? { shape: def.shape as LfoShape, depth: def.depth, num: def.rate.num, den: def.rate.den, phase: def.phase }
-          : { shape: "off", depth: 50, num: 1, den: 1, phase: 0.0 });
-        setLfoEditField(0);
-        setFocus("lfo");
+        openLfoEditor(ccLfoTargetKey, "cc");
         return;
       }
 
@@ -1415,7 +1434,7 @@ export function App({ baseUrl }: AppProps) {
     }
 
     if (focus === "lfo") {
-      if (key.escape) { setFocus("cc"); return; }
+      if (key.escape) { setFocus(lfoReturnFocus); return; }
       if (key.upArrow) { setLfoEditField((f) => Math.max(0, f - 1)); return; }
       if (key.downArrow) { setLfoEditField((f) => Math.min(4, f + 1)); return; }
       if (key.leftArrow || key.rightArrow) {
@@ -1440,13 +1459,13 @@ export function App({ baseUrl }: AppProps) {
               break;
             }
           }
-          if (!lfoParamName) {
+          if (!lfoEditTargetKey) {
             return next;
           }
           if (next.shape === "off") {
-            void actions.setLfoRoute(lfoTargetKey, null);
+            void actions.setLfoRoute(lfoEditTargetKey, null);
           } else {
-            void actions.setLfoRoute(lfoTargetKey, {
+            void actions.setLfoRoute(lfoEditTargetKey, {
               shape: next.shape,
               depth: next.depth,
               rate: { num: next.num, den: next.den },
@@ -1468,7 +1487,10 @@ export function App({ baseUrl }: AppProps) {
     termCols,
     showLog,
     showTrig: true,
-    minSeqWidth: state.seq_mode === "euclidean" && patternStepEdit ? EUCLID_SEQ_MIN_WIDTH : undefined,
+    minSeqWidth:
+      state.seq_mode === "euclidean" && patternStepEdit
+        ? euclidPanelMinWidth(state.pattern_length)
+        : undefined,
   });
   let lfoColW = Math.min(58, Math.max(28, Math.round(stackWidth * 0.46)));
   let mixContentW = stackWidth - lfoColW - 1;
@@ -1512,22 +1534,18 @@ export function App({ baseUrl }: AppProps) {
             <Box flexDirection="row" width={stackWidth}>
               {state.seq_mode === "euclidean" ? (
                 <>
-                  <EuclidTrackStrip
+                  <EuclidGridPanel
+                    width={patternStepEdit ? seqGridWidth : stackWidth}
+                    patternLength={state.pattern_length}
                     selectedTrack={patternTrack}
-                    trackMuted={state.track_muted}
-                    pendingMuteTracks={pendingMuteTracks}
-                    isFocused={focus === "pattern" && euclidDepth === "track-strip"}
-                    width={EUCLID_TRACK_STRIP_WIDTH}
-                  />
-                  <EuclidRingPanel
-                    width={patternStepEdit ? Math.max(0, seqGridWidth - EUCLID_TRACK_STRIP_WIDTH) : Math.max(0, stackWidth - EUCLID_TRACK_STRIP_WIDTH)}
-                    track={TRACK_NAMES[patternTrack] as TrackName}
                     euclid={state.euclid}
                     currentStep={state.current_step}
-                    isFocused={focus === "pattern" && euclidDepth === "active-ring"}
+                    isFocused={focus === "pattern"}
                     editBox={euclidDepth === "active-ring" ? euclidEditBox : null}
                     stepTrigEdit={patternStepEdit}
                     selectedPatternStep={patternStepEdit ? patternSelectedStep : null}
+                    trackMuted={state.track_muted}
+                    pendingMuteTracks={pendingMuteTracks}
                   />
                   {patternStepEdit && (
                     <TrigEditPanel
@@ -1610,13 +1628,13 @@ export function App({ baseUrl }: AppProps) {
               <LfoPanel
                 width={lfoColW}
                 graphBrailleRows={lfoGraphRows}
-                targetKey={lfoTargetKey}
+                targetKey={lfoPanelTargetKey}
                 lfo={state.lfo}
                 lfoOut={state.lfo_out}
                 patternLength={state.pattern_length}
                 currentStep={state.current_step}
                 globalStep={state.global_step}
-                isFocused={focus === "cc" || focus === "lfo"}
+                isFocused={focus === "lfo"}
                 isEditing={focus === "lfo"}
                 editField={lfoEditField}
                 editDraft={lfoEditDraft}

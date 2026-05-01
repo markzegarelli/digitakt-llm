@@ -289,7 +289,14 @@ test("track strip rows include all 8 tracks and standard M/Q/MQ badge language",
   expect(rows[2]).toMatchObject({ cursor: " ", label: "LT", badge: "Q" });
 });
 
-test("EuclidTrackStrip component is importable", async () => {
-  const mod = await import("./components/EuclidTrackStrip.js");
-  expect(typeof mod.EuclidTrackStrip).toBe("function");
+test("EuclidGridPanel component is importable", async () => {
+  const mod = await import("./components/EuclidGridPanel.js");
+  expect(typeof mod.EuclidGridPanel).toBe("function");
+});
+
+test("euclidPanelMinWidth accounts for one column per pattern step", async () => {
+  const { euclidPanelMinWidth } = await import("./components/EuclidGridPanel.js");
+  expect(euclidPanelMinWidth(8)).toBe(36);
+  expect(euclidPanelMinWidth(16)).toBe(44);
+  expect(euclidPanelMinWidth(32)).toBe(60);
 });
