@@ -57,8 +57,11 @@ export function StatusBar({
   const transportColor = isPlaying ? theme.accent : theme.textDim;
   const transportLabel = isPlaying ? "\u25B6 PLAY" : "\u25A0 STOP";
   const pat = patternName ? truncateName(patternName, 20) : "UNTITLED";
+  const stepNumWidth = String(patternLength).length;
   const stepDisp =
-    currentStep !== null && currentStep >= 0 ? `${currentStep + 1}/${patternLength}` : `\u2014/${patternLength}`;
+    currentStep !== null && currentStep >= 0
+      ? `${String(currentStep + 1).padStart(stepNumWidth, " ")}/${patternLength}`
+      : `${"\u2014".padStart(stepNumWidth, " ")}/${patternLength}`;
   const midiShort =
     midiConnected && midiPortName
       ? truncateName(midiPortName.replace(/\s+/g, " "), 14)
