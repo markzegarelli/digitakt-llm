@@ -11,8 +11,7 @@ import { LfoPanel } from "./components/LfoPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
-import { EuclidRingPanel } from "./components/EuclidRingPanel.js";
-import { EuclidTrackStrip } from "./components/EuclidTrackStrip.js";
+import { EuclidGridPanel } from "./components/EuclidGridPanel.js";
 import {
   applyEuclidDepthKey,
   getEuclidStepTrigExitState,
@@ -52,9 +51,7 @@ import { theme } from "./theme.js";
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const EUCLID_TRACK_STRIP_WIDTH = 12;
-const EUCLID_RING_MIN_WIDTH = 24;
-const EUCLID_SEQ_MIN_WIDTH = EUCLID_TRACK_STRIP_WIDTH + EUCLID_RING_MIN_WIDTH;
+const EUCLID_SEQ_MIN_WIDTH = 36;
 
 // Track alias map: normalize shorthand display names to canonical API names
 const normalizeTrack = (raw: string) => normalizeTrackAlias(raw);
@@ -1512,22 +1509,17 @@ export function App({ baseUrl }: AppProps) {
             <Box flexDirection="row" width={stackWidth}>
               {state.seq_mode === "euclidean" ? (
                 <>
-                  <EuclidTrackStrip
+                  <EuclidGridPanel
+                    width={patternStepEdit ? seqGridWidth : stackWidth}
                     selectedTrack={patternTrack}
-                    trackMuted={state.track_muted}
-                    pendingMuteTracks={pendingMuteTracks}
-                    isFocused={focus === "pattern" && euclidDepth === "track-strip"}
-                    width={EUCLID_TRACK_STRIP_WIDTH}
-                  />
-                  <EuclidRingPanel
-                    width={patternStepEdit ? Math.max(0, seqGridWidth - EUCLID_TRACK_STRIP_WIDTH) : Math.max(0, stackWidth - EUCLID_TRACK_STRIP_WIDTH)}
-                    track={TRACK_NAMES[patternTrack] as TrackName}
                     euclid={state.euclid}
                     currentStep={state.current_step}
-                    isFocused={focus === "pattern" && euclidDepth === "active-ring"}
+                    isFocused={focus === "pattern"}
                     editBox={euclidDepth === "active-ring" ? euclidEditBox : null}
                     stepTrigEdit={patternStepEdit}
                     selectedPatternStep={patternStepEdit ? patternSelectedStep : null}
+                    trackMuted={state.track_muted}
+                    pendingMuteTracks={pendingMuteTracks}
                   />
                   {patternStepEdit && (
                     <TrigEditPanel
