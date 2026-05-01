@@ -162,7 +162,7 @@ export function computeSplitStackLayout({
       seqGridWidth = MIN_SEQ_WIDTH;
       trigWidth = stackWidth - seqGridWidth;
     } else {
-      trigWidth = Math.round(stackWidth * 0.42);
+      trigWidth = Math.round(stackWidth * 0.34);
       trigWidth = Math.min(Math.max(MIN_TRIG_WIDTH, trigWidth), stackWidth - MIN_SEQ_WIDTH);
       seqGridWidth = stackWidth - trigWidth;
     }

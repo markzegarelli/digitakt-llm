@@ -32,21 +32,27 @@ test("bjorklund(8, 8) returns all true", () => {
   ]);
 });
 
-test("bjorklund(3, 8) hits at steps 2, 5, 7", () => {
+test("bjorklund(3, 8) hits at steps 0, 3, 6", () => {
   const result = bjorklund(3, 8);
-  expect(result[2]).toBe(true);
-  expect(result[5]).toBe(true);
-  expect(result[7]).toBe(true);
+  expect(result[0]).toBe(true);
+  expect(result[3]).toBe(true);
+  expect(result[6]).toBe(true);
   expect(result.filter(Boolean).length).toBe(3);
 });
 
-test("bjorklund(5, 16) hits at steps 3, 6, 9, 12, 15", () => {
+test("bjorklund(4, 16) hits every fourth step from 0", () => {
+  const result = bjorklund(4, 16);
+  for (const i of [0, 4, 8, 12]) {
+    expect(result[i]).toBe(true);
+  }
+  expect(result.filter(Boolean).length).toBe(4);
+});
+
+test("bjorklund(5, 16) hits at steps 0, 4, 7, 10, 13", () => {
   const result = bjorklund(5, 16);
-  expect(result[3]).toBe(true);
-  expect(result[6]).toBe(true);
-  expect(result[9]).toBe(true);
-  expect(result[12]).toBe(true);
-  expect(result[15]).toBe(true);
+  for (const i of [0, 4, 7, 10, 13]) {
+    expect(result[i]).toBe(true);
+  }
   expect(result.filter(Boolean).length).toBe(5);
 });
 
@@ -63,15 +69,15 @@ test("isVertexHit: k>=n is always true", () => {
 });
 
 test("isVertexHit uses rhythm_hit mapping for k=5 n=16 r=0", () => {
-  expect(isVertexHit(3, 5, 16, 0)).toBe(true);
-  expect(isVertexHit(6, 5, 16, 0)).toBe(true);
-  expect(isVertexHit(0, 5, 16, 0)).toBe(false);
+  expect(isVertexHit(0, 5, 16, 0)).toBe(true);
+  expect(isVertexHit(4, 5, 16, 0)).toBe(true);
+  expect(isVertexHit(3, 5, 16, 0)).toBe(false);
   expect(isVertexHit(1, 5, 16, 0)).toBe(false);
 });
 
 test("isVertexHit respects rotation r=1", () => {
-  expect(isVertexHit(2, 5, 16, 1)).toBe(true);
-  expect(isVertexHit(3, 5, 16, 1)).toBe(false);
+  expect(isVertexHit(3, 5, 16, 1)).toBe(true);
+  expect(isVertexHit(2, 5, 16, 1)).toBe(false);
 });
 
 // ===== stepToVertex / playhead =====
@@ -198,19 +204,19 @@ test("euclideanMasterStepHit(3,8,0,s) matches bjorklund ring[(s+r)%n]", () => {
 });
 
 test("listEuclideanHitMasterSteps k=3 n=8 length 16", () => {
-  expect(listEuclideanHitMasterSteps(3, 8, 0, 16)).toEqual([2, 5, 7, 10, 13, 15]);
+  expect(listEuclideanHitMasterSteps(3, 8, 0, 16)).toEqual([0, 3, 6, 8, 11, 14]);
 });
 
 test("advanceEuclideanHitMasterStep wraps on k=3 n=8", () => {
-  expect(advanceEuclideanHitMasterStep(15, 1, 3, 8, 0, 16)).toBe(2);
-  expect(advanceEuclideanHitMasterStep(2, -1, 3, 8, 0, 16)).toBe(15);
+  expect(advanceEuclideanHitMasterStep(15, 1, 3, 8, 0, 16)).toBe(3);
+  expect(advanceEuclideanHitMasterStep(2, -1, 3, 8, 0, 16)).toBe(0);
 });
 
 test("snapMasterStepToEuclideanHit picks next hit", () => {
   const hits = listEuclideanHitMasterSteps(3, 8, 0, 16);
-  expect(snapMasterStepToEuclideanHit(0, hits, 16)).toBe(2);
-  expect(snapMasterStepToEuclideanHit(3, hits, 16)).toBe(5);
-  expect(snapMasterStepToEuclideanHit(7, hits, 16)).toBe(7);
+  expect(snapMasterStepToEuclideanHit(0, hits, 16)).toBe(0);
+  expect(snapMasterStepToEuclideanHit(3, hits, 16)).toBe(3);
+  expect(snapMasterStepToEuclideanHit(7, hits, 16)).toBe(8);
 });
 
 test("euclideanMasterStepHit k=0 is never true", () => {

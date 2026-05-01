@@ -46,21 +46,15 @@ export const VERTICES_11x11: [number, number][] = (() => {
 })();
 
 /**
- * Bjorklund / Bresenham bucket accumulator.
- * Returns a length-n boolean array with k True values, evenly distributed.
- * Matches the Python core/euclidean.py implementation exactly.
+ * Euclidean / Bjorklund: step `i` is a pulse iff `(i * k) % n < k` (0-based `i`).
+ * First pulse at step 0 when k > 0; matches `core/euclidean.py`.
  */
 export function bjorklund(k: number, n: number): boolean[] {
   if (k <= 0) return new Array(n).fill(false) as boolean[];
   if (k >= n) return new Array(n).fill(true) as boolean[];
   const out = new Array(n).fill(false) as boolean[];
-  let bucket = 0;
   for (let i = 0; i < n; i++) {
-    bucket += k;
-    if (bucket >= n) {
-      bucket -= n;
-      out[i] = true;
-    }
+    out[i] = ((i * k) % n) < k;
   }
   return out;
 }

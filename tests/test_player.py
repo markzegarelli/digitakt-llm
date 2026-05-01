@@ -134,10 +134,10 @@ def test_euclidean_mode_gates_kick_to_ring_hits():
     state.current_pattern = pat
     port.reset_mock()
     player._play_step(0)
-    assert len(_kick_note_ons(port)) == 0
+    assert len(_kick_note_ons(port)) >= 1
     port.reset_mock()
     player._play_step(7)
-    assert len(_kick_note_ons(port)) >= 1
+    assert len(_kick_note_ons(port)) == 0
 
 
 def test_euclidean_ring_hit_fires_even_when_grid_step_is_empty():
@@ -151,7 +151,7 @@ def test_euclidean_ring_hit_fires_even_when_grid_step_is_empty():
     pat["euclid"] = eu
     normalize_euclid_in_pattern(pat, 16, tuple(TRACK_NAMES))
     state.current_pattern = pat
-    player._play_step(15)
+    player._play_step(0)
     kick_sends = _kick_note_ons(port)
     assert len(kick_sends) == 1
     assert kick_sends[0][0][0].velocity == state.track_velocity["kick"]
