@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import type { TrackName } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
-import { clampEuclidTriplet, isVertexHit } from "../euclidRing.js";
+import { clampEuclidTriplet, euclideanMasterStepHit, isVertexHit } from "../euclidRing.js";
 
 const TRACK_LABELS: Record<TrackName, string> = {
   kick: "BD", snare: "SD", tom: "LT", clap: "CL",
@@ -27,6 +27,8 @@ const COLOR_REST = "#444";
 
 export interface EuclidGridPanelProps {
   width: number;
+  /** Master pattern length (8 / 16 / 32); columns and playhead use one column per step. */
+  patternLength: number;
   selectedTrack: number;
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
   currentStep: number | null;
@@ -38,23 +40,15 @@ export interface EuclidGridPanelProps {
   pendingMuteTracks: Set<TrackName>;
 }
 
-/** Build reverse lookup: master column → euclidean step index (or -1). */
-function buildColToStep(n: number): number[] {
-  const out = new Array(16).fill(-1) as number[];
-  for (let i = 0; i < n; i++) {
-    out[Math.floor(i * 16 / n)] = i;
-  }
-  return out;
-}
-
-/** Split `total` chars across 16 columns; extra width goes left-to-right, capped per column. */
-function pulseColumnWidths(total: number): number[] {
-  const t = Math.max(16, total);
-  const w = Array.from({ length: 16 }, () => 1);
-  let used = 16;
+/** Split `total` chars across `cols` columns; extra width goes left-to-right, capped per column. */
+function pulseColumnWidths(total: number, cols: number): number[] {
+  const c = Math.max(1, cols);
+  const t = Math.max(c, total);
+  const w = Array.from({ length: c }, () => 1);
+  let used = c;
   while (used < t) {
     let progressed = false;
-    for (let i = 0; i < 16 && used < t; i++) {
+    for (let i = 0; i < c && used < t; i++) {
       if (w[i] < MAX_COL_W) {
         w[i]++;
         used++;
@@ -66,8 +60,24 @@ function pulseColumnWidths(total: number): number[] {
   return w;
 }
 
+/** Smallest pattern step in `[0, pl)` with a Euclidean hit, or `-1` if none. */
+function firstHitPatternStep(k: number, n: number, r: number, pl: number): number {
+  const len = Math.max(0, Math.floor(pl));
+  for (let c = 0; c < len; c++) {
+    if (euclideanMasterStepHit(k, n, r, c)) return c;
+  }
+  return -1;
+}
+
+/** Minimum terminal width for the panel at 1 char per step (labels + k/n/r + border). */
+export function euclidPanelMinWidth(patternLength: number): number {
+  const pl = Math.max(1, Math.floor(patternLength));
+  return BORDER_PAD + LABEL_COL_W + KRN_RESERVE_W + pl;
+}
+
 export function EuclidGridPanel({
   width,
+  patternLength,
   selectedTrack,
   euclid,
   currentStep,
@@ -78,12 +88,17 @@ export function EuclidGridPanel({
   trackMuted,
   pendingMuteTracks,
 }: EuclidGridPanelProps) {
-  const playheadCol = currentStep !== null ? currentStep % 16 : null;
-  const cursorCol = stepTrigEdit && selectedPatternStep !== null ? selectedPatternStep % 16 : null;
+  const pl = Math.max(1, Math.floor(patternLength));
+  const playheadCol =
+    currentStep !== null ? ((Math.floor(currentStep) % pl) + pl) % pl : null;
+  const cursorCol =
+    stepTrigEdit && selectedPatternStep !== null
+      ? ((Math.floor(selectedPatternStep) % pl) + pl) % pl
+      : null;
 
   const innerW = Math.max(0, width - BORDER_PAD);
-  const dotLaneW = Math.max(16, innerW - LABEL_COL_W - KRN_RESERVE_W);
-  const colW = pulseColumnWidths(dotLaneW);
+  const dotLaneW = Math.max(pl, innerW - LABEL_COL_W - KRN_RESERVE_W);
+  const colW = pulseColumnWidths(dotLaneW, pl);
 
   return (
     <Box
@@ -99,10 +114,7 @@ export function EuclidGridPanel({
         const isSelected = idx === selectedTrack;
         const isMuted = trackMuted[track] ?? false;
         const isPending = pendingMuteTracks.has(track);
-        const colToStep = buildColToStep(nc);
-        // First trig: the euclidean vertex where ring[0] lands after rotation.
-        // ring[(vIdx + rc) % nc] = ring[0] → vIdx = (nc - rc) % nc
-        const firstTrigVertex = kc > 0 ? ((nc - rc) % nc + nc) % nc : -1;
+        const firstHitCol = firstHitPatternStep(kc, nc, rc, pl);
 
         const labelColor = isPending
           ? theme.warn
@@ -122,22 +134,14 @@ export function EuclidGridPanel({
               </Text>
             </Box>
 
-            {Array.from({ length: 16 }, (_, c) => {
-              const stepIdx = colToStep[c];
+            {Array.from({ length: pl }, (_, c) => {
+              const stepIdx = ((c % nc) + nc) % nc;
               const isPlayhead = c === playheadCol;
               const isCursor = c === cursorCol;
               const cw = colW[c] ?? 1;
 
-              if (stepIdx === -1) {
-                return (
-                  <Box key={c} width={cw} justifyContent="center">
-                    <Text underline={isPlayhead || isCursor}>{" ".repeat(cw)}</Text>
-                  </Box>
-                );
-              }
-
               const isHit = isVertexHit(stepIdx, kc, nc, rc);
-              const isFirstTrig = stepIdx === firstTrigVertex;
+              const isFirstTrig = isHit && c === firstHitCol;
               const glyph = isFirstTrig ? "◆" : isHit ? "●" : "·";
               const dotColor = isMuted
                 ? theme.textGhost

@@ -11,7 +11,7 @@ import { LfoPanel } from "./components/LfoPanel.js";
 import { ActivityLog } from "./components/ActivityLog.js";
 import { Prompt } from "./components/Prompt.js";
 import { TrigEditPanel } from "./components/TrigEditPanel.js";
-import { EuclidGridPanel } from "./components/EuclidGridPanel.js";
+import { EuclidGridPanel, euclidPanelMinWidth } from "./components/EuclidGridPanel.js";
 import {
   applyEuclidDepthKey,
   getEuclidStepTrigExitState,
@@ -51,7 +51,6 @@ import { theme } from "./theme.js";
 interface AppProps { baseUrl: string; }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const EUCLID_SEQ_MIN_WIDTH = 36;
 
 // Track alias map: normalize shorthand display names to canonical API names
 const normalizeTrack = (raw: string) => normalizeTrackAlias(raw);
@@ -1488,7 +1487,10 @@ export function App({ baseUrl }: AppProps) {
     termCols,
     showLog,
     showTrig: true,
-    minSeqWidth: state.seq_mode === "euclidean" && patternStepEdit ? EUCLID_SEQ_MIN_WIDTH : undefined,
+    minSeqWidth:
+      state.seq_mode === "euclidean" && patternStepEdit
+        ? euclidPanelMinWidth(state.pattern_length)
+        : undefined,
   });
   let lfoColW = Math.min(58, Math.max(28, Math.round(stackWidth * 0.46)));
   let mixContentW = stackWidth - lfoColW - 1;
@@ -1534,6 +1536,7 @@ export function App({ baseUrl }: AppProps) {
                 <>
                   <EuclidGridPanel
                     width={patternStepEdit ? seqGridWidth : stackWidth}
+                    patternLength={state.pattern_length}
                     selectedTrack={patternTrack}
                     euclid={state.euclid}
                     currentStep={state.current_step}
