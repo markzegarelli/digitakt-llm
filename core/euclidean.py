@@ -13,10 +13,10 @@ _EUCLID_N_MIN = 1
 
 
 def bjorklund(k: int, n: int) -> list[bool]:
-    """Return length-`n` boolean list with exactly `k` True values (Bresenham / Bjorklund distribution).
+    """Return length-`n` boolean list with exactly `k` True values (Euclidean / Bjorklund).
 
-    Pulses are spread as evenly as possible across `n` steps. Convention matches common
-    software implementations (bucket accumulator).
+    Uses the usual ``(i * k) % n < k`` characterization (0-based step index ``i``): the first
+    pulse is always at step 0 when ``k > 0``, e.g. E(4, 16) hits 0, 4, 8, 12.
     """
     if n < 1:
         raise ValueError("n must be at least 1")
@@ -28,14 +28,7 @@ def bjorklund(k: int, n: int) -> list[bool]:
         return [False] * n
     if k == n:
         return [True] * n
-    out = [False] * n
-    bucket = 0
-    for i in range(n):
-        bucket += k
-        if bucket >= n:
-            bucket -= n
-            out[i] = True
-    return out
+    return [((i * k) % n) < k for i in range(n)]
 
 
 def rhythm_hit(k: int, n: int, r: int, step: int) -> bool:

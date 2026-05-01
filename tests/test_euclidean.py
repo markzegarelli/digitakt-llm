@@ -14,11 +14,32 @@ from core.euclidean import (
 
 
 def test_bjorklund_3_8():
-    assert bjorklund(3, 8) == [False, False, True, False, False, True, False, True]
+    assert bjorklund(3, 8) == [True, False, False, True, False, False, True, False]
+
+
+def test_bjorklund_4_16():
+    assert bjorklund(4, 16) == [
+        True,
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+        False,
+    ]
 
 
 def test_bjorklund_5_8():
-    assert bjorklund(5, 8) == [False, True, False, True, True, False, True, True]
+    assert bjorklund(5, 8) == [True, False, True, False, True, True, False, True]
 
 
 def test_bjorklund_edges():
@@ -77,9 +98,9 @@ def test_track_euclidean_hit_respects_row():
         "euclid": {"kick": {"k": 1, "n": 4, "r": 0}, "snare": {"k": 4, "n": 4, "r": 0}},
     }
     normalize_euclid_in_pattern(p, 16, tracks)
-    # k=1,n=4 → single hit (Bresenham ring places the lone pulse at index 3)
-    assert track_euclidean_hit(p, "kick", 3) is True
-    assert track_euclidean_hit(p, "kick", 0) is False
+    # k=1,n=4 → single hit on downbeat of the 4-step ring (master step 0, 4, 8, …)
+    assert track_euclidean_hit(p, "kick", 0) is True
+    assert track_euclidean_hit(p, "kick", 1) is False
 
 
 def test_default_euclid_block():

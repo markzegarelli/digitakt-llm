@@ -12,6 +12,15 @@ const TRACK_LABELS: Record<TrackName, string> = {
 
 const FIELD_NAMES = ["k", "n", "r"] as const;
 
+/** Border (2) + paddingX (2). */
+const BORDER_PAD = 4;
+/** Cursor + 2-letter track + space — must match every row for column alignment. */
+const LABEL_COL_W = 4;
+/** Space for selected-row `k=…  n=…  r=…` so pulse columns align across all tracks. */
+const KRN_RESERVE_W = 20;
+/** Max chars per pulse column on very wide terminals. */
+const MAX_COL_W = 6;
+
 const COLOR_FIRST_TRIG = "#e8c55a";
 const COLOR_HIT = "#e0e0e0";
 const COLOR_REST = "#444";
@@ -38,6 +47,25 @@ function buildColToStep(n: number): number[] {
   return out;
 }
 
+/** Split `total` chars across 16 columns; extra width goes left-to-right, capped per column. */
+function pulseColumnWidths(total: number): number[] {
+  const t = Math.max(16, total);
+  const w = Array.from({ length: 16 }, () => 1);
+  let used = 16;
+  while (used < t) {
+    let progressed = false;
+    for (let i = 0; i < 16 && used < t; i++) {
+      if (w[i] < MAX_COL_W) {
+        w[i]++;
+        used++;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+  return w;
+}
+
 export function EuclidGridPanel({
   width,
   selectedTrack,
@@ -52,6 +80,10 @@ export function EuclidGridPanel({
 }: EuclidGridPanelProps) {
   const playheadCol = currentStep !== null ? currentStep % 16 : null;
   const cursorCol = stepTrigEdit && selectedPatternStep !== null ? selectedPatternStep % 16 : null;
+
+  const innerW = Math.max(0, width - BORDER_PAD);
+  const dotLaneW = Math.max(16, innerW - LABEL_COL_W - KRN_RESERVE_W);
+  const colW = pulseColumnWidths(dotLaneW);
 
   return (
     <Box
@@ -84,18 +116,23 @@ export function EuclidGridPanel({
 
         return (
           <Box key={track} flexDirection="row">
-            <Text bold color={labelColor}>
-              {isSelected && isFocused ? ">" : " "}{TRACK_LABELS[track]}{" "}
-            </Text>
+            <Box width={LABEL_COL_W}>
+              <Text bold color={labelColor}>
+                {isSelected && isFocused ? ">" : " "}{TRACK_LABELS[track]}{" "}
+              </Text>
+            </Box>
 
             {Array.from({ length: 16 }, (_, c) => {
               const stepIdx = colToStep[c];
               const isPlayhead = c === playheadCol;
               const isCursor = c === cursorCol;
+              const cw = colW[c] ?? 1;
 
               if (stepIdx === -1) {
                 return (
-                  <Text key={c} underline={isPlayhead || isCursor}>{" "}</Text>
+                  <Box key={c} width={cw} justifyContent="center">
+                    <Text underline={isPlayhead || isCursor}>{" ".repeat(cw)}</Text>
+                  </Box>
                 );
               }
 
@@ -111,33 +148,36 @@ export function EuclidGridPanel({
                     : COLOR_REST;
 
               return (
-                <Text
-                  key={c}
-                  color={isCursor && !isPlayhead ? theme.accent : dotColor}
-                  underline={isPlayhead || isCursor}
-                >
-                  {glyph}
-                </Text>
+                <Box key={c} width={cw} justifyContent="center">
+                  <Text
+                    color={isCursor && !isPlayhead ? theme.accent : dotColor}
+                    underline={isPlayhead || isCursor}
+                  >
+                    {glyph}
+                  </Text>
+                </Box>
               );
             })}
 
-            {isSelected && (
-              <Box flexDirection="row" marginLeft={1}>
-                {FIELD_NAMES.map((field, i) => {
-                  const val = i === 0 ? kc : i === 1 ? nc : rc;
-                  const active = editBox === i;
-                  const dimmed = editBox !== null && !active;
-                  return (
-                    <Text
-                      key={field}
-                      color={active ? theme.accent : dimmed ? theme.textGhost : theme.textDim}
-                    >
-                      {field}={val}{i < 2 ? "  " : ""}
-                    </Text>
-                  );
-                })}
-              </Box>
-            )}
+            <Box flexDirection="row" marginLeft={1} minWidth={KRN_RESERVE_W}>
+              {isSelected
+                ? FIELD_NAMES.map((field, i) => {
+                    const val = i === 0 ? kc : i === 1 ? nc : rc;
+                    const active = editBox === i;
+                    const dimmed = editBox !== null && !active;
+                    return (
+                      <Text
+                        key={field}
+                        color={active ? theme.accent : dimmed ? theme.textGhost : theme.textDim}
+                      >
+                        {field}={val}{i < 2 ? "  " : ""}
+                      </Text>
+                    );
+                  })
+                : (
+                  <Text> </Text>
+                )}
+            </Box>
           </Box>
         );
       })}
