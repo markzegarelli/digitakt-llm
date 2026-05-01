@@ -94,7 +94,7 @@ export interface EuclidTrackStripRow {
   badge: "" | "M" | "Q" | "MQ";
 }
 
-export type PatternMuteRouteFocus = "pattern" | "cc" | "prompt";
+export type PatternMuteRouteFocus = "pattern" | "cc" | "lfo" | "prompt";
 
 export function shouldRoutePatternMuteKey({
   input,

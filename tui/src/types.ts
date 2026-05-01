@@ -231,4 +231,4 @@ export function parseLfoFromApi(raw: unknown): Record<string, LfoDef> {
   return out;
 }
 
-export type FocusPanel = "pattern" | "cc" | "prompt";
+export type FocusPanel = "pattern" | "cc" | "lfo" | "prompt";
