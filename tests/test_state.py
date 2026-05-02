@@ -150,6 +150,39 @@ def test_queue_fill_sets_fill_pattern():
     assert state.fill_pattern == fill
 
 
+def test_queue_fill_from_chain_slot_success():
+    from core.state import TRACK_NAMES
+
+    state = AppState()
+    p1 = {k: [1] * 16 for k in TRACK_NAMES}
+    p2 = {k: [2] * 16 for k in TRACK_NAMES}
+    state.set_chain(["a", "b"], [p1, p2], auto=False)
+    state.chain_index = 0
+    out = state.queue_fill_from_chain_slot(2)
+    assert out["ok"] is True
+    assert out["slot"] == 2
+    assert out["pattern_name"] == "b"
+    assert state.fill_pattern is not None
+    assert state.chain_index == 0
+
+
+def test_queue_fill_from_chain_slot_errors():
+    from core.state import TRACK_NAMES
+
+    state = AppState()
+    assert state.queue_fill_from_chain_slot(1)["code"] == "no_chain"
+
+    p1 = {k: [1] * 16 for k in TRACK_NAMES}
+    state.set_chain(["a"], [p1], auto=False)
+    assert state.queue_fill_from_chain_slot(0)["code"] == "bad_slot"
+    assert state.queue_fill_from_chain_slot(2)["code"] == "bad_slot"
+
+    state.queue_fill({k: [9] * 16 for k in TRACK_NAMES})
+    state.apply_bar_boundary()
+    assert state.is_fill_active() is True
+    assert state.queue_fill_from_chain_slot(1)["code"] == "fill_active"
+
+
 def test_track_pitch_defaults_to_60():
     state = AppState()
     for track in TRACK_NAMES:

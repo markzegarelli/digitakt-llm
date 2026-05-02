@@ -80,6 +80,31 @@ class AppState:
             self.fill_pattern = pattern  # legacy field kept for compat
             self._fill_fsm.queue(pattern)
 
+    def queue_fill_from_chain_slot(self, slot: int) -> dict:
+        """Queue a one-shot fill from a 1-based chain slot.
+
+        Returns ``{"ok": True, "slot", "pattern_name", "queued": True}`` or
+        ``{"ok": False, "code": "no_chain"|"bad_slot"|"fill_active"}``.
+        """
+        with self._lock:
+            if not self.chain_patterns:
+                return {"ok": False, "code": "no_chain"}
+            if slot < 1 or slot > len(self.chain_patterns):
+                return {"ok": False, "code": "bad_slot"}
+            if self._fill_active:
+                return {"ok": False, "code": "fill_active"}
+            pattern_name = self.chain[slot - 1]
+            raw = copy.deepcopy(self.chain_patterns[slot - 1])
+            normalized = self.normalize_pattern_length(raw, self.pattern_length)
+            self.fill_pattern = normalized
+            self._fill_fsm.queue(normalized)
+        return {
+            "ok": True,
+            "slot": slot,
+            "pattern_name": pattern_name,
+            "queued": True,
+        }
+
     cc_focused_track: str = "kick"
 
     def update_cc(self, track: str, param: str, value: int) -> None:

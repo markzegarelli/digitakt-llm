@@ -705,6 +705,44 @@ def test_post_chain_next_queues_candidate(tmp_path):
     assert state["chain_armed"] is False
 
 
+def test_post_chain_slot_fill_queues_pattern(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    _write_saved_pattern(tmp_path / "b.json", 22)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a", "b"], "auto": False})
+    resp = client.post("/chain/slot/2/fill")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["slot"] == 2
+    assert data["pattern_name"] == "b"
+    assert data["queued"] is True
+
+
+def test_post_chain_slot_fill_no_chain_404(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/chain/slot/1/fill")
+    assert resp.status_code == 404
+
+
+def test_post_chain_slot_fill_bad_slot_422(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a"], "auto": False})
+    assert client.post("/chain/slot/0/fill").status_code == 422
+    assert client.post("/chain/slot/2/fill").status_code == 422
+
+
+def test_post_chain_slot_fill_active_409(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    _write_saved_pattern(tmp_path / "b.json", 22)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a", "b"], "auto": False})
+    client.post("/fill/a")
+    server_module._state.apply_bar_boundary()
+    resp = client.post("/chain/slot/2/fill")
+    assert resp.status_code == 409
+
+
 def test_post_chain_fire_arms_for_next_bar(tmp_path):
     _write_saved_pattern(tmp_path / "a.json", 11)
     client = _make_test_client(tmp_path)
@@ -739,6 +777,32 @@ def test_chain_endpoints_require_defined_chain(tmp_path):
     client = _make_test_client(tmp_path)
     assert client.post("/chain/next").status_code == 404
     assert client.post("/chain/fire").status_code == 404
+
+
+def test_post_chain_slot_fill_ok(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    _write_saved_pattern(tmp_path / "b.json", 22)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a", "b"], "auto": False})
+    resp = client.post("/chain/slot/2/fill")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["slot"] == 2
+    assert data["pattern_name"] == "b"
+    assert data["queued"] is True
+
+
+def test_post_chain_slot_fill_404_no_chain(tmp_path):
+    client = _make_test_client(tmp_path)
+    assert client.post("/chain/slot/1/fill").status_code == 404
+
+
+def test_post_chain_slot_fill_422_bad_slot(tmp_path):
+    _write_saved_pattern(tmp_path / "a.json", 11)
+    client = _make_test_client(tmp_path)
+    client.post("/chain", json={"names": ["a"], "auto": False})
+    assert client.post("/chain/slot/2/fill").status_code == 422
+    assert client.post("/chain/slot/0/fill").status_code == 422
 
 
 def test_pattern_name_path_traversal_rejected(tmp_path):

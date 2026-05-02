@@ -411,6 +411,7 @@ The system prompt (`_build_system_prompt()`) encodes domain knowledge including:
 | `POST` | `/chain` | Define chain names and auto mode |
 | `POST` | `/chain/next` | Queue next chain candidate (no immediate swap) |
 | `POST` | `/chain/fire` | Arm queued chain candidate for next bar downbeat |
+| `POST` | `/chain/slot/{slot}/fill` | Queue one-shot fill from chain slot `1…n` (rejects if fill already playing) |
 | `DELETE` | `/chain` | Clear chain state |
 | `GET` | `/traces` | Return recent LLM prompt/response traces |
 | `WS` | `/ws` | WebSocket stream of all EventBus events |

@@ -773,6 +773,27 @@ def chain_fire():
     return payload
 
 
+@app.post("/chain/slot/{slot}/fill")
+def chain_slot_fill(slot: int):
+    if slot < 1:
+        raise HTTPException(status_code=422, detail="slot must be >= 1")
+    result = _state.queue_fill_from_chain_slot(slot)
+    if not result.get("ok"):
+        code = result.get("code")
+        if code == "no_chain":
+            raise HTTPException(status_code=404, detail="No chain configured")
+        if code == "bad_slot":
+            raise HTTPException(status_code=422, detail="Slot out of range for current chain")
+        if code == "fill_active":
+            raise HTTPException(status_code=409, detail="Fill already playing")
+        raise HTTPException(status_code=500, detail="Unexpected queue_fill_from_chain_slot result")
+    return {
+        "slot": result["slot"],
+        "pattern_name": result["pattern_name"],
+        "queued": result["queued"],
+    }
+
+
 @app.delete("/chain")
 def clear_chain():
     _state.clear_chain()
