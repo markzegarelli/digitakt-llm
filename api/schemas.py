@@ -266,6 +266,12 @@ class SeqModeRequest(BaseModel):
     euclid: dict[str, EuclidTrackRow] | None = None
 
 
+class EuclidStripModeRequest(BaseModel):
+    """Euclidean track-strip layout only (display): grid = n equal columns; fractional = pattern-step buckets when n ≤ pl."""
+
+    mode: Literal["grid", "fractional"]
+
+
 class MidiConnectRequest(BaseModel):
     """Omit `port` to auto-detect an output whose name contains \"Digitakt\"."""
 

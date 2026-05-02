@@ -56,6 +56,21 @@ def test_post_seq_mode_updates_pattern(tmp_path):
     assert st["current_pattern"]["seq_mode"] == "euclidean"
 
 
+def test_post_euclid_strip_mode_updates_pattern(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/euclid-strip-mode", json={"mode": "fractional"})
+    assert resp.status_code == 200
+    assert resp.json() == {"euclid_strip_mode": "fractional"}
+    st = client.get("/state").json()
+    assert st["current_pattern"]["euclid_strip_mode"] == "fractional"
+
+
+def test_post_euclid_strip_mode_422_on_bad_mode(tmp_path):
+    client = _make_test_client(tmp_path)
+    resp = client.post("/euclid-strip-mode", json={"mode": "wide"})
+    assert resp.status_code == 422
+
+
 def test_post_generate_returns_202(tmp_path):
     client = _make_test_client(tmp_path)
     resp = client.post("/generate", json={"prompt": "heavy kick"})

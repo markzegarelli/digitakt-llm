@@ -27,6 +27,19 @@ describe("prompt slash interaction helpers", () => {
     expect(getPromptSuggestions("/lfo")).toEqual([]);
   });
 
+  test("suggests euclid-strip while typing the command prefix", () => {
+    expect(getPromptSuggestions("/eucli")).toContain("euclid-strip");
+  });
+
+  test("euclid-strip exposes optional mode param hints", () => {
+    expect(getParamHintState("/euclid-strip")).toEqual({ active: true, paramCount: 1 });
+    expect(getParamHintState("/euclid-strip ")).toEqual({ active: true, paramCount: 1 });
+    const sug = getFocusedParamSuggestions("/euclid-strip ", 0);
+    expect(sug).toContain("grid");
+    expect(sug).toContain("fractional");
+    expect(getFocusedParamSuggestions("/euclid-strip frac", 0)).toEqual(["fractional"]);
+  });
+
   test("cycles focused parameter index in strict tab mode", () => {
     expect(nextParamFocusIndex(0, 5, false)).toBe(1);
     expect(nextParamFocusIndex(4, 5, false)).toBe(0);

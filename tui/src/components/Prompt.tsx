@@ -75,6 +75,7 @@ const HELP_LINES = [
   "  Tab                                  toggle step/ring keys ↔ TRIG value keys",
   "",
   "Euclidean ring (k/n/r)",
+  "  euclid-strip [grid|fractional]       strip layout (n-fold columns vs pattern-step buckets); bare toggles in Euclidean",
   "  Enter                                open/close k n r boxes",
   "  [ ] or ←/→                           cycle k/n/r field when boxes are open",
   "  ↑/↓                                  track select (closed) or adjust field (open)",
@@ -115,7 +116,7 @@ const HELP_LINES = [
 
 // All slash commands for autocomplete
 const COMMANDS = [
-  "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "fill", "fresh", "gate",
+  "ask", "bpm", "cc", "cc-step", "clear", "cond", "delete", "euclid-strip", "fill", "fresh", "gate",
   "lfo", "gen", "help", "history", "length", "load", "log", "midi", "mode", "mute",
   "new", "patterns", "pitch", "play", "prob", "quit", "random",
   "randbeat", "save", "stop", "swing", "undo", "vel",

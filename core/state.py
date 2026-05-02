@@ -162,7 +162,7 @@ class AppState:
             self.pattern_length = steps
 
     def touch_euclid_metadata_if_live_pattern(self) -> None:
-        """Ensure `seq_mode` / `euclid` exist when the pattern dict holds all track velocity rows."""
+        """Ensure `seq_mode` / `euclid` / `euclid_strip_mode` exist when the pattern dict holds all track rows."""
         with self._lock:
             if not all(t in self.current_pattern for t in TRACK_NAMES):
                 return

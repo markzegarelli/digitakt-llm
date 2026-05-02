@@ -167,6 +167,40 @@ export function stepToVertex(step: number, n: number): number {
   return ((s % n) + n) % n;
 }
 
+/**
+ * Inclusive pattern-column index range `[start, end]` for Euclidean vertex `v` when the strip
+ * uses `pl` columns and `nc` ring vertices (`nc <= pl`). Matches floor partition of the bar.
+ */
+export function euclideanVertexPatternSlice(
+  v: number,
+  patternLength: number,
+  nc: number,
+): [number, number] {
+  const n = Math.max(1, Math.floor(nc));
+  const pl = Math.max(1, Math.floor(patternLength));
+  const vi = Math.max(0, Math.min(Math.floor(v), n - 1));
+  const start = Math.floor((vi * pl) / n);
+  let end = Math.floor(((vi + 1) * pl) / n) - 1;
+  if (end < start) end = start;
+  return [start, end];
+}
+
+/** Which vertex bucket master pattern step `step` (0-based) falls into for grid strip mode. */
+export function patternColumnToVertexSlice(
+  step: number,
+  patternLength: number,
+  nc: number,
+): number {
+  const n = Math.max(1, Math.floor(nc));
+  const pl = Math.max(1, Math.floor(patternLength));
+  const s = ((Math.floor(step) % pl) + pl) % pl;
+  for (let v = 0; v < n; v++) {
+    const [a, b] = euclideanVertexPatternSlice(v, pl, n);
+    if (s >= a && s <= b) return v;
+  }
+  return n - 1;
+}
+
 /** Playhead uses the same logical ring index as {@link stepToVertex} (layout rotation is visual only). */
 export function stepToPlayheadVertex(step: number, n: number): number {
   return stepToVertex(step, n);
