@@ -152,6 +152,7 @@ export interface DigitaktActions {
   chainNext(): Promise<void>;
   chainFire(): Promise<void>;
   chainClear(): Promise<void>;
+  chainSlotFill(slot: number): Promise<void>;
   setCCFocusedTrack(track: TrackName): Promise<void>;
   setLfoRoute(target: string, lfo: LfoDef | null): Promise<void>;
   setEuclidStripMode(mode: EuclidStripMode): Promise<void>;
@@ -790,6 +791,23 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
 
     chainClear: useCallback(async () => {
       await api("DELETE", "/chain");
+    }, [api]),
+
+    chainSlotFill: useCallback(async (slot: number) => {
+      setState((s) => ({ ...s, fill_queued: `#${slot}` }));
+      try {
+        const data = (await api("POST", `/chain/slot/${slot}/fill`)) as {
+          pattern_name: string;
+          slot: number;
+        };
+        setState((s) => ({
+          ...s,
+          fill_queued: `#${data.slot}:${data.pattern_name}`,
+        }));
+      } catch (e) {
+        setState((s) => ({ ...s, fill_queued: false }));
+        throw e instanceof Error ? e : new Error(String(e));
+      }
     }, [api]),
 
     setCCFocusedTrack: useCallback(async (track: TrackName) => {
