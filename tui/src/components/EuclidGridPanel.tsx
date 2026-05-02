@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import type { TrackName } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
-import { clampEuclidTriplet, euclideanMasterStepHit, isVertexHit } from "../euclidRing.js";
+import { clampEuclidTriplet, euclideanMasterStepHit, isVertexHit, stepToVertex } from "../euclidRing.js";
 
 const TRACK_LABELS: Record<TrackName, string> = {
   kick: "BD", snare: "SD", tom: "LT", clap: "CL",
@@ -16,7 +16,7 @@ const FIELD_NAMES = ["k", "n", "r"] as const;
 const BORDER_PAD = 4;
 /** Cursor + 2-letter track + space — must match every row for column alignment. */
 const LABEL_COL_W = 4;
-/** Space for selected-row `k=…  n=…  r=…` so pulse columns align across all tracks. */
+/** Space for selected-row `k=…  n=…  r=…` after the dot lane. */
 const KRN_RESERVE_W = 20;
 /** Max chars per pulse column on very wide terminals. */
 const MAX_COL_W = 6;
@@ -27,7 +27,7 @@ const COLOR_REST = "#444";
 
 export interface EuclidGridPanelProps {
   width: number;
-  /** Master pattern length (8 / 16 / 32); columns and playhead use one column per step. */
+  /** Master pattern length (8 / 16 / 32); dot lane width and first-hit use full pattern; each row shows `n` vertices. */
   patternLength: number;
   selectedTrack: number;
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
@@ -89,16 +89,9 @@ export function EuclidGridPanel({
   pendingMuteTracks,
 }: EuclidGridPanelProps) {
   const pl = Math.max(1, Math.floor(patternLength));
-  const playheadCol =
-    currentStep !== null ? ((Math.floor(currentStep) % pl) + pl) % pl : null;
-  const cursorCol =
-    stepTrigEdit && selectedPatternStep !== null
-      ? ((Math.floor(selectedPatternStep) % pl) + pl) % pl
-      : null;
 
   const innerW = Math.max(0, width - BORDER_PAD);
   const dotLaneW = Math.max(pl, innerW - LABEL_COL_W - KRN_RESERVE_W);
-  const colW = pulseColumnWidths(dotLaneW, pl);
 
   return (
     <Box
@@ -114,7 +107,11 @@ export function EuclidGridPanel({
         const isSelected = idx === selectedTrack;
         const isMuted = trackMuted[track] ?? false;
         const isPending = pendingMuteTracks.has(track);
-        const firstHitCol = firstHitPatternStep(kc, nc, rc, pl);
+        const rowCols = Math.max(1, nc);
+        const rowColW = pulseColumnWidths(dotLaneW, rowCols);
+        const firstHitStep = firstHitPatternStep(kc, nc, rc, pl);
+        const firstHitVertex =
+          firstHitStep >= 0 ? stepToVertex(firstHitStep, nc) : -1;
 
         const labelColor = isPending
           ? theme.warn
@@ -134,14 +131,18 @@ export function EuclidGridPanel({
               </Text>
             </Box>
 
-            {Array.from({ length: pl }, (_, c) => {
-              const stepIdx = ((c % nc) + nc) % nc;
-              const isPlayhead = c === playheadCol;
-              const isCursor = c === cursorCol;
-              const cw = colW[c] ?? 1;
+            {Array.from({ length: rowCols }, (_, v) => {
+              const isPlayhead =
+                currentStep !== null &&
+                stepToVertex(Math.floor(currentStep), nc) === v;
+              const isCursor =
+                stepTrigEdit &&
+                selectedPatternStep !== null &&
+                stepToVertex(Math.floor(selectedPatternStep), nc) === v;
+              const cw = rowColW[v] ?? 1;
 
-              const isHit = isVertexHit(stepIdx, kc, nc, rc);
-              const isFirstTrig = isHit && c === firstHitCol;
+              const isHit = isVertexHit(v, kc, nc, rc);
+              const isFirstTrig = isHit && v === firstHitVertex;
               const glyph = isFirstTrig ? "◆" : isHit ? "●" : "·";
               const dotColor = isMuted
                 ? theme.textGhost
@@ -152,7 +153,7 @@ export function EuclidGridPanel({
                     : COLOR_REST;
 
               return (
-                <Box key={c} width={cw} justifyContent="center">
+                <Box key={v} width={cw} justifyContent="center">
                   <Text
                     color={isCursor && !isPlayhead ? theme.accent : dotColor}
                     underline={isPlayhead || isCursor}
