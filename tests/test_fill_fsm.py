@@ -231,3 +231,38 @@ def test_apply_bar_boundary_fill_ended():
     assert result["fill_event"] == "fill_ended"
     assert result["current_pattern"] == original
     assert state.current_pattern == original
+
+
+def test_queue_fill_from_chain_slot_leaves_chain_index():
+    from core.state import AppState
+    state = AppState()
+    p1 = {k: [10] * 16 for k in TRACK_NAMES}
+    p2 = {k: [20] * 16 for k in TRACK_NAMES}
+    state.set_chain(["a", "b"], [p1, p2], auto=False)
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.chain_index = 0
+
+    res = state.queue_fill_from_chain_slot(2)
+    assert res["ok"] is True
+    assert res["pattern_name"] == "b"
+
+    r1 = state.apply_bar_boundary()
+    assert r1["fill_event"] == "fill_started"
+    assert state.chain_index == 0
+
+    r2 = state.apply_bar_boundary()
+    assert r2["fill_event"] == "fill_ended"
+    assert state.chain_index == 0
+
+
+def test_queue_fill_from_chain_slot_rejects_while_fill_active():
+    from core.state import AppState
+    state = AppState()
+    p1 = {k: [1] * 16 for k in TRACK_NAMES}
+    p2 = {k: [2] * 16 for k in TRACK_NAMES}
+    state.set_chain(["a", "b"], [p1, p2], auto=False)
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.queue_fill({k: [99] * 16 for k in TRACK_NAMES})
+    state.apply_bar_boundary()
+    res = state.queue_fill_from_chain_slot(1)
+    assert res == {"ok": False, "code": "fill_active"}
