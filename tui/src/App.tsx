@@ -406,6 +406,7 @@ export function App({ baseUrl }: AppProps) {
     const stripped = cmd.startsWith("/") ? cmd.slice(1) : cmd;
     const parts = stripped.trim().split(/\s+/);
     const verb = parts[0]?.toLowerCase();
+    const dispatchError = (err: Error) => actions.addLog(`✗ ${err.message}`);
 
     // Local-only commands (no API call)
     switch (verb) {
@@ -428,6 +429,33 @@ export function App({ baseUrl }: AppProps) {
         actions.addLog("✗ Usage: /mode chat|beat|standard|euclidean");
         return;
       }
+      case "euclid-strip": {
+        const sub = parts[1]?.toLowerCase();
+        if (!sub) {
+          if (state.seq_mode !== "euclidean") {
+            actions.addLog("Strip toggle applies in Euclidean seq mode (/mode euclidean).");
+            return;
+          }
+          const next: "grid" | "fractional" =
+            state.euclid_strip_mode === "grid" ? "fractional" : "grid";
+          actions.setEuclidStripMode(next)
+            .then(() => {
+              actions.addLog(`Euclidean strip → ${next}`);
+            })
+            .catch(dispatchError);
+          return;
+        }
+        if (sub !== "grid" && sub !== "fractional") {
+          actions.addLog("✗ Usage: /euclid-strip [grid|fractional]");
+          return;
+        }
+        actions.setEuclidStripMode(sub)
+          .then(() => {
+            actions.addLog(`Euclidean strip → ${sub}`);
+          })
+          .catch(dispatchError);
+        return;
+      }
       case "gen":
         if (lastAnswerRef.current) { setImplementableHint(false); actions.generate(lastAnswerRef.current); }
         else actions.addLog("✗ No ask response to generate from. Use /ask first.");
@@ -448,8 +476,6 @@ export function App({ baseUrl }: AppProps) {
     }
 
     // Commands with API dispatch — Python validates, errors surface from response
-    const dispatchError = (err: Error) => actions.addLog(`✗ ${err.message}`);
-
     switch (verb) {
       case "play":  actions.play(); break;
       case "stop":  actions.stop(); break;
@@ -776,6 +802,8 @@ export function App({ baseUrl }: AppProps) {
     runPatternLoadByName,
     setShowLog,
     state.is_playing,
+    state.seq_mode,
+    state.euclid_strip_mode,
     state.track_muted,
     state.chain,
     state.chain_index,
@@ -1539,6 +1567,7 @@ export function App({ baseUrl }: AppProps) {
                     patternLength={state.pattern_length}
                     selectedTrack={patternTrack}
                     euclid={state.euclid}
+                    stripMode={state.euclid_strip_mode}
                     currentStep={state.current_step}
                     isFocused={focus === "pattern"}
                     editBox={euclidDepth === "active-ring" ? euclidEditBox : null}

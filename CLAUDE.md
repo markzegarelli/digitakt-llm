@@ -57,6 +57,7 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/log` — toggle activity log
 - `/clear` — clear activity log
 - `/mode [chat|beat|standard|euclidean]` — switch input mode (`chat` / `beat`) or pattern sequencing mode (`standard` grid vs `euclidean` rhythms)
+- `/euclid-strip [grid|fractional]` — Euclidean track-strip display: `grid` uses pattern-length column buckets per vertex; `fractional` uses n equal columns (engine still fires on discrete pattern steps). Bare `/euclid-strip` toggles only when `seq_mode` is `euclidean`; explicit `grid`/`fractional` persists on the pattern anytime
 - `/ask <question>` — ask Claude (works in any mode)
 - `/fresh <prompt>` — generate a new pattern without prior-pattern variation context (same as `POST /generate` with `"variation": false`)
 - `/gen` — generate a beat from the last `/ask` response
@@ -205,6 +206,7 @@ Key endpoints:
 - `POST /note` — per-step MIDI note (`track`, `step`, `value` 0–127 or `null` to inherit `track_pitch`)
 - `POST /length` — set pattern step count (8, 16, 32)
 - `POST /seq-mode` — set `seq_mode` (`standard` \| `euclidean`) and optional per-track `euclid` `{k,n,r}` in the live pattern
+- `POST /euclid-strip-mode` — set `euclid_strip_mode` (`grid` \| `fractional`) on the live pattern (TUI strip layout only; emits `pattern_changed` like other pattern writes)
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)
 - `POST /gate-track` — set gate to the same value on every step for a track

@@ -1,9 +1,16 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { TrackName } from "../types.js";
+import type { EuclidStripMode, TrackName } from "../types.js";
 import { TRACK_NAMES } from "../types.js";
 import { theme } from "../theme.js";
-import { clampEuclidTriplet, euclideanMasterStepHit, isVertexHit, stepToVertex } from "../euclidRing.js";
+import {
+  clampEuclidTriplet,
+  euclideanMasterStepHit,
+  isVertexHit,
+  patternColumnToVertexSlice,
+  euclideanVertexPatternSlice,
+  stepToVertex,
+} from "../euclidRing.js";
 
 const TRACK_LABELS: Record<TrackName, string> = {
   kick: "BD", snare: "SD", tom: "LT", clap: "CL",
@@ -31,6 +38,8 @@ export interface EuclidGridPanelProps {
   patternLength: number;
   selectedTrack: number;
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
+  /** Strip layout: `grid` merges pattern-length columns per vertex; `fractional` uses n equal terminal columns. */
+  stripMode: EuclidStripMode;
   currentStep: number | null;
   isFocused: boolean;
   editBox: number | null;
@@ -49,8 +58,8 @@ function pulseColumnWidths(total: number, cols: number): number[] {
   while (used < t) {
     let progressed = false;
     for (let i = 0; i < c && used < t; i++) {
-      if (w[i] < MAX_COL_W) {
-        w[i]++;
+      if (w[i]! < MAX_COL_W) {
+        w[i]! += 1;
         used++;
         progressed = true;
       }
@@ -80,6 +89,7 @@ export function EuclidGridPanel({
   patternLength,
   selectedTrack,
   euclid,
+  stripMode,
   currentStep,
   isFocused,
   editBox,
@@ -107,11 +117,38 @@ export function EuclidGridPanel({
         const isSelected = idx === selectedTrack;
         const isMuted = trackMuted[track] ?? false;
         const isPending = pendingMuteTracks.has(track);
-        const rowCols = Math.max(1, nc);
-        const rowColW = pulseColumnWidths(dotLaneW, rowCols);
+
+        const sliceLayout = stripMode === "grid" && nc <= pl;
+        const baseColW = sliceLayout ? pulseColumnWidths(dotLaneW, pl) : null;
+        const rowColW = sliceLayout
+          ? Array.from({ length: nc }, (_, v) => {
+              const [a, b] = euclideanVertexPatternSlice(v, pl, nc);
+              let sum = 0;
+              for (let c = a; c <= b; c++) sum += baseColW![c] ?? 1;
+              return sum;
+            })
+          : pulseColumnWidths(dotLaneW, Math.max(1, nc));
+
         const firstHitStep = firstHitPatternStep(kc, nc, rc, pl);
         const firstHitVertex =
-          firstHitStep >= 0 ? stepToVertex(firstHitStep, nc) : -1;
+          firstHitStep >= 0
+            ? sliceLayout
+              ? patternColumnToVertexSlice(firstHitStep, pl, nc)
+              : stepToVertex(firstHitStep, nc)
+            : -1;
+
+        const playVertex =
+          currentStep !== null
+            ? sliceLayout
+              ? patternColumnToVertexSlice(Math.floor(currentStep), pl, nc)
+              : stepToVertex(Math.floor(currentStep), nc)
+            : -2;
+        const cursorVertex =
+          stepTrigEdit && selectedPatternStep !== null
+            ? sliceLayout
+              ? patternColumnToVertexSlice(Math.floor(selectedPatternStep), pl, nc)
+              : stepToVertex(Math.floor(selectedPatternStep), nc)
+            : -2;
 
         const labelColor = isPending
           ? theme.warn
@@ -131,14 +168,9 @@ export function EuclidGridPanel({
               </Text>
             </Box>
 
-            {Array.from({ length: rowCols }, (_, v) => {
-              const isPlayhead =
-                currentStep !== null &&
-                stepToVertex(Math.floor(currentStep), nc) === v;
-              const isCursor =
-                stepTrigEdit &&
-                selectedPatternStep !== null &&
-                stepToVertex(Math.floor(selectedPatternStep), nc) === v;
+            {Array.from({ length: nc }, (_, v) => {
+              const isPlayhead = playVertex === v;
+              const isCursor = cursorVertex === v;
               const cw = rowColW[v] ?? 1;
 
               const isHit = isVertexHit(v, kc, nc, rc);
@@ -187,13 +219,16 @@ export function EuclidGridPanel({
         );
       })}
 
-      <Box>
+      <Box flexDirection="column">
         <Text color={theme.textGhost}>
           {stepTrigEdit
             ? "←→ / [ ] pulse steps only  ↑↓ track  t TRIG keys  Shift+t ALL  Esc grid"
             : editBox !== null
               ? "↑↓ value  Shift+↑↓ ×10  ←/→ or ]/[ field  Enter TRIG  Esc tracks  m/q/Q mute"
               : "↑↓ track  Enter k/n/r  Shift+M standard  m/q/Q mute"}
+        </Text>
+        <Text color={theme.textGhost}>
+          strip:{stripMode}  /euclid-strip [grid|fractional]
         </Text>
       </Box>
     </Box>

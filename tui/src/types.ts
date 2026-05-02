@@ -7,6 +7,13 @@ export const DEFAULT_GATE_PCT = 50;
 
 export type TrackName = typeof TRACK_NAMES[number];
 
+/** Euclidean track-strip layout (display only; hits remain on discrete pattern steps). */
+export type EuclidStripMode = "grid" | "fractional";
+
+export function parseEuclidStripMode(raw: unknown): EuclidStripMode {
+  return raw === "fractional" ? "fractional" : "grid";
+}
+
 export type LfoShape = "sine" | "square" | "triangle" | "ramp" | "saw";
 
 export interface LfoDef {
@@ -190,6 +197,7 @@ export interface DigitaktState {
   } | null;
   seq_mode: "standard" | "euclidean";
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
+  euclid_strip_mode: EuclidStripMode;
   /** LFO routes keyed e.g. `cc:kick:filter`, `trig:snare:prob`, `pitch:kick:main` */
   lfo: Record<string, LfoDef>;
   /**

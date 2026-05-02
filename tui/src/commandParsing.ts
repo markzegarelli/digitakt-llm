@@ -17,7 +17,7 @@ const KNOWN_SLASH_COMMANDS = new Set([
   "play", "stop", "new", "undo", "randbeat", "fresh", "bpm", "swing", "length",
   "prob", "vel", "gate", "pitch", "cc", "cc-step", "cond", "random", "mute",
   "save", "load", "delete", "fill", "chain", "patterns", "quit", "q", "help", "log",
-  "clear", "history", "mode", "gen", "ask", "midi", "lfo",
+  "clear", "history", "mode", "euclid-strip", "gen", "ask", "midi", "lfo",
 ]);
 
 const COMMAND_SPECS: Record<string, CommandSpec> = {
@@ -44,6 +44,10 @@ const COMMAND_SPECS: Record<string, CommandSpec> = {
     ],
   },
   delete: { params: [{ label: "name", required: false }] },
+  "euclid-strip": {
+    params: [{ label: "grid|fractional", required: false, suggestions: ["grid", "fractional"] }],
+    formHint: "bare = toggle (Euclidean only)",
+  },
   fill: { params: [{ label: "name", required: true }] },
   fresh: { params: [{ label: "prompt", required: true }] },
   gate: {

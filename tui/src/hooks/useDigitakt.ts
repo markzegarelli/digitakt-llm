@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DigitaktState, LfoDef, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
+import type { DigitaktState, EuclidStripMode, LfoDef, TrackName, CCParam, CCParamDef, PatternTrigState } from "../types.js";
 import {
   TRACK_NAMES,
   emptyTrigState,
   inferPatternLengthFromApi,
+  parseEuclidStripMode,
   parseLfoFromApi,
   parsePatternFromApi,
 } from "../types.js";
@@ -53,6 +54,7 @@ const DEFAULT_STATE: DigitaktState = {
   euclid: Object.fromEntries(
     TRACK_NAMES.map((t) => [t, { k: 0, n: 16, r: 0 }])
   ) as Record<TrackName, { k: number; n: number; r: number }>,
+  euclid_strip_mode: "grid" as const,
   lfo: {},
   lfo_out: {},
 };
@@ -152,6 +154,7 @@ export interface DigitaktActions {
   chainClear(): Promise<void>;
   setCCFocusedTrack(track: TrackName): Promise<void>;
   setLfoRoute(target: string, lfo: LfoDef | null): Promise<void>;
+  setEuclidStripMode(mode: EuclidStripMode): Promise<void>;
 }
 
 export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
@@ -195,6 +198,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       const pattern = data["current_pattern"] as Record<string, unknown>;
       const plen = (data["pattern_length"] as number) ?? 16;
       const { velocities, trig } = parsePatternFromApi(pattern, plen);
+      const seqMode = pattern["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
+      const euclid = parseEuclidBlock(pattern["euclid"], DEFAULT_STATE.euclid);
+      const euclidStripMode = parseEuclidStripMode(pattern["euclid_strip_mode"]);
       setState((prev) => ({
         ...prev,
         current_pattern: velocities,
@@ -218,6 +224,9 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
         chain_armed: (data["chain_armed"] as boolean) ?? prev.chain_armed,
         lfo: parseLfoFromApi(pattern["lfo"]),
         lfo_out: {},
+        seq_mode: seqMode,
+        euclid,
+        euclid_strip_mode: euclidStripMode,
         global_step: null,
         connected: true,
         midi_connected: (data["midi_port_name"] as string | null) !== null,
@@ -292,6 +301,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               const seqMode = raw["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
               const rawEuclid = raw["euclid"];
               const euclid = parseEuclidBlock(rawEuclid, prev.euclid);
+              const euclidStripMode = parseEuclidStripMode(raw["euclid_strip_mode"]);
               return {
                 ...prev,
                 pattern_length: plen,
@@ -301,6 +311,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 lfo_out: {},
                 seq_mode: seqMode,
                 euclid,
+                euclid_strip_mode: euclidStripMode,
                 log: newLog,
               };
             }
@@ -335,6 +346,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 : { velocities: prev.current_pattern, trig: prev.pattern_trig };
               const seqMode = raw?.["seq_mode"] === "euclidean" ? "euclidean" as const : "standard" as const;
               const euclid = raw ? parseEuclidBlock(raw["euclid"], prev.euclid) : prev.euclid;
+              const euclidStripMode = raw ? parseEuclidStripMode(raw["euclid_strip_mode"]) : prev.euclid_strip_mode;
               return {
                 ...prev,
                 generation_status: "idle",
@@ -345,6 +357,7 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
                 lfo_out: raw ? {} : prev.lfo_out,
                 seq_mode: seqMode,
                 euclid,
+                euclid_strip_mode: euclidStripMode,
                 last_prompt: (msg.data["prompt"] as string | null) ?? prev.last_prompt,
                 generation_summary: (msg.data["summary"] as DigitaktState["generation_summary"]) ?? null,
                 ...(genBpm ? { bpm: genBpm } : {}),
@@ -789,6 +802,10 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
       },
       [api],
     ),
+
+    setEuclidStripMode: useCallback(async (mode: EuclidStripMode) => {
+      await api("POST", "/euclid-strip-mode", { mode });
+    }, [api]),
   };
 
   return [state, actions];

@@ -141,7 +141,7 @@ slot at bar boundaries, then advances on the subsequent swap.
 
 ## Saved pattern files (JSON)
 
-`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, optional `lfo` — map of LFO routes keyed e.g. `cc:kick:filter` / `trig:snare:prob` / `pitch:kick:main` —, optional `seq_mode` and `euclid` for Euclidean sequencing, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
+`POST /patterns/{name}` writes `version: 2` JSON via `core/pattern_snapshot`: the step `pattern` (tracks, optional `prob` / `gate` / `cond` / `note` / `swing` / `step_cc`, optional `lfo` — map of LFO routes keyed e.g. `cc:kick:filter` / `trig:snare:prob` / `pitch:kick:main` —, optional `seq_mode`, `euclid`, and `euclid_strip_mode` for Euclidean sequencing / strip layout, etc.) plus session fields `bpm`, `swing` (global swing amount), `pattern_length`, `track_cc`, `track_velocity`, `track_pitch`, and `track_muted`. Legacy saves without `version` still load: only the pattern portion is applied (previous behavior). `GET /patterns/{name}` restores the full snapshot when `version` is 2, flushes global CC to the MIDI port if connected, and emits `pattern_loaded` so clients can resync from `/state`. `DELETE /patterns/{name}` removes a saved file. `POST /fill/{name}` continues to use only the nested `pattern` for the one-shot fill.
 
 Per-step `note` (optional dict of track → list of MIDI note 0–127 or JSON `null` to inherit `track_pitch` for that step) is edited from the TRIG panel or `POST /note`; playback uses the step override when set, otherwise `track_pitch` (or the default note map).
 
@@ -160,6 +160,12 @@ velocities are still read at the global step index. `POST /seq-mode` updates mod
 rows (same mutator path as other pattern edits). `GET /state` ensures defaults exist when all eight
 track rows are present. The TUI uses `/mode standard` or `/mode euclidean` (overloaded alongside
 `/mode chat|beat` for input mode).
+
+`euclid_strip_mode`: `"grid"` (default) or `"fractional"` — **display only** for the Euclidean track strip
+(`EuclidGridPanel`): `grid` merges character columns from the pattern length across ring vertices; `fractional`
+gives each vertex one equal terminal column. Normalized with `seq_mode` / `euclid` in `normalize_euclid_in_pattern`.
+`POST /euclid-strip-mode` with `{"mode":"grid"|"fractional"}` updates only this key; `pattern_changed` carries
+the full `pattern` dict including `euclid_strip_mode` (same as `generation_complete` / loads).
 
 ## Bar-Synced Mute Queue
 

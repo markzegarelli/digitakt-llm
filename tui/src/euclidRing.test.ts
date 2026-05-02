@@ -16,6 +16,8 @@ import {
   snapMasterStepToEuclideanHit,
   stepToPlayheadVertex,
   stepToVertex,
+  euclideanVertexPatternSlice,
+  patternColumnToVertexSlice,
 } from "./euclidRing.js";
 
 // ===== bjorklund tests =====
@@ -92,6 +94,36 @@ test("stepToVertex maps step mod n to vertex index (step 0 = top = vertex 0)", (
 test("stepToVertex wraps for step >= n", () => {
   expect(stepToVertex(16, 16)).toBe(0);
   expect(stepToVertex(17, 16)).toBe(1);
+});
+
+test("euclideanVertexPatternSlice partitions pl=16 across nc=3", () => {
+  const slices = [0, 1, 2].map((v) => euclideanVertexPatternSlice(v, 16, 3));
+  expect(slices).toEqual([
+    [0, 4],
+    [5, 9],
+    [10, 15],
+  ]);
+  const covered = new Set<number>();
+  for (const [a, b] of slices) {
+    for (let s = a; s <= b; s++) covered.add(s);
+  }
+  expect(covered.size).toBe(16);
+  for (let s = 0; s < 16; s++) expect(covered.has(s)).toBe(true);
+});
+
+test("patternColumnToVertexSlice inverts slice partition for pl=16 nc=5", () => {
+  const nc = 5;
+  const pl = 16;
+  for (let s = 0; s < pl; s++) {
+    const v = patternColumnToVertexSlice(s, pl, nc);
+    const [a, b] = euclideanVertexPatternSlice(v, pl, nc);
+    expect(s).toBeGreaterThanOrEqual(a);
+    expect(s).toBeLessThanOrEqual(b);
+  }
+});
+
+test("patternColumnToVertexSlice wraps steps outside pattern length", () => {
+  expect(patternColumnToVertexSlice(17, 16, 3)).toBe(patternColumnToVertexSlice(1, 16, 3));
 });
 
 test("stepToPlayheadVertex matches stepToVertex (rotation is layout-only)", () => {

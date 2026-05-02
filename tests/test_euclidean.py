@@ -3,10 +3,13 @@ import pytest
 from core.euclidean import (
     SEQ_MODE_EUCLIDEAN,
     SEQ_MODE_STANDARD,
+    EUCLID_STRIP_MODE_FRACTIONAL,
+    EUCLID_STRIP_MODE_GRID,
     bjorklund,
     clamp_euclid_triplet,
     default_euclid_block,
     normalize_euclid_in_pattern,
+    normalize_euclid_strip_mode,
     normalize_seq_mode,
     rhythm_hit,
     track_euclidean_hit,
@@ -82,6 +85,13 @@ def test_clamp_euclid_triplet():
     assert clamp_euclid_triplet(20, 40, 0) == (16, 16, 0)
 
 
+def test_normalize_euclid_strip_mode_defaults_and_clamps():
+    assert normalize_euclid_strip_mode(None) == EUCLID_STRIP_MODE_GRID
+    assert normalize_euclid_strip_mode("bogus") == EUCLID_STRIP_MODE_GRID
+    assert normalize_euclid_strip_mode("") == EUCLID_STRIP_MODE_GRID
+    assert normalize_euclid_strip_mode("fractional") == EUCLID_STRIP_MODE_FRACTIONAL
+
+
 def test_normalize_euclid_in_pattern():
     tracks = ("kick", "snare")
     p: dict = {"kick": [0, 0], "snare": [0, 0]}
@@ -89,6 +99,18 @@ def test_normalize_euclid_in_pattern():
     assert p["seq_mode"] == SEQ_MODE_STANDARD
     assert set(p["euclid"].keys()) == {"kick", "snare"}
     assert p["euclid"]["kick"] == {"k": 0, "n": 2, "r": 0}
+    assert p["euclid_strip_mode"] == EUCLID_STRIP_MODE_GRID
+
+
+def test_normalize_euclid_in_pattern_preserves_fractional_strip_mode():
+    tracks = ("kick", "snare")
+    p: dict = {
+        "kick": [0, 0],
+        "snare": [0, 0],
+        "euclid_strip_mode": "fractional",
+    }
+    normalize_euclid_in_pattern(p, 2, tracks)
+    assert p["euclid_strip_mode"] == EUCLID_STRIP_MODE_FRACTIONAL
 
 
 def test_track_euclidean_hit_respects_row():

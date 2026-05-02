@@ -34,6 +34,7 @@ from api.schemas import (
     CCParamEntry, CCParamsResponse,
     ChainRequest,
     SeqModeRequest,
+    EuclidStripModeRequest,
     MidiConnectRequest,
     MidiConnectResponse,
     MidiOutputsResponse,
@@ -490,6 +491,22 @@ def post_seq_mode(req: SeqModeRequest):
     new_pattern = _mutator.apply(_apply, event=None)
     _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
     return {"seq_mode": new_pattern.get("seq_mode"), "euclid": new_pattern.get("euclid")}
+
+
+@app.post("/euclid-strip-mode")
+def post_euclid_strip_mode(req: EuclidStripModeRequest):
+    """Set `euclid_strip_mode` on the live pattern (`grid` vs `fractional` strip layout)."""
+    tnames = tuple(TRACK_NAMES)
+
+    def _apply(p: dict) -> dict:
+        q = copy.deepcopy(p)
+        q["euclid_strip_mode"] = req.mode
+        normalize_euclid_in_pattern(q, _state.pattern_length, tnames)
+        return q
+
+    new_pattern = _mutator.apply(_apply, event=None)
+    _bus.emit("pattern_changed", {"pattern": new_pattern, "prompt": _state.last_prompt or ""})
+    return {"euclid_strip_mode": new_pattern.get("euclid_strip_mode")}
 
 
 @app.post("/vel")

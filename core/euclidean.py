@@ -8,6 +8,9 @@ SEQ_MODE_STANDARD = "standard"
 SEQ_MODE_EUCLIDEAN = "euclidean"
 VALID_SEQ_MODES = frozenset({SEQ_MODE_STANDARD, SEQ_MODE_EUCLIDEAN})
 
+EUCLID_STRIP_MODE_GRID = "grid"
+EUCLID_STRIP_MODE_FRACTIONAL = "fractional"
+
 _EUCLID_N_MAX = 16
 _EUCLID_N_MIN = 1
 
@@ -65,34 +68,41 @@ def normalize_seq_mode(raw: Any) -> str:
     return SEQ_MODE_STANDARD
 
 
+def normalize_euclid_strip_mode(raw: Any) -> str:
+    """Strip UI only: `grid` (pattern-length columns) or `fractional` (n equal columns). Unknown → grid."""
+    if raw == EUCLID_STRIP_MODE_FRACTIONAL:
+        return EUCLID_STRIP_MODE_FRACTIONAL
+    return EUCLID_STRIP_MODE_GRID
+
+
 def normalize_euclid_in_pattern(
     pattern: dict, pattern_length: int, track_names: tuple[str, ...]
 ) -> None:
-    """In-place: ensure `seq_mode`, `euclid` keys exist and all triplets are clamped."""
+    """In-place: ensure `seq_mode`, `euclid`, `euclid_strip_mode` keys exist and triplets are clamped."""
     pattern["seq_mode"] = normalize_seq_mode(pattern.get("seq_mode"))
     block = pattern.get("euclid")
     if not isinstance(block, dict):
-        block = default_euclid_block(pattern_length, track_names)
-        pattern["euclid"] = block
-        return
-    pl = max(_EUCLID_N_MIN, min(int(pattern_length), _EUCLID_N_MAX))
-    defaults = default_euclid_block(pl, track_names)
-    new_block: dict[str, dict[str, int]] = {}
-    for t in track_names:
-        row = block.get(t)
-        if not isinstance(row, dict):
-            new_block[t] = defaults[t].copy()
-            continue
-        k = row.get("k", defaults[t]["k"])
-        n = row.get("n", defaults[t]["n"])
-        r = row.get("r", 0)
-        try:
-            k_i, n_i, r_i = clamp_euclid_triplet(int(k), int(n), int(r))
-        except (TypeError, ValueError):
-            new_block[t] = defaults[t].copy()
-            continue
-        new_block[t] = {"k": k_i, "n": n_i, "r": r_i}
-    pattern["euclid"] = new_block
+        pattern["euclid"] = default_euclid_block(pattern_length, track_names)
+    else:
+        pl = max(_EUCLID_N_MIN, min(int(pattern_length), _EUCLID_N_MAX))
+        defaults = default_euclid_block(pl, track_names)
+        new_block: dict[str, dict[str, int]] = {}
+        for t in track_names:
+            row = block.get(t)
+            if not isinstance(row, dict):
+                new_block[t] = defaults[t].copy()
+                continue
+            k = row.get("k", defaults[t]["k"])
+            n = row.get("n", defaults[t]["n"])
+            r = row.get("r", 0)
+            try:
+                k_i, n_i, r_i = clamp_euclid_triplet(int(k), int(n), int(r))
+            except (TypeError, ValueError):
+                new_block[t] = defaults[t].copy()
+                continue
+            new_block[t] = {"k": k_i, "n": n_i, "r": r_i}
+        pattern["euclid"] = new_block
+    pattern["euclid_strip_mode"] = normalize_euclid_strip_mode(pattern.get("euclid_strip_mode"))
 
 
 def track_euclidean_hit(pattern: dict, track: str, step: int) -> bool:

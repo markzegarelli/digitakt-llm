@@ -772,6 +772,8 @@ class Generator:
                 pattern["seq_mode"] = existing["seq_mode"]
             if "euclid" not in pattern and isinstance(existing.get("euclid"), dict):
                 pattern["euclid"] = copy.deepcopy(existing["euclid"])
+            if "euclid_strip_mode" not in pattern and isinstance(existing.get("euclid_strip_mode"), str):
+                pattern["euclid_strip_mode"] = existing["euclid_strip_mode"]
             if "lfo" not in pattern and isinstance(existing.get("lfo"), dict):
                 pattern["lfo"] = copy.deepcopy(existing["lfo"])
             self.state.update_pattern(pattern, prompt)
