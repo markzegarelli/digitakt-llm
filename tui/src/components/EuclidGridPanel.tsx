@@ -101,7 +101,17 @@ export function EuclidGridPanel({
   const pl = Math.max(1, Math.floor(patternLength));
 
   const innerW = Math.max(0, width - BORDER_PAD);
+  /** Full inner budget for column math; strip is drawn in a pinned ruler width below. */
   const dotLaneW = Math.max(pl, innerW - LABEL_COL_W - KRN_RESERVE_W);
+  /**
+   * Width for steps 1…`pl`: `pl` × chars-per-step (~`floor(dotLaneW/pl)`, capped like pulse columns).
+   * Shared by grid and fractional so `k/n/r` lines up with the pattern end in both strip modes.
+   */
+  const charsPerPatternStep = Math.max(1, Math.min(MAX_COL_W, Math.floor(dotLaneW / pl)));
+  const dotsStripW = pl * charsPerPatternStep;
+  const gapKn = 1;
+  const stripRowUsed = LABEL_COL_W + dotsStripW + gapKn + KRN_RESERVE_W;
+  const stripRowTailFlex = innerW > stripRowUsed;
 
   return (
     <Box
@@ -119,7 +129,7 @@ export function EuclidGridPanel({
         const isPending = pendingMuteTracks.has(track);
 
         const sliceLayout = stripMode === "fractional" && nc <= pl;
-        const baseColW = sliceLayout ? pulseColumnWidths(dotLaneW, pl) : null;
+        const baseColW = sliceLayout ? pulseColumnWidths(dotsStripW, pl) : null;
         const rowColW = sliceLayout
           ? Array.from({ length: nc }, (_, v) => {
               const [a, b] = euclideanVertexPatternSlice(v, pl, nc);
@@ -127,7 +137,7 @@ export function EuclidGridPanel({
               for (let c = a; c <= b; c++) sum += baseColW![c] ?? 1;
               return sum;
             })
-          : pulseColumnWidths(dotLaneW, Math.max(1, nc));
+          : pulseColumnWidths(dotsStripW, Math.max(1, nc));
 
         const firstHitStep = firstHitPatternStep(kc, nc, rc, pl);
         const firstHitVertex =
@@ -161,42 +171,44 @@ export function EuclidGridPanel({
                 : theme.textDim;
 
         return (
-          <Box key={track} flexDirection="row">
+          <Box key={track} flexDirection="row" width={innerW}>
             <Box width={LABEL_COL_W}>
               <Text bold color={labelColor}>
                 {isSelected && isFocused ? ">" : " "}{TRACK_LABELS[track]}{" "}
               </Text>
             </Box>
 
-            {Array.from({ length: nc }, (_, v) => {
-              const isPlayhead = playVertex === v;
-              const isCursor = cursorVertex === v;
-              const cw = rowColW[v] ?? 1;
+            <Box flexDirection="row" width={dotsStripW}>
+              {Array.from({ length: nc }, (_, v) => {
+                const isPlayhead = playVertex === v;
+                const isCursor = cursorVertex === v;
+                const cw = rowColW[v] ?? 1;
 
-              const isHit = isVertexHit(v, kc, nc, rc);
-              const isFirstTrig = isHit && v === firstHitVertex;
-              const glyph = isFirstTrig ? "◆" : isHit ? "●" : "·";
-              const dotColor = isMuted
-                ? theme.textGhost
-                : isFirstTrig
-                  ? COLOR_FIRST_TRIG
-                  : isHit
-                    ? COLOR_HIT
-                    : COLOR_REST;
+                const isHit = isVertexHit(v, kc, nc, rc);
+                const isFirstTrig = isHit && v === firstHitVertex;
+                const glyph = isFirstTrig ? "◆" : isHit ? "●" : "·";
+                const dotColor = isMuted
+                  ? theme.textGhost
+                  : isFirstTrig
+                    ? COLOR_FIRST_TRIG
+                    : isHit
+                      ? COLOR_HIT
+                      : COLOR_REST;
 
-              return (
-                <Box key={v} width={cw} justifyContent="center">
-                  <Text
-                    color={isCursor && !isPlayhead ? theme.accent : dotColor}
-                    underline={isPlayhead || isCursor}
-                  >
-                    {glyph}
-                  </Text>
-                </Box>
-              );
-            })}
+                return (
+                  <Box key={v} width={cw} justifyContent="center">
+                    <Text
+                      color={isCursor && !isPlayhead ? theme.accent : dotColor}
+                      underline={isPlayhead || isCursor}
+                    >
+                      {glyph}
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
 
-            <Box flexDirection="row" marginLeft={1} minWidth={KRN_RESERVE_W}>
+            <Box flexDirection="row" marginLeft={gapKn} minWidth={KRN_RESERVE_W}>
               {isSelected
                 ? FIELD_NAMES.map((field, i) => {
                     const val = i === 0 ? kc : i === 1 ? nc : rc;
@@ -215,6 +227,7 @@ export function EuclidGridPanel({
                   <Text> </Text>
                 )}
             </Box>
+            {stripRowTailFlex ? <Box flexGrow={1} /> : null}
           </Box>
         );
       })}
