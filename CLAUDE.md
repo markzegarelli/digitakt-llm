@@ -48,6 +48,7 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/chain <p1> <p2> ... [--auto]` — define a pattern chain (setlist), optional auto-advance each bar
 - `/chain next` — queue next chain candidate (does not switch yet)
 - `/chain fire` — arm queued chain change to land on next bar downbeat (next "1")
+- `/chain fill <slot>` — queue a one-shot fill from chain slot `1`…`n` (same engine as `/fill`; rejected while a fill is already playing)
 - `/chain status` — show chain position, queued slot, and armed state
 - `/chain clear` — clear chain state
 - `/patterns [#tag]` — list saved patterns, optionally filtered by tag
@@ -72,6 +73,8 @@ Keyboard shortcuts:
 - `Shift+M` — toggle sequencing mode `standard` ↔ `euclidean`
 - `m` / `q` / `Shift+Q` — immediate mute, stage queued mute, fire queued mutes at next bar
 - `c` / `n` / `Shift+N` — if a chain exists: focus chain strip, queue chain next, arm chain fire on next downbeat
+- `Shift+!@#$%^&*(` — when a chain exists (and not in TRIG digit mode): queue fill from chain slots `1`–`9` (US QWERTY top-row symbols)
+- `f` then `1`–`9` within ~0.8s — same, layout-neutral (not while CMD is focused)
 
 **Interaction contract**
 
@@ -208,6 +211,7 @@ Key endpoints:
 - `POST /seq-mode` — set `seq_mode` (`standard` \| `euclidean`) and optional per-track `euclid` `{k,n,r}` in the live pattern
 - `POST /euclid-strip-mode` — set `euclid_strip_mode` (`grid` \| `fractional`) on the live pattern (TUI strip layout only; emits `pattern_changed` like other pattern writes)
 - `POST /fill/{name}` — queue saved pattern as one-shot fill
+- `POST /chain/slot/{slot}/fill` — queue one-shot fill from chain slot `1…n` (`404` no chain, `422` bad slot, `409` fill already playing)
 - `POST /gate` — set per-step gate (0–100% of step duration before note_off)
 - `POST /gate-track` — set gate to the same value on every step for a track
 - `POST /pitch` — set per-track MIDI note pitch (0–127)

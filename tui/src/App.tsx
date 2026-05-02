@@ -62,6 +62,11 @@ const normalizeRandomParam = (raw: string): string => {
   return raw;
 };
 
+/** US QWERTY Shift+digit row → chain slot 1–9 (one-bar fill). */
+const US_SHIFT_TOP_ROW_TO_SLOT: Record<string, number> = {
+  "!": 1, "@": 2, "#": 3, "$": 4, "%": 5, "^": 6, "&": 7, "*": 8, "(": 9,
+};
+
 export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -89,6 +94,8 @@ export function App({ baseUrl }: AppProps) {
   const [patternModal, setPatternModal] = useState<PatternModalState | null>(null);
   const [chainStripFocused, setChainStripFocused] = useState(false);
   const [chainSlotIdx, setChainSlotIdx] = useState(0);
+  /** Deadline (ms) for `f` then digit chain-slot fill shortcut. */
+  const fillLeaderDeadlineRef = useRef(0);
 
   const [patternStepEdit, setPatternStepEdit] = useState(false);
   const [patternSelectedStep, setPatternSelectedStep] = useState(0);
@@ -660,6 +667,12 @@ export function App({ baseUrl }: AppProps) {
         break;
       case "chain": {
         const chainCommand = parseChainCommand(parts);
+        if (chainCommand.kind === "fill_slot") {
+          actions.chainSlotFill(chainCommand.slot)
+            .then(() => actions.addLog(`fill queued: chain slot ${chainCommand.slot}`))
+            .catch(dispatchError);
+          break;
+        }
         if (chainCommand.kind === "subcommand") {
           const sub = chainCommand.subcommand;
           if (sub === "next") {
@@ -1171,6 +1184,38 @@ export function App({ baseUrl }: AppProps) {
       if (handlePatternMuteKey(shortcutInput)) return;
     }
 
+    const chainSlotFillKeysOk =
+      !patternModal &&
+      !ccStepMode &&
+      state.chain.length > 0 &&
+      isUnmodified &&
+      !(focus === "pattern" && patternStepEdit && trigKeysActive);
+    if (chainSlotFillKeysOk) {
+      const slotFromShift = US_SHIFT_TOP_ROW_TO_SLOT[input];
+      if (key.shift && slotFromShift !== undefined && slotFromShift <= state.chain.length) {
+        void actions.chainSlotFill(slotFromShift)
+          .then(() => actions.addLog(`fill queued: chain slot ${slotFromShift}`))
+          .catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+      if (isPlainShortcut("f")) {
+        fillLeaderDeadlineRef.current = Date.now() + 800;
+        return;
+      }
+      if (/^[1-9]$/.test(input) && Date.now() <= fillLeaderDeadlineRef.current) {
+        fillLeaderDeadlineRef.current = 0;
+        const slot = parseInt(input, 10);
+        if (slot > state.chain.length) {
+          actions.addLog(`✗ chain slot ${slot} is out of range (chain has ${state.chain.length})`);
+          return;
+        }
+        void actions.chainSlotFill(slot)
+          .then(() => actions.addLog(`fill queued: chain slot ${slot}`))
+          .catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+    }
+
     if (input === " ") {
       if (focus === "pattern" && patternStepEdit) {
         const track = TRACK_NAMES[patternTrack];
@@ -1554,6 +1599,8 @@ export function App({ baseUrl }: AppProps) {
         armed={state.chain_armed}
         stripFocused={chainStripFocused}
         selectedSlotIdx={chainSlotIdx}
+        termCols={termCols}
+        termRows={termRows}
       />
       <Box flexDirection="row" width={termCols}>
         <FocusRail focus={focus} />

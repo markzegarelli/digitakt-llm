@@ -33,7 +33,7 @@ const COMMAND_SPECS: Record<string, CommandSpec> = {
   "cc-step": { params: [{ label: "track", required: true }, { label: "param", required: true }, { label: "step", required: true }, { label: "value|-1", required: true }] },
   chain: {
     params: [{ label: "p1", required: true }, { label: "p2", required: false }, { label: "--auto", required: false }],
-    formHint: "or next|fire|status|clear",
+    formHint: "or next|fire|status|clear|fill <n>",
   },
   clear: { params: [] },
   cond: {
@@ -191,6 +191,7 @@ export function normalizeLfoTarget(raw: string): string {
 
 export type ParsedChainCommand =
   | { kind: "subcommand"; subcommand: ChainSubcommand }
+  | { kind: "fill_slot"; slot: number }
   | { kind: "set"; names: string[]; autoFlag: boolean }
   | { kind: "error"; message: string };
 
@@ -202,6 +203,17 @@ export function validateTrackValueArity(verb: string, parts: string[]): string |
 
 export function parseChainCommand(parts: string[]): ParsedChainCommand {
   const sub = parts[1]?.toLowerCase();
+  if (sub === "fill") {
+    const slotStr = parts[2];
+    if (!slotStr) {
+      return { kind: "error", message: "usage: /chain fill <slot> (1-based)" };
+    }
+    const slot = parseInt(slotStr, 10);
+    if (!Number.isFinite(slot) || slot < 1) {
+      return { kind: "error", message: "usage: /chain fill <slot> (1-based)" };
+    }
+    return { kind: "fill_slot", slot };
+  }
   if (sub && CHAIN_SUBCOMMANDS.includes(sub as ChainSubcommand)) {
     return { kind: "subcommand", subcommand: sub as ChainSubcommand };
   }
@@ -211,11 +223,15 @@ export function parseChainCommand(parts: string[]): ParsedChainCommand {
   if (names.length === 0) {
     return {
       kind: "error",
-      message: "usage: /chain <p1> <p2> ... [--auto]  or  /chain <next|fire|status|clear>",
+      message: "usage: /chain <p1> <p2> ... [--auto]  or  /chain <next|fire|status|clear|fill <n>",
     };
   }
 
-  const reserved = names.filter((n) => CHAIN_SUBCOMMANDS.includes(n.toLowerCase() as ChainSubcommand));
+  const reserved = names.filter(
+    (n) =>
+      CHAIN_SUBCOMMANDS.includes(n.toLowerCase() as ChainSubcommand) ||
+      n.toLowerCase() === "fill",
+  );
   if (reserved.length > 0) {
     return {
       kind: "error",
