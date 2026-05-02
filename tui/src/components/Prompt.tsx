@@ -75,7 +75,7 @@ const HELP_LINES = [
   "  Tab                                  toggle step/ring keys ↔ TRIG value keys",
   "",
   "Euclidean ring (k/n/r)",
-  "  euclid-strip [grid|fractional]       strip layout (pattern-step grid vs n-fold columns); bare toggles in Euclidean",
+  "  euclid-strip [grid|fractional]       strip layout (n-fold columns vs pattern-step buckets); bare toggles in Euclidean",
   "  Enter                                open/close k n r boxes",
   "  [ ] or ←/→                           cycle k/n/r field when boxes are open",
   "  ↑/↓                                  track select (closed) or adjust field (open)",

@@ -162,8 +162,7 @@ track rows are present. The TUI uses `/mode standard` or `/mode euclidean` (over
 `/mode chat|beat` for input mode).
 
 `euclid_strip_mode`: `"grid"` (default) or `"fractional"` — **display only** for the Euclidean track strip
-(`EuclidGridPanel`): `grid` merges character columns from the pattern length across ring vertices; `fractional`
-gives each vertex one equal terminal column. Normalized with `seq_mode` / `euclid` in `normalize_euclid_in_pattern`.
+(`EuclidGridPanel`): `grid` gives each vertex one equal terminal column; `fractional` merges character columns from the pattern length across ring vertices (when ring length n ≤ pattern length). Normalized with `seq_mode` / `euclid` in `normalize_euclid_in_pattern`.
 `POST /euclid-strip-mode` with `{"mode":"grid"|"fractional"}` updates only this key; `pattern_changed` carries
 the full `pattern` dict including `euclid_strip_mode` (same as `generation_complete` / loads).
 

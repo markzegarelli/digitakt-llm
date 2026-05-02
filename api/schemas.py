@@ -267,7 +267,7 @@ class SeqModeRequest(BaseModel):
 
 
 class EuclidStripModeRequest(BaseModel):
-    """Euclidean track-strip layout only (display); engine stays step-quantized on pattern length."""
+    """Euclidean track-strip layout only (display): grid = n equal columns; fractional = pattern-step buckets when n ≤ pl."""
 
     mode: Literal["grid", "fractional"]
 

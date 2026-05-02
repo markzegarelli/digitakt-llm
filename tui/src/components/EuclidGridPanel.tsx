@@ -38,7 +38,7 @@ export interface EuclidGridPanelProps {
   patternLength: number;
   selectedTrack: number;
   euclid: Record<TrackName, { k: number; n: number; r: number }>;
-  /** Strip layout: `grid` merges pattern-length columns per vertex; `fractional` uses n equal terminal columns. */
+  /** Strip layout: `grid` uses n equal terminal columns; `fractional` merges pattern-length columns per vertex (when n ≤ pl). */
   stripMode: EuclidStripMode;
   currentStep: number | null;
   isFocused: boolean;
@@ -118,7 +118,7 @@ export function EuclidGridPanel({
         const isMuted = trackMuted[track] ?? false;
         const isPending = pendingMuteTracks.has(track);
 
-        const sliceLayout = stripMode === "grid" && nc <= pl;
+        const sliceLayout = stripMode === "fractional" && nc <= pl;
         const baseColW = sliceLayout ? pulseColumnWidths(dotLaneW, pl) : null;
         const rowColW = sliceLayout
           ? Array.from({ length: nc }, (_, v) => {

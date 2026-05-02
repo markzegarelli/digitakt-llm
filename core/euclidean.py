@@ -69,7 +69,7 @@ def normalize_seq_mode(raw: Any) -> str:
 
 
 def normalize_euclid_strip_mode(raw: Any) -> str:
-    """Strip UI only: `grid` (pattern-length columns) or `fractional` (n equal columns). Unknown → grid."""
+    """Strip UI only: `grid` (n equal columns per vertex) or `fractional` (pattern-length buckets). Unknown → grid."""
     if raw == EUCLID_STRIP_MODE_FRACTIONAL:
         return EUCLID_STRIP_MODE_FRACTIONAL
     return EUCLID_STRIP_MODE_GRID

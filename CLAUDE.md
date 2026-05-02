@@ -57,7 +57,7 @@ Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** si
 - `/log` — toggle activity log
 - `/clear` — clear activity log
 - `/mode [chat|beat|standard|euclidean]` — switch input mode (`chat` / `beat`) or pattern sequencing mode (`standard` grid vs `euclidean` rhythms)
-- `/euclid-strip [grid|fractional]` — Euclidean track-strip display: `grid` uses pattern-length column buckets per vertex; `fractional` uses n equal columns (engine still fires on discrete pattern steps). Bare `/euclid-strip` toggles only when `seq_mode` is `euclidean`; explicit `grid`/`fractional` persists on the pattern anytime
+- `/euclid-strip [grid|fractional]` — Euclidean track-strip display: `grid` uses n equal columns across vertices; `fractional` uses pattern-length column buckets merged per vertex when n ≤ pattern length (engine still fires on discrete pattern steps). Bare `/euclid-strip` toggles only when `seq_mode` is `euclidean`; explicit `grid`/`fractional` persists on the pattern anytime
 - `/ask <question>` — ask Claude (works in any mode)
 - `/fresh <prompt>` — generate a new pattern without prior-pattern variation context (same as `POST /generate` with `"variation": false`)
 - `/gen` — generate a beat from the last `/ask` response
