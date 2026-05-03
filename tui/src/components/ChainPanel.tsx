@@ -100,15 +100,12 @@ export function ChainPanel({
           const fillCue = fillIdx === i;
           const isSel = stripFocused && i === selectedSlotIdx;
 
-          let borderColor = theme.border;
+          let borderColor = theme.textFaint;
           if (fillCue) borderColor = theme.good;
           else if (transitionArmed) borderColor = theme.error;
           else if (transitionQueued) borderColor = theme.warn;
           else if (isCurrent || isSel) borderColor = theme.borderActive;
 
-          // Slots with an active state get a border; inactive slots are plain text
-          // with paddingX=2 to preserve the same total width (border eats 1 char per side).
-          const hasBorder = isCurrent || isSel || transitionQueued || transitionArmed || fillCue;
           const onAccent = isCurrent;
           const mainColor = onAccent ? theme.accent : theme.textDim;
           const nameColor = onAccent ? theme.accent : theme.text;
@@ -122,9 +119,9 @@ export function ChainPanel({
           return (
             <Box
               key={`${name}-${i}`}
-              borderStyle={hasBorder ? "single" : undefined}
-              borderColor={hasBorder ? borderColor : undefined}
-              paddingX={hasBorder ? 1 : 2}
+              borderStyle="single"
+              borderColor={borderColor}
+              paddingX={1}
               marginRight={1}
               marginBottom={0}
               flexShrink={0}
