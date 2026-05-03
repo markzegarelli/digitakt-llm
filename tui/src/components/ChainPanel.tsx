@@ -100,7 +100,7 @@ export function ChainPanel({
           const fillCue = fillIdx === i;
           const isSel = stripFocused && i === selectedSlotIdx;
 
-          let borderColor = theme.textFaint;
+          let borderColor: string = "black";
           if (fillCue) borderColor = theme.good;
           else if (isCurrent || isSel) borderColor = theme.borderActive;
 
