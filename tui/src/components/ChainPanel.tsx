@@ -100,9 +100,10 @@ export function ChainPanel({
           const fillCue = fillIdx === i;
           const isSel = stripFocused && i === selectedSlotIdx;
 
-          let borderColor: string = "black";
+          let borderColor: string = "gray";
           if (fillCue) borderColor = theme.good;
-          else if (isCurrent || isSel) borderColor = theme.borderActive;
+          else if (isCurrent) borderColor = theme.borderActive;
+          else if (isSel) borderColor = theme.accentSubtle;
 
           const onAccent = isCurrent;
           const mainColor = onAccent ? theme.accent : theme.textDim;

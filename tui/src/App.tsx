@@ -1186,11 +1186,8 @@ export function App({ baseUrl }: AppProps) {
 
     if (state.chain.length > 0) {
       if (shortcutInput === "n" && isUnmodified) {
-        const nextIdx = state.chain_index >= 0
-          ? (state.chain_index + 1) % state.chain.length
-          : 0;
         setChainStripFocused(true);
-        setChainSlotIdx(nextIdx);
+        setChainSlotIdx(state.chain_index >= 0 ? state.chain_index : 0);
         actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
         return;
       }
