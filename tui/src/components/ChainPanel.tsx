@@ -89,7 +89,7 @@ export function ChainPanel({
             CHAIN
             {stripFocused ? " \u25B8" : ""}
           </Text>
-          {fillActive ? <Text color={theme.good}> FILL</Text> : null}
+          <Text color={fillActive ? theme.good : theme.surface}> FILL</Text>
         </Box>
         {chain.map((name, i) => {
           const slot = i + 1;
@@ -106,11 +106,14 @@ export function ChainPanel({
           else if (transitionQueued) borderColor = theme.warn;
           else if (isCurrent || isSel) borderColor = theme.borderActive;
 
+          // Slots with an active state get a border; inactive slots are plain text
+          // with paddingX=2 to preserve the same total width (border eats 1 char per side).
+          const hasBorder = isCurrent || isSel || transitionQueued || transitionArmed || fillCue;
           const onAccent = isCurrent;
           const mainColor = onAccent ? theme.accent : theme.textDim;
           const nameColor = onAccent ? theme.accent : theme.text;
           // Fixed 6-char slots per cue type \u2014 prevents layout shift as cues appear/disappear.
-          // "\u00A0\u00B7fill" and "\u00A0\u00B7next" are each 6 chars; "@1" padded to match.
+          // " \u00B7fill" and " \u00B7next" are each 6 chars; "@1" padded to match.
           const fillCueStr  = fillCue        ? "\u00A0\u00B7fill" : "      ";
           const transCueStr = transitionArmed  ? "\u00A0\u00B7@1  "
                             : transitionQueued ? "\u00A0\u00B7next"
@@ -119,9 +122,9 @@ export function ChainPanel({
           return (
             <Box
               key={`${name}-${i}`}
-              borderStyle="single"
-              borderColor={borderColor}
-              paddingX={1}
+              borderStyle={hasBorder ? "single" : undefined}
+              borderColor={hasBorder ? borderColor : undefined}
+              paddingX={hasBorder ? 1 : 2}
               marginRight={1}
               marginBottom={0}
               flexShrink={0}
