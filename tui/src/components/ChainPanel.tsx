@@ -2,11 +2,29 @@ import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../theme.js";
 
+/** Width budget: outer panel width termCols; paddingX=1 → inner strip ≈ termCols-2 (border eats 2). */
 function trunc(s: string, max: number): string {
   if (max <= 0) return "";
   if (s.length <= max) return s;
   if (max <= 1) return "\u2026";
   return `${s.slice(0, max - 1)}\u2026`;
+}
+
+/** Parse chain-slot fill cue from optimistic/API `fill_queued` (`#2`, `#2:name`). */
+function parseFillQueuedChainSlot(fillQueued: string | false): number | null {
+  if (fillQueued === false) return null;
+  const m = /^#(\d+)/.exec(fillQueued);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) && n >= 1 ? n - 1 : null;
+}
+
+function fillCueIndex(chain: string[], fillQueued: string | false): number | null {
+  const bySlot = parseFillQueuedChainSlot(fillQueued);
+  if (bySlot !== null) return bySlot;
+  if (fillQueued === false) return null;
+  const idx = chain.indexOf(fillQueued);
+  return idx >= 0 ? idx : null;
 }
 
 interface ChainPanelProps {
@@ -17,6 +35,8 @@ interface ChainPanelProps {
   armed: boolean;
   stripFocused?: boolean;
   selectedSlotIdx?: number;
+  fillQueued?: string | false;
+  fillActive?: boolean;
   termCols: number;
   termRows: number;
 }
@@ -29,92 +49,29 @@ export function ChainPanel({
   armed,
   stripFocused = false,
   selectedSlotIdx = 0,
+  fillQueued = false,
+  fillActive = false,
   termCols,
   termRows,
 }: ChainPanelProps) {
   if (chain.length === 0) return null;
 
-  const innerW = Math.max(8, termCols - 4);
-  const useCompact = chain.length > 8 || termRows < 22;
-  const cellW = Math.max(3, Math.floor(innerW / chain.length) - 1);
-  const nameMax = Math.max(4, Math.min(14, cellW + 2));
-
+  const innerW = Math.max(8, termCols - 2);
+  const useShortHint = termRows < 22 || termCols < 72;
   const hintLong =
     "c focus \u00B7 n next \u00B7 N fire \u00B7 Shift+1\u20139 fill (US) \u00B7 f\u2192digit \u00B7 /chain fill n";
   const hintShort =
     termCols >= 72 ? hintLong : "c n N \u00B7 Shift+digit fill \u00B7 f\u21921\u20139 \u00B7 /chain fill n";
 
-  const sep = " \u203a ";
-
-  if (useCompact) {
-    return (
-      <Box
-        flexDirection="column"
-        width={termCols}
-        paddingX={1}
-        paddingY={0}
-        borderStyle="single"
-        borderColor={stripFocused ? theme.borderActive : theme.border}
-        flexShrink={0}
-      >
-        <Box flexDirection="row" flexWrap="wrap">
-          <Text bold color={stripFocused ? theme.accent : theme.textDim}>
-            CHAIN
-            {stripFocused ? " \u25B8" : ""}
-          </Text>
-          <Text color={theme.textGhost}>{sep}</Text>
-          {chain.map((name, i) => {
-            const slot = i + 1;
-            const isCurrent = i === chainIndex;
-            const isQueued = queuedIndex !== null && i === queuedIndex;
-            const isSel = stripFocused && i === selectedSlotIdx;
-            return (
-              <React.Fragment key={`${name}-${i}`}>
-                {i > 0 ? <Text color={theme.textGhost}>{sep}</Text> : null}
-                <Text
-                  bold={isCurrent || isQueued || isSel}
-                  color={
-                    isCurrent
-                      ? theme.accentInk
-                      : isQueued
-                        ? armed
-                          ? theme.error
-                          : theme.warn
-                        : isSel
-                          ? theme.accent
-                          : theme.textDim
-                  }
-                  backgroundColor={isCurrent ? theme.accent : undefined}
-                >
-                  [{slot}]{trunc(name, nameMax)}
-                </Text>
-              </React.Fragment>
-            );
-          })}
-          {chainAuto ? (
-            <>
-              <Text color={theme.textGhost}>{"  "}</Text>
-              <Text color={theme.textFaint}>LOOP</Text>
-            </>
-          ) : null}
-          {queuedIndex !== null && chain[queuedIndex] !== undefined ? (
-            <>
-              <Text color={theme.textGhost}>{"  "}</Text>
-              <Text color={theme.warn} bold>
-                {`\u23ED${queuedIndex + 1}`}
-                <Text color={theme.textFaint}>{armed ? "@1" : " bar"}</Text>
-              </Text>
-            </>
-          ) : null}
-        </Box>
-        <Box flexDirection="row" marginTop={0}>
-          <Text color={theme.textFaint} wrap="truncate">
-            {hintShort}
-          </Text>
-        </Box>
-      </Box>
-    );
-  }
+  const boxFrame = 4;
+  const approxBracket = 4;
+  const nameMax = Math.max(
+    4,
+    Math.min(
+      28,
+      Math.floor((innerW - chain.length * (boxFrame + approxBracket)) / Math.max(1, chain.length)),
+    ),
+  );
 
   return (
     <Box
@@ -126,66 +83,71 @@ export function ChainPanel({
       borderColor={stripFocused ? theme.borderActive : theme.border}
       flexShrink={0}
     >
-      <Box flexDirection="row" marginBottom={0}>
-        <Text bold color={stripFocused ? theme.accent : theme.textDim}>
-          CHAIN
-          {stripFocused ? " \u25B8" : ""}
-        </Text>
-      </Box>
-      <Box flexDirection="row" flexWrap="nowrap" width={innerW}>
+      <Box flexDirection="row" flexWrap="wrap" alignItems="flex-start">
+        <Box flexDirection="row" marginRight={1} flexShrink={0}>
+          <Text bold color={stripFocused ? theme.accent : theme.textDim}>
+            CHAIN
+            {stripFocused ? " \u25B8" : ""}
+          </Text>
+          <Text color={fillActive ? theme.good : theme.surface}> FILL</Text>
+        </Box>
         {chain.map((name, i) => {
           const slot = i + 1;
           const isCurrent = i === chainIndex;
-          const isQueued = queuedIndex !== null && i === queuedIndex;
+          const transitionQueued = queuedIndex !== null && i === queuedIndex;
+          const transitionArmed = transitionQueued && armed;
+          const fillIdx = fillCueIndex(chain, fillQueued);
+          const fillCue = fillIdx === i;
           const isSel = stripFocused && i === selectedSlotIdx;
-          const w = Math.max(3, cellW);
-          const numColor =
-            isCurrent ? theme.accentInk
-            : isQueued ? (armed ? theme.error : theme.warn)
-            : isSel ? theme.accent
-            : theme.textGhost;
-          const numBg = isCurrent ? theme.accent : undefined;
+
+          let borderColor: string = "gray";
+          if (fillCue) borderColor = theme.good;
+          else if (isCurrent) borderColor = theme.borderActive;
+          else if (isSel) borderColor = theme.accentSubtle;
+
+          const onAccent = isCurrent;
+          const mainColor = onAccent ? theme.accent : theme.textDim;
+          const nameColor = onAccent ? theme.accent : theme.text;
+          // Fixed 6-char slots per cue type \u2014 prevents layout shift as cues appear/disappear.
+          // " \u00B7fill" and " \u00B7next" are each 6 chars; "@1" padded to match.
+          const fillCueStr  = fillCue        ? "\u00A0\u00B7fill" : "      ";
+          const transCueStr = transitionArmed  ? "\u00A0\u00B7@1  "
+                            : transitionQueued ? "\u00A0\u00B7next"
+                            :                    "      ";
+
           return (
-            <Box key={`slot-${i}`} width={w + 1} marginRight={0} flexDirection="column">
-              <Text
-                bold
-                color={numColor}
-                backgroundColor={numBg}
-                wrap="truncate"
-              >
-                {String(slot).padStart(Math.max(1, w - 1), " ")}
-              </Text>
-              <Text
-                color={isCurrent ? theme.accentInk : theme.textDim}
-                backgroundColor={isCurrent ? theme.accent : undefined}
-                wrap="truncate"
-              >
-                {trunc(name, nameMax)}
+            <Box
+              key={`${name}-${i}`}
+              borderStyle="single"
+              borderColor={borderColor}
+              paddingX={1}
+              marginRight={1}
+              marginBottom={0}
+              flexShrink={0}
+              flexDirection="column"
+            >
+              <Text wrap="truncate">
+                <Text bold color={mainColor}>
+                  {`[${slot}]`}
+                </Text>
+                <Text color={nameColor}>{` ${trunc(name, nameMax)}`}</Text>
+                <Text color={fillCue ? theme.good : theme.textFaint}>{fillCueStr}</Text>
+                <Text color={transitionArmed ? theme.error : transitionQueued ? theme.warn : theme.textFaint}>{transCueStr}</Text>
               </Text>
             </Box>
           );
         })}
+        {chainAuto ? (
+          <Box marginLeft={0} flexShrink={0}>
+            <Text color={theme.textFaint}>AUTO</Text>
+          </Box>
+        ) : null}
       </Box>
-      <Box flexDirection="row" flexWrap="wrap" marginTop={0}>
-        {queuedIndex !== null && chain[queuedIndex] !== undefined ? (
-          <Text color={theme.warn} bold>
-            {`\u23ED ${queuedIndex + 1}:${chain[queuedIndex]}`}
-            <Text color={theme.textFaint}>
-              {armed ? "  @1" : "  next bar"}
-            </Text>
-          </Text>
-        ) : (
-          <Text color={theme.textFaint}>{stripFocused ? "\u2190\u2192  n  N  esc  \u00B7  " : ""}</Text>
-        )}
+      <Box flexDirection="row" marginTop={0}>
         <Text color={theme.textFaint} wrap="truncate">
-          {hintShort}
+          {useShortHint ? hintShort : hintLong}
         </Text>
       </Box>
-      {chainAuto ? (
-        <Box flexDirection="row">
-          <Text color={theme.textFaint}>AUTO-ADVANCE</Text>
-        </Box>
-      ) : null}
     </Box>
   );
 }

@@ -1184,6 +1184,22 @@ export function App({ baseUrl }: AppProps) {
       if (handlePatternMuteKey(shortcutInput)) return;
     }
 
+    if (state.chain.length > 0) {
+      if (shortcutInput === "n" && isUnmodified) {
+        setChainStripFocused(true);
+        setChainSlotIdx(state.chain_index >= 0 ? state.chain_index : 0);
+        actions.chainNext().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+      if (shortcutInput === "N" && isUnmodified) {
+        const qIdx = state.chain_queued_index;
+        setChainStripFocused(true);
+        setChainSlotIdx(qIdx !== null ? qIdx : Math.max(0, state.chain_index));
+        actions.chainFire().catch((e: Error) => actions.addLog(`✗ ${e.message}`));
+        return;
+      }
+    }
+
     const chainSlotFillKeysOk =
       !patternModal &&
       !ccStepMode &&
@@ -1599,6 +1615,8 @@ export function App({ baseUrl }: AppProps) {
         armed={state.chain_armed}
         stripFocused={chainStripFocused}
         selectedSlotIdx={chainSlotIdx}
+        fillQueued={state.fill_queued}
+        fillActive={state.fill_active}
         termCols={termCols}
         termRows={termRows}
       />
