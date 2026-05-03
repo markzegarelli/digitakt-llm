@@ -102,8 +102,6 @@ export function ChainPanel({
 
           let borderColor = theme.textFaint;
           if (fillCue) borderColor = theme.good;
-          else if (transitionArmed) borderColor = theme.error;
-          else if (transitionQueued) borderColor = theme.warn;
           else if (isCurrent || isSel) borderColor = theme.borderActive;
 
           const onAccent = isCurrent;
