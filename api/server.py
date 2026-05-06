@@ -13,6 +13,7 @@ from typing import Set
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 
 import datetime
 from core.logging_config import get_logger
@@ -857,6 +858,11 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()  # keep connection alive
     except WebSocketDisconnect:
         _ws_clients.discard(websocket)
+
+
+_web_dist = Path(__file__).parent.parent / "web" / "dist"
+if _web_dist.exists():
+    app.mount("/", StaticFiles(directory=str(_web_dist), html=True), name="static")
 
 
 def start_background(port: int = 8000, host: str | None = None) -> None:

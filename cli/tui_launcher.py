@@ -82,12 +82,54 @@ def _wait_for_server(url: str, timeout: float = 15.0) -> bool:
     return False
 
 
-def main() -> None:
-    tui_dir = Path(__file__).parent.parent / "tui"
-    if not tui_dir.exists():
-        print("Error: tui/ directory not found. Run 'bun install' in tui/ first.")
+def _launch_ink(tui_dir: Path, url: str) -> None:
+    result = subprocess.run(
+        ["bun", "run", "src/index.tsx"],
+        cwd=str(tui_dir),
+        env={**os.environ, "DIGITAKT_URL": url},
+    )
+    sys.exit(result.returncode)
+
+
+def _launch_web(api_port: int, url: str) -> None:
+    import webbrowser
+    web_dir = Path(__file__).parent.parent / "web"
+    dist_dir = web_dir / "dist"
+
+    if not web_dir.exists():
+        print("Error: web/ directory not found. Run 'bun install' in web/ first.")
         sys.exit(1)
 
+    if dist_dir.exists():
+        webbrowser.open(f"http://localhost:{api_port}")
+        print(f"Web UI: http://localhost:{api_port}")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+    else:
+        vite_url = "http://localhost:5173"
+        webbrowser.open(vite_url)
+        print(f"Web UI (dev): {vite_url}")
+        result = subprocess.run(
+            ["bun", "run", "dev"],
+            cwd=str(web_dir),
+            env={**os.environ, "VITE_API_URL": url},
+        )
+        sys.exit(result.returncode)
+
+
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Digitakt LLM sequencer")
+    parser.add_argument(
+        "--ui", choices=["ink", "web"], default="ink",
+        help="UI mode: ink (terminal, default) or web (browser)",
+    )
+    args, _ = parser.parse_known_args()
+
+    tui_dir = Path(__file__).parent.parent / "tui"
     api_port = int(os.environ.get("PORT", "8000"))
     url = os.environ.get("DIGITAKT_URL", f"http://localhost:{api_port}")
 
@@ -98,7 +140,6 @@ def main() -> None:
         )
         sys.exit(1)
 
-    return_code = 1
     try:
         _start_server(api_port)
 
@@ -108,13 +149,13 @@ def main() -> None:
 
         print(f"API server ready at http://localhost:{api_port}")
 
-        result = subprocess.run(
-            ["bun", "run", "src/index.tsx"],
-            cwd=str(tui_dir),
-            env={**os.environ, "DIGITAKT_URL": url},
-        )
-        return_code = result.returncode
+        if args.ui == "web":
+            _launch_web(api_port, url)
+        else:
+            if not tui_dir.exists():
+                print("Error: tui/ directory not found. Run 'bun install' in tui/ first.")
+                sys.exit(1)
+            _launch_ink(tui_dir, url)
     finally:
         if _midi_listener is not None:
             _midi_listener.stop()
-    sys.exit(return_code)
