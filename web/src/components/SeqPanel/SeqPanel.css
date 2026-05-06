@@ -1,0 +1,35 @@
+.seq-panel { min-height: 200px; }
+
+.seq-grid {
+  display: grid;
+  gap: 2px;
+  padding: var(--panel-pad);
+  font-size: 12px;
+}
+
+.seq-track-name {
+  color: var(--text-dim);
+  align-self: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 4px;
+}
+
+.seq-track-name.muted { color: var(--muted); text-decoration: line-through; }
+
+.seq-step {
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 2px 0;
+  user-select: none;
+  transition: background 0.05s;
+}
+
+.seq-step.on      { color: var(--text); }
+.seq-step.playhead { background: var(--accent-dim); color: var(--accent); }
+.seq-step.muted   { opacity: 0.4; }
+.seq-step:hover   { border-color: var(--border); }

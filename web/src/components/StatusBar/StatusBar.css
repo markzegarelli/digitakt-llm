@@ -1,0 +1,18 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  font-size: 11px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.status-bar .sep   { color: var(--muted); }
+.status-bar .playing { color: var(--success); }
+.status-bar .stopped { color: var(--muted); }
+.status-bar .midi-ok  { color: var(--success); }
+.status-bar .midi-off { color: var(--danger); }
+.status-bar .fill { color: var(--accent); }
+.status-bar .disconnected { color: var(--danger); }

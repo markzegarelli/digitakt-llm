@@ -1,0 +1,41 @@
+.cmd-panel { min-height: 60px; }
+
+.cmd-body {
+  padding: var(--panel-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmd-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd-status.generating { color: var(--accent); }
+.cmd-status.failed     { color: var(--danger); }
+
+.cmd-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cmd-prompt-char { color: var(--accent); }
+
+.cmd-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  caret-color: var(--accent);
+}
+
+.cmd-input::placeholder { color: var(--muted); }

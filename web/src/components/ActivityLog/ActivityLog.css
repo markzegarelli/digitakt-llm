@@ -1,0 +1,6 @@
+.activity-log { max-height: 120px; overflow-y: auto; }
+
+.log-body { padding: 4px 12px; font-size: 11px; }
+
+.log-entry { color: var(--text-dim); white-space: pre-wrap; }
+.log-entry:last-child { color: var(--text); }

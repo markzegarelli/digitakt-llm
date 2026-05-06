@@ -1,0 +1,24 @@
+.mix-panel { overflow-y: auto; }
+
+.mix-list {
+  padding: var(--panel-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mix-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.mix-track { color: var(--text-dim); width: 60px; flex-shrink: 0; }
+.mix-param { color: var(--text-dim); flex: 1; }
+.mix-value { color: var(--accent); width: 36px; text-align: right; flex-shrink: 0; }
+
+.mix-bar { flex: 2; height: 4px; background: var(--surface2); border-radius: 2px; }
+.mix-bar-fill { height: 100%; background: var(--accent-dim); border-radius: 2px; }
+
+.mix-empty { color: var(--muted); font-size: 12px; padding: var(--panel-pad); }
