@@ -13,12 +13,17 @@ export function createClient(baseUrl = "http://localhost:8000"): BackendClient {
   function connect() {
     const socket = new WebSocket(wsUrl);
     socket.onmessage = (ev) => {
-      let data: AppEvent;
+      let raw: Record<string, unknown>;
       try {
-        data = JSON.parse(ev.data as string);
+        raw = JSON.parse(ev.data as string);
       } catch {
         return;
       }
+      // Normalize server format {event, data} → {type, ...data}
+      const data: AppEvent =
+        typeof raw["event"] === "string"
+          ? { type: raw["event"], ...((raw["data"] as Record<string, unknown>) ?? {}) }
+          : raw;
       handlers.forEach((h) => h(data));
     };
     socket.onclose = () => setTimeout(connect, 1000);
