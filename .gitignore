@@ -11,6 +11,8 @@ dist/
 build/
 package-lock.json
 tui/node_modules/
+web/node_modules/
+web/dist/
 .DS_Store
 .vscode/
 .idea/
