@@ -1,0 +1,53 @@
+:root {
+  --bg:          #0d0d0d;
+  --surface:     #141414;
+  --surface2:    #1a1a1a;
+  --border:      #2a2a2a;
+  --accent:      #f0c040;
+  --accent-dim:  #7a621f;
+  --muted:       #555555;
+  --text:        #e0e0e0;
+  --text-dim:    #888888;
+  --danger:      #e05050;
+  --success:     #50e080;
+  --font-mono:   "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", monospace;
+  --font-size:   13px;
+  --line-height: 1.4;
+  --panel-pad:   8px 12px;
+  --radius:      2px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  overflow: hidden;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 4px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-header.focused {
+  color: var(--accent);
+  border-bottom-color: var(--accent-dim);
+}
+
+.panel-body { padding: var(--panel-pad); }

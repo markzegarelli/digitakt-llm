@@ -1,0 +1,25 @@
+.app-layout {
+  display: grid;
+  grid-template-areas:
+    "status status"
+    "seq    seq   "
+    "mix    trig  "
+    "cmd    cmd   "
+    "log    log   ";
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 28px 1fr auto auto auto;
+  height: 100vh;
+  gap: 1px;
+  background: var(--border);
+}
+
+.status-bar  { grid-area: status; }
+.seq-panel   { grid-area: seq; }
+.mix-panel   { grid-area: mix; }
+.trig-panel  { grid-area: trig; }
+.cmd-panel   { grid-area: cmd; }
+.activity-log { grid-area: log; }
+
+.app-layout:not(:has(.activity-log)) {
+  grid-template-rows: 28px 1fr auto auto 0;
+}
