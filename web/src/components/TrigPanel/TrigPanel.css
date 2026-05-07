@@ -1,18 +1,9 @@
 .trig-panel { overflow-y: auto; }
 
-.trig-body { padding: var(--panel-pad); font-size: 12px; }
+.trig-body { padding: 10px 10px 8px; }
 
-.trig-step-info {
-  color: var(--muted);
-  font-size: 11px;
-  margin-bottom: 8px;
+.trig-rows {
+  font-size: 13px;
+  line-height: 24px;
+  color: var(--fg);
 }
-
-.trig-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.trig-label { color: var(--text-dim); width: 50px; }
-.trig-value { color: var(--text); }

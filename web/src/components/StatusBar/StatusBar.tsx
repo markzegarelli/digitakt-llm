@@ -4,28 +4,35 @@ import "./StatusBar.css";
 
 interface Props { state: DigitaktState; className?: string; }
 
+const SEP = <span className="hdr-sep">  │  </span>;
+
 export function StatusBar({ state, className }: Props) {
+  const midiColor = state.midi_connected ? "var(--good)" : "var(--dim2)";
+  const playColor = state.is_playing ? "var(--accent)" : "var(--dim1)";
+
   return (
-    <div className={`status-bar ${className ?? ""}`}>
-      <span>{Math.round(state.bpm)} BPM</span>
-      <span className="sep">|</span>
-      <span className={state.is_playing ? "playing" : "stopped"}>
-        {state.is_playing ? "▶ PLAYING" : "■ STOPPED"}
+    <pre className={`app-header${className ? ` ${className}` : ""}`}>
+      <span className="hdr-brand">● DGTK</span>
+      <span className="hdr-sub">  digital sequencer  </span>
+      {SEP}
+      <span className="hdr-label">BPM </span>
+      <span className="hdr-value">{state.bpm.toFixed(1)}</span>
+      {SEP}
+      <span style={{ color: playColor }}>
+        {state.is_playing ? "▶ PLAY" : "■ STOP"}
       </span>
-      <span className="sep">|</span>
-      <span>SW {state.swing}</span>
-      <span className="sep">|</span>
-      <span>{state.pattern_length} steps</span>
-      <span className="sep">|</span>
-      <span className={state.midi_connected ? "midi-ok" : "midi-off"}>
-        MIDI {state.midi_connected ? (state.midi_port_name ?? "OK") : "—"}
+      {SEP}
+      <span className="hdr-label">SW </span>
+      <span className="hdr-value">{state.swing}</span>
+      {SEP}
+      <span className="hdr-label">LEN </span>
+      <span className="hdr-value">{state.pattern_length}</span>
+      {SEP}
+      <span style={{ color: midiColor }}>
+        MIDI {state.midi_connected ? `● ${state.midi_port_name ?? "OK"}` : "—"}
       </span>
-      {state.fill_active && (
-        <><span className="sep">|</span><span className="fill">FILL</span></>
-      )}
-      {!state.connected && (
-        <><span className="sep">|</span><span className="disconnected">DISCONNECTED</span></>
-      )}
-    </div>
+      {state.fill_active && <>{SEP}<span className="hdr-fill">FILL</span></>}
+      {!state.connected && <>{SEP}<span className="hdr-disconnected">OFFLINE</span></>}
+    </pre>
   );
 }

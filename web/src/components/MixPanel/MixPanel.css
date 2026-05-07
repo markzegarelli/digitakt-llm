@@ -1,24 +1,28 @@
 .mix-panel { overflow-y: auto; }
 
-.mix-list {
-  padding: var(--panel-pad);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+.mix-body { padding: 10px 10px 8px; }
 
-.mix-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.mix-rows {
   font-size: 12px;
+  line-height: 20px;
+  color: var(--fg);
 }
 
-.mix-track { color: var(--text-dim); width: 60px; flex-shrink: 0; }
-.mix-param { color: var(--text-dim); flex: 1; }
-.mix-value { color: var(--accent); width: 36px; text-align: right; flex-shrink: 0; }
+.mix-row { display: inline; }
+.mix-row.muted { opacity: 0.4; }
 
-.mix-bar { flex: 2; height: 4px; background: var(--surface2); border-radius: 2px; }
-.mix-bar-fill { height: 100%; background: var(--accent-dim); border-radius: 2px; }
+.mix-bar { color: var(--dim2); }
 
-.mix-empty { color: var(--muted); font-size: 12px; padding: var(--panel-pad); }
+.mix-param-label {
+  font-size: 10px;
+  color: var(--dim3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.mix-empty {
+  color: var(--dim2);
+  font-size: 12px;
+  padding: 8px 0;
+}

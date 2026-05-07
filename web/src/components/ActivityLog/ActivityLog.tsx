@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { Region } from "../Region.js";
 import "./ActivityLog.css";
 
 interface Props { log: string[]; className?: string; }
@@ -10,14 +11,13 @@ export function ActivityLog({ log, className }: Props) {
   }, [log]);
 
   return (
-    <div className={`activity-log panel ${className ?? ""}`}>
-      <div className="panel-header">LOG</div>
+    <Region title="LOG" className={`activity-log${className ? ` ${className}` : ""}`}>
       <div className="log-body">
         {log.map((entry, i) => (
-          <div key={i} className="log-entry">{entry}</div>
+          <pre key={i} className="log-entry">{entry}</pre>
         ))}
         <div ref={bottomRef} />
       </div>
-    </div>
+    </Region>
   );
 }

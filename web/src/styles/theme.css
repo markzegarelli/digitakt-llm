@@ -1,53 +1,52 @@
 :root {
-  --bg:          #0d0d0d;
-  --surface:     #141414;
-  --surface2:    #1a1a1a;
-  --border:      #2a2a2a;
-  --accent:      #f0c040;
-  --accent-dim:  #7a621f;
-  --muted:       #555555;
-  --text:        #e0e0e0;
-  --text-dim:    #888888;
-  --danger:      #e05050;
-  --success:     #50e080;
-  --font-mono:   "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", monospace;
-  --font-size:   13px;
-  --line-height: 1.4;
-  --panel-pad:   8px 12px;
-  --radius:      2px;
+  --bg:          #0A0B0A;
+  --fg:          #E4E7DE;
+  --dim1:        #9FA39A;
+  --dim2:        #6B6E66;
+  --dim3:        #3A3C38;
+  --line:        #1F221E;
+  --line2:       #2A2D28;
+  --accent:      #FFB020;
+  --accent-ink:  #0A0B0A;
+  --red:         #FF5D5D;
+  --amber:       #FFB020;
+  --good:        #7BB26A;
+  --font-mono:   "JetBrains Mono", ui-monospace, "Fira Code", monospace;
+  --font-size:   14px;
+  --line-height: 22px;
 }
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #root {
   height: 100%;
   background: var(--bg);
-  color: var(--text);
+  color: var(--fg);
   font-family: var(--font-mono);
   font-size: var(--font-size);
   line-height: var(--line-height);
   overflow: hidden;
+  font-variant-ligatures: none;
+  font-feature-settings: "calt" 0;
+  -webkit-font-smoothing: antialiased;
 }
 
-.panel {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  overflow: hidden;
+pre, .mono {
+  font-family: inherit;
+  white-space: pre;
 }
 
-.panel-header {
-  padding: 4px 12px;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  color: var(--text-dim);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--dim3); }
+::-webkit-scrollbar-track { background: transparent; }
 
-.panel-header.focused {
-  color: var(--accent);
-  border-bottom-color: var(--accent-dim);
+kbd {
+  font-family: inherit;
+  border: 1px solid var(--dim3);
+  padding: 0 5px;
+  color: var(--fg);
+  background: #121310;
+  font-size: 12px;
 }
-
-.panel-body { padding: var(--panel-pad); }

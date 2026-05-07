@@ -1,18 +1,19 @@
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 12px;
-  font-size: 11px;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
+.app-header {
+  padding: 5px 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: var(--line-height);
+  white-space: pre;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.status-bar .sep   { color: var(--muted); }
-.status-bar .playing { color: var(--success); }
-.status-bar .stopped { color: var(--muted); }
-.status-bar .midi-ok  { color: var(--success); }
-.status-bar .midi-off { color: var(--danger); }
-.status-bar .fill { color: var(--accent); }
-.status-bar .disconnected { color: var(--danger); }
+.hdr-brand       { color: var(--accent); font-weight: 700; }
+.hdr-sub         { color: var(--dim2); }
+.hdr-sep         { color: var(--dim3); }
+.hdr-label       { color: var(--dim2); }
+.hdr-value       { color: var(--fg); font-weight: 600; }
+.hdr-fill        { color: var(--accent); font-weight: 700; }
+.hdr-disconnected { color: var(--red); }

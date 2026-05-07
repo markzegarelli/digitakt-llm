@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { DigitaktState } from "../../backend/types.js";
 import type { DigitaktActions } from "../../hooks/useDigitakt.js";
+import { Region } from "../Region.js";
 import "./CmdPanel.css";
 
 interface Props {
@@ -75,19 +76,28 @@ export function CmdPanel({ state, actions, focused, className, onFocus }: Props)
     }
   }, [value, submit, history, histIdx]);
 
-  const statusText = state.generation_status === "generating"
-    ? "⟳ generating..."
-    : state.generation_status === "failed"
-    ? (state.generation_error ?? "generation failed")
-    : state.generation_summary
-    ? `✓ ${state.generation_summary.track_summary}`
-    : "";
+  const statusText =
+    state.generation_status === "generating"
+      ? "⟳ generating…"
+      : state.generation_status === "failed"
+      ? `✗ ${state.generation_error ?? "generation failed"}`
+      : state.generation_summary
+      ? `✦ ${state.generation_summary.track_summary}`
+      : "";
+
+  const modeLabel = "chat";
 
   return (
-    <div className={`cmd-panel panel ${className ?? ""}`} onClick={onFocus}>
-      <div className={`panel-header ${focused ? "focused" : ""}`}>CMD</div>
-      <div className="cmd-body">
-        <div className={`cmd-status ${state.generation_status}`}>{statusText}</div>
+    <Region
+      title="CMD · claude"
+      focused={focused}
+      right={modeLabel.toUpperCase()}
+      className={`cmd-panel${className ? ` ${className}` : ""}`}
+    >
+      <div className="cmd-body" onClick={onFocus}>
+        {statusText && (
+          <pre className={`cmd-status ${state.generation_status}`}>{statusText}</pre>
+        )}
         <div className="cmd-input-row">
           <span className="cmd-prompt-char">›</span>
           <input
@@ -101,8 +111,9 @@ export function CmdPanel({ state, actions, focused, className, onFocus }: Props)
             spellCheck={false}
             autoComplete="off"
           />
+          {focused && <span className="cmd-caret" aria-hidden="true" />}
         </div>
       </div>
-    </div>
+    </Region>
   );
 }

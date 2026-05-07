@@ -1,0 +1,50 @@
+.focus-rail-inner {
+  height: 100%;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rail-logo {
+  color: var(--dim2);
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 18px;
+  user-select: none;
+}
+
+.rail-item {
+  cursor: pointer;
+  color: var(--dim1);
+  padding: 2px 4px;
+  margin: 1px 0;
+  font-weight: 400;
+  font-size: 13px;
+  user-select: none;
+}
+
+.rail-item:hover {
+  color: var(--fg);
+}
+
+.rail-item.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.rail-hints {
+  margin-top: 16px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--dim3);
+  user-select: none;
+}
+
+.rail-status {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 11px;
+  color: var(--dim2);
+  user-select: none;
+}

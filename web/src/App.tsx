@@ -7,12 +7,11 @@ import { TrigPanel } from "./components/TrigPanel/TrigPanel.js";
 import { CmdPanel } from "./components/CmdPanel/CmdPanel.js";
 import { ActivityLog } from "./components/ActivityLog/ActivityLog.js";
 import { StatusBar } from "./components/StatusBar/StatusBar.js";
+import { FocusRail } from "./components/FocusRail/FocusRail.js";
 
 export type FocusZone = "seq" | "mix" | "trig" | "cmd";
 
-const BASE_URL = (import.meta as Record<string, unknown>)["env"]
-  ? ((import.meta as unknown as { env: Record<string, string> }).env["VITE_API_URL"] ?? "http://localhost:8000")
-  : "http://localhost:8000";
+const BASE_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_API_URL"] ?? "http://localhost:8000";
 
 const client = createClient(BASE_URL);
 
@@ -25,7 +24,7 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Tab" && !e.shiftKey) {
         e.preventDefault();
-        setFocus((f) => f === "seq" ? "mix" : f === "mix" ? "cmd" : "seq");
+        setFocus((f) => f === "seq" ? "mix" : f === "mix" ? "trig" : f === "trig" ? "cmd" : "seq");
         return;
       }
       if (e.key === "/" && focus !== "cmd") {
@@ -49,28 +48,49 @@ export function App() {
 
   return (
     <div className="app-layout">
-      <StatusBar state={state} className="status-bar" />
-      <SeqPanel
-        state={state} actions={actions}
-        focused={focus === "seq"} className="seq-panel"
-        onFocus={() => setFocus("seq")}
-      />
-      <MixPanel
-        state={state} actions={actions}
-        focused={focus === "mix"} className="mix-panel"
-        onFocus={() => setFocus("mix")}
-      />
-      <TrigPanel
-        state={state} actions={actions}
-        focused={focus === "trig"} className="trig-panel"
-        onFocus={() => setFocus("trig")}
-      />
-      <CmdPanel
-        state={state} actions={actions}
-        focused={focus === "cmd"} className="cmd-panel"
-        onFocus={() => setFocus("cmd")}
-      />
-      {showLog && <ActivityLog log={state.log} className="activity-log" />}
+      <StatusBar state={state} />
+
+      <div className="app-body">
+        <FocusRail
+          focus={focus}
+          setFocus={setFocus}
+          isPlaying={state.is_playing}
+          showLog={showLog}
+        />
+
+        <div className="main-col">
+          <SeqPanel
+            state={state}
+            actions={actions}
+            focused={focus === "seq"}
+            onFocus={() => setFocus("seq")}
+          />
+
+          <div className="mid-row">
+            <MixPanel
+              state={state}
+              actions={actions}
+              focused={focus === "mix"}
+              onFocus={() => setFocus("mix")}
+            />
+            <TrigPanel
+              state={state}
+              actions={actions}
+              focused={focus === "trig"}
+              onFocus={() => setFocus("trig")}
+            />
+          </div>
+
+          <CmdPanel
+            state={state}
+            actions={actions}
+            focused={focus === "cmd"}
+            onFocus={() => setFocus("cmd")}
+          />
+
+          {showLog && <ActivityLog log={state.log} />}
+        </div>
+      </div>
     </div>
   );
 }
