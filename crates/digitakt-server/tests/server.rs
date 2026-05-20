@@ -47,7 +47,7 @@ fn test_app() -> Arc<App> {
 #[tokio::test]
 async fn get_state_returns_200() {
     let app = test_app();
-    let router = app.clone().router();
+    let router = app.clone().router(None);
     let resp = router
         .oneshot(Request::get("/state").body(Body::empty()).unwrap())
         .await
@@ -58,7 +58,7 @@ async fn get_state_returns_200() {
 #[tokio::test]
 async fn post_bpm_updates_state() {
     let app = test_app();
-    let router = app.clone().router();
+    let router = app.clone().router(None);
     let resp = router
         .oneshot(
             Request::post("/bpm")
@@ -75,7 +75,7 @@ async fn post_bpm_updates_state() {
 #[tokio::test]
 async fn post_generate_returns_202() {
     let app = test_app();
-    let router = app.router();
+    let router = app.router(None);
     let resp = router
         .oneshot(
             Request::post("/generate")
@@ -91,7 +91,7 @@ async fn post_generate_returns_202() {
 #[tokio::test]
 async fn post_play_and_stop() {
     let app = test_app();
-    let router = app.clone().router();
+    let router = app.clone().router(None);
     let play = router
         .clone()
         .oneshot(Request::post("/play").body(Body::empty()).unwrap())

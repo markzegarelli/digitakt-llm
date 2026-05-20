@@ -3,5 +3,5 @@
 mod app;
 mod schemas;
 
-pub use app::{run_server, App, DEFAULT_PORT};
+pub use app::{resolve_web_dist, run_server, App, DEFAULT_PORT};
 pub use schemas::*;

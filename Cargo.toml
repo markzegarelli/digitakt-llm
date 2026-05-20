@@ -7,6 +7,7 @@ members = [
     "crates/digitakt-generator",
     "crates/digitakt-server",
     "crates/digitakt-cli",
+    "src-tauri",
 ]
 default-members = ["crates/digitakt-core"]
 

@@ -10,14 +10,7 @@
     "frontendDist": "../web/dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Digitakt LLM",
-        "width": 1280,
-        "height": 800,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
@@ -25,6 +18,9 @@
   "bundle": {
     "active": true,
     "targets": ["app"],
+    "resources": {
+      "../web/dist/": "web/dist/"
+    },
     "macOS": {
       "minimumSystemVersion": "12.0"
     }

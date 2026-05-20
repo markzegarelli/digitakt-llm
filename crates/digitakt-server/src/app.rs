@@ -26,10 +26,39 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::schemas::*;
 
 pub const DEFAULT_PORT: u16 = 8000;
+
+/// Resolve `web/dist` for SPA static hosting (mirrors Python `api/server.py`).
+pub fn resolve_web_dist() -> Option<PathBuf> {
+    if let Ok(raw) = std::env::var("DIGITAKT_WEB_DIST") {
+        let path = PathBuf::from(raw);
+        if path.join("index.html").is_file() {
+            return Some(path);
+        }
+    }
+    let mut candidates: Vec<PathBuf> = vec![
+        PathBuf::from("web/dist"),
+        PathBuf::from("../web/dist"),
+    ];
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("web/dist"));
+        candidates.push(cwd.join("../web/dist"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(mac_os) = exe.parent() {
+            if let Some(contents) = mac_os.parent() {
+                candidates.push(contents.join("Resources/web/dist"));
+            }
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.join("index.html").is_file())
+}
 
 pub struct App {
     pub state: Arc<AppState>,
@@ -117,11 +146,13 @@ impl App {
         }
     }
 
-    pub fn router(self: Arc<Self>) -> Router {
+    pub fn router(self: Arc<Self>, web_dist: Option<PathBuf>) -> Router {
         let cors = CorsLayer::new()
             .allow_origin([
                 "http://localhost:5173".parse().unwrap(),
                 "http://127.0.0.1:5173".parse().unwrap(),
+                "http://localhost:8000".parse().unwrap(),
+                "http://127.0.0.1:8000".parse().unwrap(),
             ])
             .allow_methods(Any)
             .allow_headers(Any);
@@ -170,7 +201,15 @@ impl App {
             .route("/traces", get(get_traces))
             .route("/ws", get(ws_handler))
             .with_state(self.clone());
-        api.layer(cors)
+        let api = api.layer(cors);
+        if let Some(dist) = web_dist.filter(|d| d.join("index.html").is_file()) {
+            let index = dist.join("index.html");
+            api.fallback_service(
+                ServeDir::new(dist).not_found_service(ServeFile::new(index)),
+            )
+        } else {
+            api
+        }
     }
 }
 
@@ -200,9 +239,14 @@ impl LlmClient for NoopClient {
     }
 }
 
-pub async fn run_server(host: &str, port: u16, patterns_dir: impl AsRef<Path>) -> Result<(), String> {
+pub async fn run_server(
+    host: &str,
+    port: u16,
+    patterns_dir: impl AsRef<Path>,
+    web_dist: Option<PathBuf>,
+) -> Result<(), String> {
     let app = Arc::new(App::new(patterns_dir)?);
-    let router = app.router();
+    let router = app.router(web_dist.or_else(resolve_web_dist));
     let addr: SocketAddr = format!("{host}:{port}").parse().map_err(|e: std::net::AddrParseError| e.to_string())?;
     let listener = tokio::net::TcpListener::bind(addr)
         .await

@@ -10,7 +10,7 @@ async fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(DEFAULT_PORT);
     let patterns_dir = std::env::var("DIGITAKT_PATTERNS_DIR").unwrap_or_else(|_| "patterns".into());
-    if let Err(e) = run_server(&host, port, patterns_dir).await {
+    if let Err(e) = run_server(&host, port, patterns_dir, None).await {
         eprintln!("digitakt serve failed: {e}");
         std::process::exit(1);
     }
