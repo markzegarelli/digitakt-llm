@@ -13,6 +13,7 @@ from typing import Set
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import datetime
@@ -79,6 +80,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Digitakt LLM", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Module-level singletons set by init()
 _state: AppState | None = None

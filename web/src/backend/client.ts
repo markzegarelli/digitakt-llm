@@ -6,8 +6,9 @@ export interface BackendClient {
   subscribe(handler: (event: AppEvent) => void): () => void;
 }
 
-export function createClient(baseUrl = "http://localhost:8000"): BackendClient {
-  const wsUrl = baseUrl.replace(/^http/, "ws") + "/ws";
+export function createClient(baseUrl = ""): BackendClient {
+  const origin = baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
+  const wsUrl = origin.replace(/^http/, "ws") + "/ws";
   const handlers = new Set<(event: AppEvent) => void>();
 
   function connect() {
@@ -32,14 +33,14 @@ export function createClient(baseUrl = "http://localhost:8000"): BackendClient {
 
   return {
     post(path, body = {}) {
-      return fetch(`${baseUrl}${path}`, {
+      return fetch(`${origin}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }).then((r) => r.json());
     },
     get(path) {
-      return fetch(`${baseUrl}${path}`).then((r) => r.json());
+      return fetch(`${origin}${path}`).then((r) => r.json());
     },
     subscribe(handler) {
       handlers.add(handler);

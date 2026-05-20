@@ -1,9 +1,0 @@
-.trig-panel { overflow-y: auto; }
-
-.trig-body { padding: 10px 10px 8px; }
-
-.trig-rows {
-  font-size: 13px;
-  line-height: 24px;
-  color: var(--fg);
-}
