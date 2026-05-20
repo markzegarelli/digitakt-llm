@@ -39,7 +39,7 @@ pub trait LlmClient: Send + Sync {
 }
 
 pub struct AnthropicClient {
-    http: reqwest::Client,
+    http: reqwest::blocking::Client,
     api_key: String,
 }
 
@@ -47,10 +47,27 @@ impl AnthropicClient {
     pub fn from_env() -> Result<Self, String> {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
             .map_err(|_| "ANTHROPIC_API_KEY not set".to_string())?;
+        if api_key.trim().is_empty() {
+            return Err("ANTHROPIC_API_KEY not set".to_string());
+        }
         Ok(Self {
-            http: reqwest::Client::new(),
+            http: reqwest::blocking::Client::new(),
             api_key,
         })
+    }
+
+    fn parse_response(resp: reqwest::blocking::Response) -> Result<Value, String> {
+        let status = resp.status();
+        let data: Value = resp.json().map_err(|e| e.to_string())?;
+        if status.is_success() {
+            return Ok(data);
+        }
+        let msg = data
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Anthropic API request failed");
+        Err(format!("HTTP {}: {}", status.as_u16(), msg))
     }
 }
 
@@ -72,21 +89,15 @@ impl LlmClient for AnthropicClient {
             "tools": [tool_schema],
             "tool_choice": {"type": "tool", "name": tool_name}
         });
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
+        let resp = self
+            .http
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+            .send()
             .map_err(|e| e.to_string())?;
-        let resp = rt
-            .block_on(
-                self.http
-                    .post("https://api.anthropic.com/v1/messages")
-                    .header("x-api-key", &self.api_key)
-                    .header("anthropic-version", "2023-06-01")
-                    .json(&body)
-                    .send(),
-            )
-            .map_err(|e| e.to_string())?;
-        let data: Value = rt.block_on(resp.json()).map_err(|e| e.to_string())?;
+        let data = Self::parse_response(resp)?;
         let mut raw = String::new();
         let mut tool_input: Option<Map<String, Value>> = None;
         if let Some(blocks) = data.get("content").and_then(|v| v.as_array()) {
@@ -122,21 +133,15 @@ impl LlmClient for AnthropicClient {
             "system": system,
             "messages": msgs
         });
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
+        let resp = self
+            .http
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+            .send()
             .map_err(|e| e.to_string())?;
-        let resp = rt
-            .block_on(
-                self.http
-                    .post("https://api.anthropic.com/v1/messages")
-                    .header("x-api-key", &self.api_key)
-                    .header("anthropic-version", "2023-06-01")
-                    .json(&body)
-                    .send(),
-            )
-            .map_err(|e| e.to_string())?;
-        let data: Value = rt.block_on(resp.json()).map_err(|e| e.to_string())?;
+        let data = Self::parse_response(resp)?;
         let mut out = String::new();
         if let Some(blocks) = data.get("content").and_then(|v| v.as_array()) {
             for block in blocks {

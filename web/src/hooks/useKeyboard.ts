@@ -56,6 +56,17 @@ export function handleTabCycle(
   return true;
 }
 
+function isTextEntryActive(st: WorkbenchView): boolean {
+  if (typeof document === "undefined") {
+    return st.ui.mode === "CMD";
+  }
+  const tag = (document.activeElement as HTMLElement | null)?.tagName ?? "";
+  const inInput = tag === "INPUT" || tag === "TEXTAREA";
+  if (st.ui.mode === "CMD") return true;
+  if (st.ui.mode === "CHAT") return inInput;
+  return inInput;
+}
+
 /** Tab pane-cycle + Space transport; must run in capture before native tab focus. */
 export function handlePaneKeys(
   e: KeyLike,
@@ -69,6 +80,7 @@ export function handlePaneKeys(
     return handleTabCycle(e, st, dispatch, focusAppRoot);
   }
   if (e.key === " ") {
+    if (isTextEntryActive(st)) return false;
     releaseTextFocus(focusAppRoot);
     handlers.playStop();
     e.preventDefault();

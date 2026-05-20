@@ -56,6 +56,21 @@ async fn get_state_returns_200() {
 }
 
 #[tokio::test]
+async fn get_state_includes_server_instance_id() {
+    let app = test_app();
+    let router = app.clone().router(None);
+    let resp = router
+        .oneshot(Request::get("/state").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json.get("server_instance_id"), Some(&json!(0)));
+}
+
+#[tokio::test]
 async fn post_bpm_updates_state() {
     let app = test_app();
     let router = app.clone().router(None);

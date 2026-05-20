@@ -69,6 +69,9 @@ pub struct StateResponse {
     pub chain_queued_index: Option<usize>,
     #[serde(default)]
     pub chain_armed: bool,
+    /// Set by the Rust server so clients can distinguish this process from a stale listener.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_instance_id: Option<u64>,
 }
 
 fn default_len() -> i64 {

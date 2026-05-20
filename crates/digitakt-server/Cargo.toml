@@ -21,6 +21,7 @@ include_dir = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
 futures-util = "0.3"
+dotenvy = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

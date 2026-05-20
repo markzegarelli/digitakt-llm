@@ -1,7 +1,8 @@
 use std::net::TcpStream;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::{Manager, WebviewUrl};
 
@@ -18,15 +19,33 @@ fn resolve_web_dist(handle: &tauri::AppHandle) -> Option<PathBuf> {
     digitakt_server::resolve_web_dist()
 }
 
-fn wait_for_server(host: &str, port: u16) -> bool {
-    let addr = format!("{host}:{port}");
-    for _ in 0..100 {
-        if TcpStream::connect(&addr).is_ok() {
-            return true;
+fn fresh_instance_id() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
+/// Wait until our embedded server has bound and reported its instance id (not a stale listener).
+fn wait_for_bound_server(bound_rx: mpsc::Receiver<u64>, expected_id: u64) -> bool {
+    match bound_rx.recv_timeout(Duration::from_secs(8)) {
+        Ok(id) if id == expected_id => true,
+        Ok(_) => {
+            eprintln!("digitakt: server reported unexpected instance id");
+            false
         }
-        thread::sleep(Duration::from_millis(50));
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            eprintln!(
+                "digitakt: embedded server did not bind on {SERVER_HOST}:{SERVER_PORT} \
+                 (port may be in use — stop any other digitakt serve process and retry)"
+            );
+            false
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            eprintln!("digitakt: embedded server exited before binding");
+            false
+        }
     }
-    false
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,18 +61,24 @@ pub fn run() {
                 .map(|d| d.join("patterns"))
                 .unwrap_or_else(|_| PathBuf::from("patterns"));
 
+            let instance_id = fresh_instance_id();
+            let (bound_tx, bound_rx) = mpsc::channel();
+
             thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-                let _ = rt.block_on(digitakt_server::run_server(
+                if let Err(e) = rt.block_on(digitakt_server::run_server(
                     SERVER_HOST,
                     SERVER_PORT,
                     patterns_dir,
                     web_dist,
-                ));
+                    instance_id,
+                    Some(bound_tx),
+                )) {
+                    eprintln!("digitakt: embedded server failed: {e}");
+                }
             });
 
-            if !wait_for_server(SERVER_HOST, SERVER_PORT) {
-                eprintln!("digitakt: embedded server did not start on {SERVER_HOST}:{SERVER_PORT}");
+            if !wait_for_bound_server(bound_rx, instance_id) {
                 return Ok(());
             }
 

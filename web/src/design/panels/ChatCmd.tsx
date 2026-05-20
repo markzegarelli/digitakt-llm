@@ -87,7 +87,6 @@ function ChatComposer({
             handleTabCycle(e.nativeEvent, view, dispatch, focusAppRoot);
             return;
           }
-          if (e.key === " ") return;
           if (e.key === "Enter" && view.ui.cmd.trim()) {
             onSend(view.ui.cmd.trim());
             dispatch({ type: "SET_CMD", value: "" });
@@ -188,7 +187,6 @@ function onCmdKey(
     handleTabCycle(e.nativeEvent, view, dispatch, focusAppRoot);
     return;
   }
-  if (k === " ") return;
   if (k === "Escape") {
     e.preventDefault();
     releaseTextFocus(focusAppRoot);

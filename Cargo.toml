@@ -30,3 +30,4 @@ tower-http = { version = "0.6", features = ["cors", "fs"] }
 midir = "0.10"
 reqwest = { version = "0.12", features = ["json"] }
 include_dir = "0.7"
+dotenvy = "0.15"

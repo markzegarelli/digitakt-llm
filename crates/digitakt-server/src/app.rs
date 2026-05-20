@@ -69,12 +69,15 @@ pub struct App {
     pub patterns_dir: PathBuf,
     pub ws_tx: broadcast::Sender<String>,
     pub _midi_listener: Mutex<Option<HardwareMidiListener>>,
+    /// Unique per process; exposed in `/state` so embedders can detect a stale listener.
+    pub instance_id: u64,
 }
 
 impl App {
-    pub fn new(patterns_dir: impl AsRef<Path>) -> Result<Self, String> {
+    pub fn new(patterns_dir: impl AsRef<Path>, instance_id: u64) -> Result<Self, String> {
         let patterns_dir = patterns_dir.as_ref().to_path_buf();
         std::fs::create_dir_all(&patterns_dir).map_err(|e| e.to_string())?;
+        crate::env_file::load_env_files(&patterns_dir);
         let state = Arc::new(AppState::new());
         let bus = Arc::new(EventBus::new());
         let player = Arc::new(Player::new(state.clone(), bus.clone(), None));
@@ -94,6 +97,7 @@ impl App {
             patterns_dir,
             ws_tx: ws_tx.clone(),
             _midi_listener: Mutex::new(None),
+            instance_id,
         };
         for event in ALL_EVENTS {
             let tx = ws_tx.clone();
@@ -143,6 +147,7 @@ impl App {
             patterns_dir,
             ws_tx,
             _midi_listener: Mutex::new(None),
+            instance_id: 0,
         }
     }
 
@@ -244,17 +249,23 @@ pub async fn run_server(
     port: u16,
     patterns_dir: impl AsRef<Path>,
     web_dist: Option<PathBuf>,
+    instance_id: u64,
+    bound: Option<std::sync::mpsc::Sender<u64>>,
 ) -> Result<(), String> {
-    let app = Arc::new(App::new(patterns_dir)?);
+    let app = Arc::new(App::new(patterns_dir, instance_id)?);
     let router = app.router(web_dist.or_else(resolve_web_dist));
     let addr: SocketAddr = format!("{host}:{port}").parse().map_err(|e: std::net::AddrParseError| e.to_string())?;
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| e.to_string())?;
+    if let Some(tx) = bound {
+        let _ = tx.send(instance_id);
+    }
     axum::serve(listener, router).await.map_err(|e| e.to_string())
 }
 
-fn state_response(state: &AppState) -> StateResponse {
+fn state_response(app: &App) -> StateResponse {
+    let state = &app.state;
     let track_cc: Map<String, Value> = state
         .track_cc_map()
         .into_iter()
@@ -287,11 +298,12 @@ fn state_response(state: &AppState) -> StateResponse {
         chain_auto: state.chain_auto(),
         chain_queued_index: state.chain_queued_index(),
         chain_armed: state.chain_armed(),
+        server_instance_id: Some(app.instance_id),
     }
 }
 
 async fn get_state(State(app): State<Arc<App>>) -> Json<StateResponse> {
-    Json(state_response(&app.state))
+    Json(state_response(&app))
 }
 
 async fn post_generate(
@@ -464,11 +476,16 @@ async fn post_ask(
     State(app): State<Arc<App>>,
     Json(req): Json<AskRequest>,
 ) -> Result<Json<AskResponse>, ApiError> {
-    let (answer, implementable) = app
-        .generator
-        .answer_question_with_classify(&req.question)
-        .map_err(ApiError::service_unavailable)?;
-    app.bus.emit(
+    let question = req.question.clone();
+    let generator = app.generator.clone();
+    let bus = app.bus.clone();
+    let (answer, implementable) = tokio::task::spawn_blocking(move || {
+        generator.answer_question_with_classify(&question)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("ask task failed: {e}")))?
+    .map_err(ApiError::service_unavailable)?;
+    bus.emit(
         "ask_complete",
         Some(Map::from_iter([
             ("question".into(), json!(req.question)),
