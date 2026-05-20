@@ -3,6 +3,7 @@ import type { BackendClient, AppEvent } from "../backend/client.js";
 import type { DigitaktState, TrackName, LfoDef, EuclidStripMode, CCParamDef } from "../backend/types.js";
 import {
   TRACK_NAMES,
+  DEFAULT_GATE_PCT,
   emptyTrigState,
   inferPatternLengthFromApi,
   parseEuclidStripMode,
@@ -78,6 +79,15 @@ function parseEuclidBlock(
     };
   }
   return result;
+}
+
+function copyRow<T>(row: T[] | undefined, length: number, fill: T): T[] {
+  if (Array.isArray(row)) return [...row];
+  return Array.from({ length }, () => fill);
+}
+
+function isTrackName(t: unknown): t is TrackName {
+  return typeof t === "string" && (TRACK_NAMES as readonly string[]).includes(t);
 }
 
 function applyEvent(state: DigitaktState, event: AppEvent): DigitaktState {
@@ -236,47 +246,63 @@ function applyEvent(state: DigitaktState, event: AppEvent): DigitaktState {
         },
       };
     case "vel_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const newPattern = { ...state.current_pattern };
-      newPattern[track] = [...newPattern[track]];
-      newPattern[track][step] = val;
+      const row = copyRow(newPattern[track], state.pattern_length, 0);
+      if (step < 0 || step >= row.length) return state;
+      row[step] = val;
+      newPattern[track] = row;
       return { ...state, current_pattern: newPattern };
     }
     case "gate_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const pt = state.pattern_trig;
-      const row = [...pt.gate[track]];
+      const row = copyRow(pt.gate[track], state.pattern_length, DEFAULT_GATE_PCT);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, gate: { ...pt.gate, [track]: row } } };
     }
     case "note_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = (event["value"] ?? null) as number | null;
       const pt = state.pattern_trig;
-      const row = [...pt.note[track]];
+      const row = copyRow(pt.note[track], state.pattern_length, null);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, note: { ...pt.note, [track]: row } } };
     }
     case "cond_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = (event["value"] as string | null) ?? null;
       const pt = state.pattern_trig;
-      const row = [...pt.cond[track]];
+      const row = copyRow(pt.cond[track], state.pattern_length, null);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, cond: { ...pt.cond, [track]: row } } };
     }
     case "prob_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const pt = state.pattern_trig;
-      const row = [...pt.prob[track]];
+      const row = copyRow(pt.prob[track], state.pattern_length, 100);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, prob: { ...pt.prob, [track]: row } } };
     }

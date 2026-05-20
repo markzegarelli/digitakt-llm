@@ -4,6 +4,7 @@ import { PARAM_NAMES, noteName } from "../constants.js";
 import { condLabel } from "../../lib/condAdapter.js";
 import { Bar, Knob } from "../primitives/index.js";
 import { LFO_SHAPES, LFO_DESTS } from "../constants.js";
+import { cycleSteps, lfoPlayheadIndex, lfoShapeNameFromIndex, lfoStrip } from "../../lib/lfoDisplay.js";
 
 export function TrigPanel({ view, focused }: { view: WorkbenchView; focused: boolean }) {
   const t = view.tracks[view.ui.cursor.track]!;
@@ -94,6 +95,20 @@ export function LFOPanel({
   const lfo = t.lfos[lfoIdx]!;
   const shape = LFO_SHAPES[lfo.shape] ?? "off";
   const dest = LFO_DESTS[lfo.dest] ?? "filter";
+  const graphShape = lfoShapeNameFromIndex(lfo.shape);
+  const graphW = 48;
+  const playCol =
+    view.playing && graphShape
+      ? lfoPlayheadIndex(view.playhead, view.stepLen, graphW)
+      : null;
+  const waveLine =
+    graphShape != null
+      ? lfoStrip(graphShape, lfo.phase, graphW)
+      : "—".repeat(graphW);
+  const waveDisplay =
+    playCol != null
+      ? `${waveLine.slice(0, playCol)}│${waveLine.slice(playCol + 1)}`
+      : waveLine;
   const fields = [
     { k: "shape", val: shape.toUpperCase() },
     { k: "dest", val: dest },
@@ -121,6 +136,12 @@ export function LFOPanel({
             {i + 1}
           </button>
         ))}
+      </div>
+      <div className="lfo-wave" title={`${lfo.num}/${lfo.den} · ${cycleSteps(view.stepLen, lfo.num, lfo.den)} st/cyc`}>
+        <span className="d" style={{ fontSize: 10, letterSpacing: "0.06em" }}>
+          {graphShape ? `${shape} · ${lfo.num}/${lfo.den}` : "off"}
+        </span>
+        <pre className="lfo-wave-line">{waveDisplay}</pre>
       </div>
       <div className="lfo-fields">
         {fields.map((f, i) => {

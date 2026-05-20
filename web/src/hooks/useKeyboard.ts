@@ -227,14 +227,12 @@ export function useKeyboard(
       } else if (st.ui.mode === "MIX") {
         if (key === "ArrowLeft") {
           e.preventDefault();
-          if (mod) handlersRef.current.nudgeMix(-10, true);
-          else dispatchRef.current({ type: "MOVE", axis: "track", delta: -1 });
+          handlersRef.current.nudgeMix(-1, mod);
           return;
         }
         if (key === "ArrowRight") {
           e.preventDefault();
-          if (mod) handlersRef.current.nudgeMix(10, true);
-          else dispatchRef.current({ type: "MOVE", axis: "track", delta: 1 });
+          handlersRef.current.nudgeMix(1, mod);
           return;
         }
         if (key === "ArrowUp") {

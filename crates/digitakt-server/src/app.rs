@@ -558,7 +558,11 @@ async fn post_prob(
     app.mutator.apply(
         |p| apply_prob_step(&p, &req.track, (req.step - 1) as usize, req.value),
         Some("prob_changed"),
-        None,
+        Some(Map::from_iter([
+            ("track".into(), json!(req.track)),
+            ("step".into(), json!(req.step)),
+            ("value".into(), json!(req.value)),
+        ])),
         ApplyMode::Queue,
     );
     Ok(Json(Map::from_iter([("status".into(), json!("ok"))])))
@@ -569,11 +573,18 @@ async fn post_prob_track(
     Json(req): Json<ProbTrackRequest>,
 ) -> Result<Json<Map<String, Value>>, ApiError> {
     validate_track(&req.track)?;
-    app.mutator.apply(
+    let new = app.mutator.apply(
         |p| apply_prob_track(&p, &req.track, req.value).unwrap(),
-        Some("prob_changed"),
+        None,
         None,
         ApplyMode::Queue,
+    );
+    app.bus.emit(
+        "pattern_changed",
+        Some(Map::from_iter([
+            ("pattern".into(), json!(new)),
+            ("prompt".into(), json!(app.state.last_prompt())),
+        ])),
     );
     Ok(Json(Map::from_iter([("status".into(), json!("ok"))])))
 }
@@ -659,7 +670,11 @@ async fn post_vel(
     app.mutator.apply(
         |p| apply_vel_step(&p, &req.track, (req.step - 1) as usize, req.value),
         Some("vel_changed"),
-        None,
+        Some(Map::from_iter([
+            ("track".into(), json!(req.track)),
+            ("step".into(), json!(req.step)),
+            ("value".into(), json!(req.value)),
+        ])),
         ApplyMode::Queue,
     );
     Ok(Json(Map::from_iter([("status".into(), json!("ok"))])))
@@ -670,11 +685,18 @@ async fn post_vel_track(
     Json(req): Json<VelTrackRequest>,
 ) -> Result<Json<Map<String, Value>>, ApiError> {
     validate_track(&req.track)?;
-    app.mutator.apply(
+    let new = app.mutator.apply(
         |p| apply_vel_track(&p, &req.track, req.value).unwrap(),
-        Some("vel_changed"),
+        None,
         None,
         ApplyMode::Queue,
+    );
+    app.bus.emit(
+        "pattern_changed",
+        Some(Map::from_iter([
+            ("pattern".into(), json!(new)),
+            ("prompt".into(), json!(app.state.last_prompt())),
+        ])),
     );
     Ok(Json(Map::from_iter([("status".into(), json!("ok"))])))
 }
@@ -688,7 +710,11 @@ async fn post_gate(
     app.mutator.apply(
         |p| apply_gate_step(&p, &req.track, (req.step - 1) as usize, req.value).unwrap(),
         Some("gate_changed"),
-        None,
+        Some(Map::from_iter([
+            ("track".into(), json!(req.track)),
+            ("step".into(), json!(req.step)),
+            ("value".into(), json!(req.value)),
+        ])),
         ApplyMode::Queue,
     );
     Ok(Json(GateResponse {
@@ -703,11 +729,18 @@ async fn post_gate_track(
     Json(req): Json<GateTrackRequest>,
 ) -> Result<Json<Map<String, Value>>, ApiError> {
     validate_track(&req.track)?;
-    app.mutator.apply(
+    let new = app.mutator.apply(
         |p| apply_gate_track(&p, &req.track, req.value).unwrap(),
-        Some("gate_changed"),
+        None,
         None,
         ApplyMode::Queue,
+    );
+    app.bus.emit(
+        "pattern_changed",
+        Some(Map::from_iter([
+            ("pattern".into(), json!(new)),
+            ("prompt".into(), json!(app.state.last_prompt())),
+        ])),
     );
     Ok(Json(Map::from_iter([("status".into(), json!("ok"))])))
 }
@@ -740,7 +773,11 @@ async fn post_note(
     app.mutator.apply(
         |p| apply_note_step(&p, &req.track, (req.step - 1) as usize, req.value).unwrap(),
         Some("note_changed"),
-        None,
+        Some(Map::from_iter([
+            ("track".into(), json!(req.track)),
+            ("step".into(), json!(req.step)),
+            ("value".into(), json!(req.value)),
+        ])),
         ApplyMode::Queue,
     );
     Ok(Json(NoteResponse {
@@ -759,7 +796,11 @@ async fn post_cond(
     app.mutator.apply(
         |p| apply_cond_step(&p, &req.track, (req.step - 1) as usize, req.value.as_deref()).unwrap(),
         Some("cond_changed"),
-        None,
+        Some(Map::from_iter([
+            ("track".into(), json!(req.track)),
+            ("step".into(), json!(req.step)),
+            ("value".into(), json!(req.value)),
+        ])),
         ApplyMode::Queue,
     );
     Ok(Json(CondResponse {

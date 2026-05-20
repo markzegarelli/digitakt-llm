@@ -122,6 +122,21 @@
   cursor: pointer;
 }
 .lfo-slot.sel { border-color: var(--yellow); color: var(--yellow-bright); }
+.lfo-wave {
+  margin: 0 8px 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel-2);
+}
+.lfo-wave-line {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--yellow-dim);
+  overflow: hidden;
+  white-space: pre;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
 .lfo-fields { display: flex; flex-direction: column; gap: 2px; }
 .lfo-field {
   display: flex;

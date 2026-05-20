@@ -43,6 +43,8 @@ export function HelpStrip({ view }: { view: WorkbenchView }) {
     { l: "SPACE", v: "play" },
     { l: "ENTER", v: "trig" },
     { l: "[ ]", v: "track" },
+    { l: "←→", v: "value" },
+    { l: "↑↓", v: "param" },
     { l: "ESC", v: "back" },
   ];
   return (

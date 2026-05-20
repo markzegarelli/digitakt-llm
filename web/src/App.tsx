@@ -78,7 +78,8 @@ export function App() {
   const handlers = useMemo(
     () => ({
       toggleStep: () => {
-        const vel = state.current_pattern[track.name][ui.cursor.step] ?? 0;
+        const row = state.current_pattern[track.name];
+        const vel = Array.isArray(row) ? (row[ui.cursor.step] ?? 0) : 0;
         actions.setVel(track.name, step, vel > 0 ? 0 : 100);
       },
       clearStep: () => actions.setVel(track.name, step, 0),
@@ -93,7 +94,9 @@ export function App() {
         const apiParam = param === "reso" ? "resonance" : param;
         const t = view.tracks[ui.cursor.track]!;
         const cur = t.mix[param] ?? 64;
-        actions.setCC(t.name, normalizeCcParamAlias(apiParam), clamp(cur + d, 0, 127));
+        const step = shift ? delta * 10 : delta;
+        const next = clamp(cur + step, 0, 127);
+        actions.setCC(t.name, normalizeCcParamAlias(apiParam), next);
       },
       nudgeTrig: (delta: number, shift: boolean) => {
         const d = shift ? delta : delta;
