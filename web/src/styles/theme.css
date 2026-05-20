@@ -1,0 +1,89 @@
+:root {
+  --bg: #0a0908;
+  --bg-panel: #0d0c0a;
+  --bg-panel-2: #131210;
+  --border: #2a2520;
+  --border-dim: #1a1714;
+  --border-focus: #f0a020;
+  --yellow: #f0a020;
+  --yellow-bright: #ffc452;
+  --yellow-dim: #8a5c10;
+  --yellow-faint: #4a3308;
+  --red: #d04a3a;
+  --red-dim: #6a2118;
+  --text: #d8d2c5;
+  --text-dim: #6a655e;
+  --text-faint: #3a3530;
+  --cool: #4ec5c5;
+  --cool-bright: #8be9e9;
+  --cool-dim: #2a6e6e;
+  --bar-on: #b88010;
+  --bar-track: #1d1407;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 3px);
+  z-index: 9999;
+}
+
+* { box-sizing: border-box; }
+::selection { background: var(--yellow); color: #000; }
+button, input, textarea { font: inherit; color: inherit; background: transparent; border: 0; outline: 0; }
+
+.y { color: var(--yellow); }
+.yb { color: var(--yellow-bright); }
+.yd { color: var(--yellow-dim); }
+.r { color: var(--red); }
+.c { color: var(--cool); }
+.cb { color: var(--cool-bright); }
+.d { color: var(--text-dim); }
+.f { color: var(--text-faint); }
+.b { font-weight: 600; }
+
+.panel {
+  border: 1px solid var(--border-dim);
+  background: var(--bg-panel);
+  position: relative;
+  min-height: 0;
+}
+.panel.focused {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--yellow-faint) inset;
+}
+.kbd { display: inline-block; color: var(--yellow); font-weight: 600; }
+.scroll { overflow: auto; }
+.scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.too-small {
+  position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: var(--bg); color: var(--yellow); z-index: 10000;
+}
+@media (max-width: 1100px), (max-height: 620px) {
+  .too-small { display: flex; }
+}
+
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}

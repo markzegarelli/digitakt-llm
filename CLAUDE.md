@@ -13,13 +13,21 @@ cd tui && bun install
 
 # Launch everything (requires .env with ANTHROPIC_API_KEY)
 uv run digitakt
+
+# Web UI (FastAPI + Vite dev server on :5173, or built dist at :8000)
+uv run digitakt --ui web
+
+# Web-only dev (backend must be running on :8000)
+cd web && bun install && bun run dev
 ```
 
 **Without uv:** `python3 -m venv .venv && source .venv/bin/activate`, `pip install -e ".[dev]"`, then `digitakt`.
 
 ## The UI
 
-**There is one UI: the Bun/Ink terminal app in `tui/`.** It is launched via the `digitakt` entry point, which starts the Python FastAPI backend and then runs `bun run src/index.tsx` in the `tui/` directory.
+**Terminal UI:** Bun/Ink app in `tui/` (default `uv run digitakt`).
+
+**Web UI:** React/Vite app in `web/` — Napkin workbench layout (SEQ + Chat + TRIG/MIX/LFO tabs + CMD overlay), wired to the same FastAPI REST/WebSocket API. Launch with `uv run digitakt --ui web` or `cd web && bun run dev` (proxies API to `:8000`). Production: `cd web && bun run build` then open `http://localhost:8000` (static mount).
 
 Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** sit on one row under the sequencer (TRIG is always shown); **CMD** is below. When the activity log is on, **LOG** is a full-width strip under the rail + main block.
 
