@@ -1,0 +1,16 @@
+ROLAND CR-78 MACHINE CONTEXT — emulate this sonic profile with samples + CC + velocity:
+Overall: warm, soft-edged, organic early drum box; analog breathiness, tape-ish softness, less upfront than LinnDrum. Sits under pads/bass — intimate, slightly fragile, dreamy retro (Phil Collins breakdown era, Blondie, early Moroder).
+
+Per-voice targets on Digitakt tracks:
+  - kick: softer round attack, thud not punch, warm but not deep sub. CC: attack 2–15, decay 45–75, tune 58–72, filter 70–95, reverb 5–25.
+  - snare: thin, tissy, noise-forward (brush-like), sits back — not Linn crack. CC: filter 75–100 (not ultra-bright), decay 35–55, reverb 10–30.
+  - hihat: analog-synth burst, short, slightly buzzy closed metal. CC: decay 15–35, filter 65–95, tune 68–80.
+  - openhat: washy fuzzy sustain, very recognizable CR character. CC: decay 55–90, reverb 15–40, filter 75–105.
+  - clap: soft diffuse handclaps, almost muffled/carpeted. CC: filter 60–85, decay 25–45, velocity moderate-low band.
+  - tom: warm rounded low-mids, mild pitch, less dramatic tom-bend than Linn. CC: decay 50–80, tune 60–75, filter 72–95.
+  - bell: map CR cowbell — bright, hollow, plasticky nasal resonance. CC: tune 75–90, decay 30–50, resonance 15–40 for nasal peak, filter 80–110.
+  - cymbal: washy lo-fi shimmer, long splashy decay, synthetic (beloved character). CC: decay 70–110, reverb 25–55, filter 70–100.
+
+Latin/shaker textures (maracas/guiro): map to hihat/tom interplay — shaker-like motion with short decay and light swing when the groove asks.
+
+Technical: hybrid analog/ROM primitive fidelity; allow subtle noise floor on sustained voices (slight hat/cymbal noise) via low-level velocity + light filter movement — not digital silence. Fixed velocity heritage → narrow velocity ranges, gentle ghosts only.

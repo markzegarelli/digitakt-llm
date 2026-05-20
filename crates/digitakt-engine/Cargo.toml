@@ -1,0 +1,25 @@
+[package]
+name = "digitakt-engine"
+description = "AppState wiring, EventBus, Player, Generator, MidiInputListener"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+digitakt-core = { path = "../digitakt-core" }
+digitakt-midi = { path = "../digitakt-midi", features = ["hardware_midi"] }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+rand = { workspace = true }
+
+[features]
+default = []
+hardware_midi = ["digitakt-midi/hardware_midi"]
+
+[dev-dependencies]
+rand = { workspace = true }

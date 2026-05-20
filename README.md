@@ -43,9 +43,29 @@ cd tui && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
 # or add it to a .env file: ANTHROPIC_API_KEY=sk-ant-...
 
-# Launch (adds .venv to PATH for this command)
+# Launch (adds .venv to PATH for this command) — **legacy Python path**
 uv run digitakt
 ```
+
+### Rust stack (recommended for v1)
+
+```bash
+# Build + test
+cargo test --workspace -- --test-threads=1
+
+# Headless API (Ink TUI / web dev)
+cargo run -p digitakt-cli -- serve
+# or: DIGITAKT_URL=http://127.0.0.1:8000 uv run digitakt   # Ink against Rust server
+
+# Web UI dev (Rust API on :8000)
+cargo run -p digitakt-cli -- serve &
+cd web && bun run dev
+
+# Tauri macOS app (from src-tauri/)
+cargo tauri dev
+```
+
+See [docs/macos-release.md](docs/macos-release.md) for Core MIDI entitlements and notarization.
 
 ### Cloud/agent startup bootstrap
 

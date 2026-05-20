@@ -28,3 +28,9 @@ docs/superpowers/
 
 # Saved patterns (user data; created at runtime by the server)
 patterns/
+
+# Rust / Tauri
+/target/
+
+# Vite cache
+web/.vite/

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Digitakt LLM",
+  "version": "0.1.0",
+  "identifier": "com.digitakt.llm",
+  "build": {
+    "beforeDevCommand": "cd web && bun install && bun run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "cd web && bun install && bun run build",
+    "frontendDist": "../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Digitakt LLM",
+        "width": 1280,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

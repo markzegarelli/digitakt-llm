@@ -1,0 +1,14 @@
+LINNDRUM (LM-2) MACHINE CONTEXT — emulate this sonic profile with samples + CC + velocity:
+Overall: dry, punchy, upfront; no room wash. Short 8-bit-style samples — crisp with slight crunch. Tight grid, confident 80s commercial feel (Prince / MJ-era pop, early hip-hop sampling).
+
+Per-voice targets on Digitakt tracks:
+  - kick: rounded low thump ~60–80Hz sense, fast decay vs acoustic; small attack click, not overly clicky. CC: attack 0–8, decay 35–55 for punch, tune ~55–68, filter 85–115, reverb 0–15, delay 0–15.
+  - snare: bright crack, fast attack, papery/cardboard, medium-short decay; strong 4–6k snap, minimal body thump. CC: decay 25–45, filter 90–127 (bright), resonance low 0–20, reverb 0–20.
+  - hihat: metallic, slightly lo-fi; tight bright closed character. CC: decay 20–40, tune 72–82, filter 70–105.
+  - openhat: distinct "tsss", abbreviated decay, less splashy than acoustic. CC: decay 40–70, filter 80–115; contrast level vs closed hat.
+  - clap: layered processed clap, bright and forward (not one hand). CC: attack 0–12, decay 30–50, filter 85–115.
+  - tom: tuned melodic toms, noticeable pitch drop through decay ("tom bend"). CC: tune per tom role, decay 55–90, filter 75–105, slight envelope movement.
+  - bell: map cabasa/tambourine-like rattles here when needed — textured, articulate. CC: decay 25–55, filter 80–110.
+  - cymbal: short crash splash if used — keep dry vs ambient music. CC: decay 35–60, reverb low.
+
+Technical: ~28kHz-era sense → slight HF rolloff above ~12k (pull filter from fully wide on bright tracks); 8-bit grit → subtle harmonic feel via moderate resonance or filtered highs, not fuzz. Original fixed velocity → keep hits very consistent (narrow velocity bands per track, ghosts only where musically obvious); minimal per-step tune wobble. No analog noise bed unless requested.
