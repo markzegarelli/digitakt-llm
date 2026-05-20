@@ -9,11 +9,30 @@ Add to `src-tauri/Entitlements.plist` for hardware MIDI:
 
 Digitakt USB MIDI requires the Elektron driver; the Rust stack uses `midir` (same as Python `mido`).
 
+## Bundle build
+
+From the repo root (macOS only):
+
+```bash
+bash scripts/bundle-macos.sh
+```
+
+Produces `target/release/bundle/macos/Digitakt LLM.app`. Requires Bun, Rust, and Tauri CLI (`cargo install tauri-cli --locked`).
+
+### Pre-commit hook (optional)
+
+To run the bundle build automatically before each commit that touches `web/`, `src-tauri/`, `crates/`, or workspace `Cargo.*`:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+Skip for one commit: `DIGITAKT_SKIP_BUNDLE=1 git commit …` or `git commit --no-verify`. Details: [.githooks/README.md](../.githooks/README.md).
+
 ## Notarization
 
-1. `cd web && bun install && bun run build`
-2. `cargo tauri build` from `src-tauri/`
-3. Notarize the `.app` with `xcrun notarytool submit` and staple the ticket.
+1. `bash scripts/bundle-macos.sh` (or the steps below manually)
+2. Notarize the `.app` with `xcrun notarytool submit` and staple the ticket.
 
 ## Local dev
 

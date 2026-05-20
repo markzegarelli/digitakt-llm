@@ -36,6 +36,28 @@ uv run pytest -v
 
 288 tests, ~4s. No real MIDI or Anthropic API calls — everything is mocked.
 
+Rust workspace:
+
+```bash
+cargo test --workspace -- --test-threads=1
+```
+
+## macOS app bundle (optional pre-commit)
+
+Release `.app` builds use Tauri on **macOS only**. From the repo root:
+
+```bash
+bash scripts/bundle-macos.sh
+```
+
+To run that build as a **git pre-commit** step when you change `web/`, `src-tauri/`, `crates/`, or `Cargo.toml` / `Cargo.lock`:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+Prerequisites: Bun, Rust, [Tauri CLI](https://v2.tauri.app/reference/cli/) (`cargo install tauri-cli --locked`). The hook is skipped on Linux/Windows and when `DIGITAKT_SKIP_BUNDLE=1` is set. See [.githooks/README.md](.githooks/README.md) and [docs/macos-release.md](docs/macos-release.md).
+
 ## Making Changes
 
 ### Branches

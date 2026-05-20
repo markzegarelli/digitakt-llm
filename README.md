@@ -65,7 +65,7 @@ cd web && bun run dev
 cargo tauri dev
 ```
 
-See [docs/macos-release.md](docs/macos-release.md) for Core MIDI entitlements and notarization.
+See [docs/macos-release.md](docs/macos-release.md) for bundle builds, optional git pre-commit hook (`bash scripts/install-git-hooks.sh`), Core MIDI entitlements, and notarization.
 
 ### Cloud/agent startup bootstrap
 
