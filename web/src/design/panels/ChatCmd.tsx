@@ -4,18 +4,20 @@ import type { UiDispatch } from "../../hooks/useUiState.js";
 import { COMMANDS } from "../constants.js";
 import { canRunCmd, parseCmd, dispatchCommand, type ParsedCmd } from "../../lib/commandDispatch.js";
 import type { CommandContext } from "../../lib/commandDispatch.js";
-import { nextTabMode } from "../../lib/tabCycle.js";
+import { handleTabCycle, releaseTextFocus } from "../../hooks/useKeyboard.js";
 
 export function ChatColumn({
   view,
   focused,
   dispatch,
   onSend,
+  focusAppRoot,
 }: {
   view: WorkbenchView;
   focused: boolean;
   dispatch: UiDispatch;
   onSend: (text: string) => void;
+  focusAppRoot?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -41,7 +43,13 @@ export function ChatColumn({
           </div>
         ))}
       </div>
-      <ChatComposer view={view} focused={focused} dispatch={dispatch} onSend={onSend} />
+      <ChatComposer
+        view={view}
+        focused={focused}
+        dispatch={dispatch}
+        onSend={onSend}
+        focusAppRoot={focusAppRoot}
+      />
     </div>
   );
 }
@@ -51,11 +59,13 @@ function ChatComposer({
   focused,
   dispatch,
   onSend,
+  focusAppRoot,
 }: {
   view: WorkbenchView;
   focused: boolean;
   dispatch: UiDispatch;
   onSend: (text: string) => void;
+  focusAppRoot?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -68,18 +78,16 @@ function ChatComposer({
       <span className={focused ? "cb b" : "d"}>›</span>
       <input
         ref={inputRef}
-        tabIndex={focused ? 0 : -1}
+        tabIndex={-1}
         value={view.ui.cmd}
         placeholder={focused ? "tell claude what to do…" : "press C or /"}
         onChange={(e) => dispatch({ type: "SET_CMD", value: e.target.value })}
         onKeyDown={(e) => {
           if (e.key === "Tab") {
-            const nextMode = nextTabMode(view.ui.mode, view.ui.lastWorkbench, e.shiftKey);
-            dispatch({ type: "MODE", value: nextMode });
-            e.preventDefault();
-            e.stopPropagation();
+            handleTabCycle(e.nativeEvent, view, dispatch, focusAppRoot);
             return;
           }
+          if (e.key === " ") return;
           if (e.key === "Enter" && view.ui.cmd.trim()) {
             onSend(view.ui.cmd.trim());
             dispatch({ type: "SET_CMD", value: "" });
@@ -88,6 +96,7 @@ function ChatComposer({
             return;
           }
           if (e.key === "Escape") {
+            releaseTextFocus(focusAppRoot);
             dispatch({ type: "MODE", value: view.ui.prevMode || "SEQ" });
             e.preventDefault();
             e.stopPropagation();
@@ -104,14 +113,17 @@ export function CommandBar({
   view,
   dispatch,
   cmdCtx,
+  focusAppRoot,
 }: {
   view: WorkbenchView;
   dispatch: UiDispatch;
   cmdCtx: CommandContext;
+  focusAppRoot?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (view.ui.mode === "CMD") inputRef.current?.focus();
+    else inputRef.current?.blur();
   }, [view.ui.mode]);
   if (view.ui.mode !== "CMD") return null;
 
@@ -149,10 +161,10 @@ export function CommandBar({
         <span className="y b">CMD ›</span>
         <input
           ref={inputRef}
-          tabIndex={view.ui.mode === "CMD" ? 0 : -1}
+          tabIndex={-1}
           value={view.ui.cmd}
           onChange={(e) => dispatch({ type: "SET_CMD", value: e.target.value })}
-          onKeyDown={(e) => onCmdKey(e, view, dispatch, parsed, runnable, allSuggestions, highlight, cmdCtx)}
+          onKeyDown={(e) => onCmdKey(e, view, dispatch, parsed, runnable, allSuggestions, highlight, cmdCtx, focusAppRoot)}
           placeholder="type a command…"
         />
       </div>
@@ -169,15 +181,17 @@ function onCmdKey(
   suggestions: unknown[],
   highlight: number,
   cmdCtx: CommandContext,
+  focusAppRoot?: () => void,
 ) {
   const k = e.key;
   if (k === "Tab") {
-    e.preventDefault();
-    dispatch({ type: "MODE", value: nextTabMode(view.ui.mode, view.ui.lastWorkbench, e.shiftKey) });
+    handleTabCycle(e.nativeEvent, view, dispatch, focusAppRoot);
     return;
   }
+  if (k === " ") return;
   if (k === "Escape") {
     e.preventDefault();
+    releaseTextFocus(focusAppRoot);
     dispatch({ type: "MODE", value: view.ui.prevMode || "SEQ" });
     return;
   }

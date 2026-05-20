@@ -13,6 +13,7 @@ export function LayoutWorkbench({
   onChatSend,
   onSelectLfoSlot,
   onSelectTrack,
+  focusAppRoot,
 }: {
   view: WorkbenchView;
   dispatch: UiDispatch;
@@ -20,6 +21,7 @@ export function LayoutWorkbench({
   onChatSend: (text: string) => void;
   onSelectLfoSlot: (idx: number) => void;
   onSelectTrack: (delta: number) => void;
+  focusAppRoot?: () => void;
 }) {
   const focusKey =
     view.ui.mode === "MIX" || view.ui.mode === "TRIG" || view.ui.mode === "LFO"
@@ -37,7 +39,13 @@ export function LayoutWorkbench({
         <Sequencer view={view} focused={view.ui.mode === "SEQ"} stepStyle={stepStyle} />
       </div>
       <div className={`panel ${view.ui.mode === "CHAT" ? "focused" : ""}`} style={{ gridRow: "1 / 3" }}>
-        <ChatColumn view={view} focused={view.ui.mode === "CHAT"} dispatch={dispatch} onSend={onChatSend} />
+        <ChatColumn
+          view={view}
+          focused={view.ui.mode === "CHAT"}
+          dispatch={dispatch}
+          onSend={onChatSend}
+          focusAppRoot={focusAppRoot}
+        />
       </div>
       <div
         className={`panel ${["TRIG", "MIX", "LFO"].includes(view.ui.mode) ? "focused" : ""}`}

@@ -31,11 +31,15 @@ export function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const view = useMemo(() => buildWorkbenchView(state, ui), [state, ui]);
 
+  const focusAppRoot = useCallback(() => {
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
+
   useEffect(() => {
     if (ui.mode !== "CHAT" && ui.mode !== "CMD") {
-      rootRef.current?.focus({ preventScroll: true });
+      focusAppRoot();
     }
-  }, [ui.mode]);
+  }, [ui.mode, focusAppRoot]);
 
   useEffect(() => {
     if (state.generation_status === "generating") {
@@ -130,7 +134,7 @@ export function App() {
     [actions, state, track, step, ui, view.tracks],
   );
 
-  useKeyboard(view, dispatch, handlers);
+  useKeyboard(view, dispatch, handlers, focusAppRoot);
 
   const onChatSend = useCallback(
     (text: string) => {
@@ -157,9 +161,10 @@ export function App() {
         onChatSend={onChatSend}
         onSelectLfoSlot={(idx) => dispatch({ type: "LFO_SWITCH", set: idx })}
         onSelectTrack={(delta) => dispatch({ type: "TRACK_DELTA", delta })}
+        focusAppRoot={focusAppRoot}
       />
       <HelpStrip view={view} />
-      <CommandBar view={view} dispatch={dispatch} cmdCtx={cmdCtx} />
+      <CommandBar view={view} dispatch={dispatch} cmdCtx={cmdCtx} focusAppRoot={focusAppRoot} />
       {ui.helpOpen ? <HelpOverlay onClose={() => dispatch({ type: "HELP_SET", value: false })} /> : null}
       <div className="too-small">
         <div>

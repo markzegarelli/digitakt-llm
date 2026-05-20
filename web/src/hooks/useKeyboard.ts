@@ -20,16 +20,68 @@ function cyclePane(
   st: WorkbenchView,
   dispatch: UiDispatch,
   shift: boolean,
+  focusAppRoot?: () => void,
 ) {
   const nextMode = nextTabMode(st.ui.mode, st.ui.lastWorkbench, shift);
   dispatch({ type: "MODE", value: nextMode });
-  (document.activeElement as HTMLElement | null)?.blur?.();
+  releaseTextFocus(focusAppRoot);
+}
+
+/** Blur chat/cmd inputs and return focus to the workbench root. */
+export function releaseTextFocus(focusAppRoot?: () => void) {
+  if (typeof document === "undefined") return;
+  const el = document.activeElement as HTMLElement | null;
+  if (el?.tagName === "INPUT" || el?.tagName === "TEXTAREA") el.blur();
+  document.querySelector<HTMLInputElement>(".chat-composer input")?.blur();
+  document.querySelector<HTMLInputElement>(".cmd-input-bar input")?.blur();
+  focusAppRoot?.();
+}
+
+type KeyLike = Pick<
+  KeyboardEvent,
+  "key" | "shiftKey" | "preventDefault" | "stopPropagation" | "stopImmediatePropagation"
+>;
+
+/** Tab pane-cycle (bubble fallback when capture already ran sets defaultPrevented). */
+export function handleTabCycle(
+  e: KeyLike,
+  st: WorkbenchView,
+  dispatch: UiDispatch,
+  focusAppRoot?: () => void,
+): boolean {
+  if (st.ui.helpOpen || e.defaultPrevented) return false;
+  if (e.key !== "Tab") return false;
+  cyclePane(st, dispatch, e.shiftKey, focusAppRoot);
+  e.preventDefault();
+  return true;
+}
+
+/** Tab pane-cycle + Space transport; must run in capture before native tab focus. */
+export function handlePaneKeys(
+  e: KeyLike,
+  st: WorkbenchView,
+  dispatch: UiDispatch,
+  handlers: KeyboardHandlers,
+  focusAppRoot?: () => void,
+): boolean {
+  if (st.ui.helpOpen || e.defaultPrevented) return false;
+  if (e.key === "Tab") {
+    return handleTabCycle(e, st, dispatch, focusAppRoot);
+  }
+  if (e.key === " ") {
+    releaseTextFocus(focusAppRoot);
+    handlers.playStop();
+    e.preventDefault();
+    return true;
+  }
+  return false;
 }
 
 export function useKeyboard(
   view: WorkbenchView,
   dispatch: UiDispatch,
   handlers: KeyboardHandlers,
+  focusAppRoot?: () => void,
 ) {
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -37,24 +89,18 @@ export function useKeyboard(
   dispatchRef.current = dispatch;
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+  const focusRootRef = useRef(focusAppRoot);
+  focusRootRef.current = focusAppRoot;
 
   useEffect(() => {
     function onGlobalCapture(e: KeyboardEvent) {
-      const st = viewRef.current;
-      if (st.ui.helpOpen) return;
-      if (e.key === "Tab") {
-        cyclePane(st, dispatchRef.current, e.shiftKey);
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        return;
-      }
-      if (e.key === " ") {
-        handlersRef.current.playStop();
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
+      handlePaneKeys(
+        e,
+        viewRef.current,
+        dispatchRef.current,
+        handlersRef.current,
+        focusRootRef.current,
+      );
     }
 
     function onKey(e: KeyboardEvent) {
@@ -253,10 +299,10 @@ export function useKeyboard(
         }
       }
     }
-    window.addEventListener("keydown", onGlobalCapture, true);
+    document.addEventListener("keydown", onGlobalCapture, true);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onGlobalCapture, true);
+      document.removeEventListener("keydown", onGlobalCapture, true);
       window.removeEventListener("keydown", onKey);
     };
   }, []);

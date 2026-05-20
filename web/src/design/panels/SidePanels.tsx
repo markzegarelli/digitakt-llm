@@ -162,7 +162,7 @@ export function LfoSummary({
             className={isSel ? "lfo-summary-row sel" : "lfo-summary-row"}
             onClick={() => onSelectTrack(i - view.ui.cursor.track)}
             role="button"
-            tabIndex={0}
+            tabIndex={-1}
           >
             <span className={isSel ? "y b" : ""}>{track.id}</span>
             <span className="d">{activeLfos.length}/{track.lfos.length} active</span>
