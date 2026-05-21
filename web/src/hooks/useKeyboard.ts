@@ -8,7 +8,9 @@ export interface KeyboardHandlers {
   toggleStep(): void;
   clearStep(): void;
   playStop(): void;
-  muteTrack(trackIdx?: number): void;
+  muteImmediate(): void;
+  muteStagePending(): void;
+  muteFirePending(): void;
   nudgeMix(delta: number, shift: boolean): void;
   nudgeTrig(delta: number, shift: boolean): void;
   nudgeLfo(delta: number, shift: boolean): void;
@@ -32,7 +34,7 @@ export function releaseTextFocus(focusAppRoot?: () => void) {
   if (typeof document === "undefined") return;
   const el = document.activeElement as HTMLElement | null;
   if (el?.tagName === "INPUT" || el?.tagName === "TEXTAREA") el.blur();
-  document.querySelector<HTMLInputElement>(".chat-composer input")?.blur();
+  document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.blur();
   document.querySelector<HTMLInputElement>(".cmd-input-bar input")?.blur();
   focusAppRoot?.();
 }
@@ -52,6 +54,37 @@ export function handleTabCycle(
   if (st.ui.helpOpen || e.defaultPrevented) return false;
   if (e.key !== "Tab") return false;
   cyclePane(st, dispatch, e.shiftKey, focusAppRoot);
+  e.preventDefault();
+  return true;
+}
+
+function isHelpKey(key: string, shift: boolean): boolean {
+  return key === "?" || (key === "/" && shift);
+}
+
+function isWorkbenchMuteKey(key: string, shift: boolean, ctrl: boolean, meta: boolean): boolean {
+  if (ctrl || meta || shift) {
+    return shift && key.toLowerCase() === "q";
+  }
+  const k = key.toLowerCase();
+  return k === "m" || k === "q";
+}
+
+function handleMuteKeys(
+  e: KeyboardEvent,
+  st: WorkbenchView,
+  handlers: KeyboardHandlers,
+): boolean {
+  if (st.ui.helpOpen || isTextEntryActive(st)) return false;
+  const key = e.key;
+  if (!isWorkbenchMuteKey(key, e.shiftKey, e.ctrlKey, e.metaKey)) return false;
+  if (e.shiftKey && key.toLowerCase() === "q") {
+    handlers.muteFirePending();
+  } else if (key.toLowerCase() === "q") {
+    handlers.muteStagePending();
+  } else {
+    handlers.muteImmediate();
+  }
   e.preventDefault();
   return true;
 }
@@ -121,13 +154,27 @@ export function useKeyboard(
       const mod = e.shiftKey;
       const tag = (e.target as HTMLElement)?.tagName ?? "";
 
+      if (isHelpKey(key, mod)) {
+        if (st.ui.mode === "CMD" && st.ui.cmd.trim().length > 0) {
+          // typed ? in CMD — fall through to input
+        } else if (st.ui.mode === "CHAT" && (tag === "INPUT" || tag === "TEXTAREA")) {
+          // typed ? in chat composer
+        } else {
+          dispatchRef.current({ type: "HELP_TOGGLE" });
+          e.preventDefault();
+          return;
+        }
+      }
+
       if (st.ui.helpOpen) {
-        if (key === "Escape" || key === "?" || key === "/") {
+        if (key === "Escape" || isHelpKey(key, mod)) {
           dispatchRef.current({ type: "HELP_SET", value: false });
           e.preventDefault();
         }
         return;
       }
+
+      if (handleMuteKeys(e, st, handlersRef.current)) return;
 
       // Tab/Space handled in capture phase (including from chat/cmd inputs)
       if (key === "Tab" || key === " ") return;
@@ -149,11 +196,6 @@ export function useKeyboard(
 
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-      if (key === "?") {
-        dispatchRef.current({ type: "HELP_TOGGLE" });
-        e.preventDefault();
-        return;
-      }
       if (key === "Escape") {
         if (st.ui.mode !== "SEQ") dispatchRef.current({ type: "MODE", value: "SEQ" });
         e.preventDefault();
@@ -175,9 +217,9 @@ export function useKeyboard(
         return;
       }
       const paneKey: Record<string, UiMode> = {
-        s: "SEQ", m: "MIX", t: "TRIG", l: "LFO", c: "CHAT",
+        s: "SEQ", i: "MIX", t: "TRIG", l: "LFO", c: "CHAT",
       };
-      if (paneKey[key.toLowerCase()] && !mod) {
+      if (paneKey[key.toLowerCase()] && !mod && !e.ctrlKey && !e.metaKey) {
         dispatchRef.current({ type: "MODE", value: paneKey[key.toLowerCase()]! });
         e.preventDefault();
         return;
@@ -216,11 +258,6 @@ export function useKeyboard(
         }
         if (key === "Delete" || key === "Backspace") {
           handlersRef.current.clearStep();
-          e.preventDefault();
-          return;
-        }
-        if (key.toLowerCase() === "x") {
-          handlersRef.current.muteTrack();
           e.preventDefault();
           return;
         }

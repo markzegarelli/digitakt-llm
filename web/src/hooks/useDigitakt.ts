@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { BackendClient, AppEvent } from "../backend/client.js";
 import type { DigitaktState, TrackName, LfoDef, EuclidStripMode, CCParamDef } from "../backend/types.js";
 import {
@@ -365,8 +365,13 @@ export interface DigitaktActions {
   clearLog(): void;
 }
 
-export function useDigitakt(client: BackendClient): { state: DigitaktState; actions: DigitaktActions } {
+export function useDigitakt(
+  client: BackendClient,
+  callbacks?: { onMuteChanged?: (track: TrackName) => void },
+): { state: DigitaktState; actions: DigitaktActions } {
   const [state, setState] = useState<DigitaktState>(DEFAULT_STATE);
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   useEffect(() => {
     client.get("/state").then((raw) => {
@@ -382,6 +387,10 @@ export function useDigitakt(client: BackendClient): { state: DigitaktState; acti
         return;
       }
       setState((s) => applyEvent(s, event));
+      if (event["type"] === "mute_changed") {
+        const track = event["track"];
+        if (isTrackName(track)) callbacksRef.current?.onMuteChanged?.(track);
+      }
     });
 
     return unsub;

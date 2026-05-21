@@ -30,6 +30,7 @@ interface StepGridProps {
   trackMuted: Record<TrackName, boolean>;
   selectedTrack: number;
   pendingMuteTracks?: Set<TrackName>;
+  armedMuteTracks?: Set<TrackName>;
   /** When true, user is editing steps on `selectedTrack`; `selectedStep` is the cursor column. */
   stepEditMode: boolean;
   selectedStep: number;
@@ -79,6 +80,7 @@ export function StepGrid({
   trackMuted,
   selectedTrack,
   pendingMuteTracks = new Set(),
+  armedMuteTracks = new Set(),
   stepEditMode,
   selectedStep,
   isFocused,
@@ -142,18 +144,20 @@ export function StepGrid({
         const label = TRACK_LABELS[track];
         const muted = trackMuted[track] ?? false;
         const isSelected = trackIdx === selectedTrack;
-        const isPendingMute = pendingMuteTracks.has(track);
+        const staged = pendingMuteTracks.has(track);
+        const armed = armedMuteTracks.has(track);
+        const showQ = staged || armed;
+        const isPendingMute = showQ;
         const labelColor = isPendingMute
-          ? theme.warn
+          ? (armed ? theme.error : theme.warn)
           : isSelected && isFocused
             ? theme.accent
             : isSelected
               ? theme.accentMuted
               : theme.textDim;
-        const showBadge = muted || isPendingMute;
+        const showBadge = muted || showQ;
         const badgeMuted = muted ? "M" : "·";
-        const badgeQueue = isPendingMute ? "Q" : "·";
-        const badgeColor = isPendingMute ? theme.warn : theme.error;
+        const badgeQueue = showQ ? "Q" : "·";
         return (
           <Box key={track} flexDirection="row">
             <Box width={LABEL_COL_W} flexDirection="row">
@@ -162,10 +166,12 @@ export function StepGrid({
                 {label}
               </Text>
               {showBadge ? (
-                <Text bold color={badgeColor}>
-                  {badgeMuted}
-                  {badgeQueue}
-                </Text>
+                <>
+                  <Text bold color={muted ? theme.error : theme.textDim}>{badgeMuted}</Text>
+                  {showQ ? (
+                    <Text bold color={armed ? theme.error : theme.warn}>{badgeQueue}</Text>
+                  ) : null}
+                </>
               ) : null}
             </Box>
             {Array.from({ length: patternLength }, (_, i) => {

@@ -33,7 +33,7 @@ export function LayoutWorkbench({
       : "TRIG";
   const tabs = [
     { id: "TRIG" as const, label: "trig", shortcut: "T" },
-    { id: "MIX" as const, label: "mix", shortcut: "M" },
+    { id: "MIX" as const, label: "mix", shortcut: "I" },
     { id: "LFO" as const, label: "lfo", shortcut: "L" },
   ];
 

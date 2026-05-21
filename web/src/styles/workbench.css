@@ -127,6 +127,7 @@
   margin-bottom: 8px;
   flex-wrap: wrap;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .lfo-slots { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -157,7 +158,7 @@
 
 .lfo-graph {
   flex: 1;
-  min-height: 160px;
+  min-height: 0;
   width: 100%;
   border: 1px solid var(--border-dim);
   background: var(--bg-panel-2);
@@ -165,12 +166,16 @@
   margin-bottom: 8px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .lfo-graph-svg {
   flex: 1;
-  min-height: 120px;
+  min-height: 0;
   display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .lfo-graph-overlay {
@@ -206,6 +211,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .lfo-param-cell {
@@ -313,13 +319,31 @@
 .chat-log { flex: 1; padding: 10px 12px; min-height: 0; }
 .chat-composer {
   border-top: 1px solid var(--border-dim);
-  padding: 8px 12px;
+  padding: 12px 12px 14px;
   display: flex;
-  gap: 6px;
-  align-items: center;
+  gap: 8px;
+  align-items: flex-start;
+  flex-shrink: 0;
 }
 .chat-composer.focused { background: rgba(78,197,197,0.04); }
-.chat-composer input { flex: 1; caret-color: var(--cool); }
+.chat-composer-prompt {
+  flex-shrink: 0;
+  line-height: 1.45;
+  padding-top: 3px;
+}
+.chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+  caret-color: var(--cool);
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  line-height: 1.45;
+  padding: 3px 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
 
 .help-strip {
   padding: 6px 14px;
@@ -367,22 +391,55 @@
 .cmd-input-bar input { flex: 1; caret-color: var(--yellow); }
 
 .help-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(10,9,8,0.96);
-  z-index: 100;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px;
 }
 .help-overlay-inner {
-  max-width: 900px;
+  max-width: 920px;
+  max-height: min(85vh, 720px);
   width: 100%;
   border: 1px solid var(--yellow);
   background: var(--bg-panel);
-  padding: 24px;
+  padding: 24px 20px 16px;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.help-overlay-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.help-overlay-section {
+  color: var(--yellow);
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+.help-overlay-subhead {
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-top: 8px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+.help-overlay-line {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.help-overlay-gap {
+  height: 6px;
 }
 .help-overlay-title {
   position: absolute;

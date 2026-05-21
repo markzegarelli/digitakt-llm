@@ -158,11 +158,16 @@ export interface DigitaktActions {
   setEuclidStripMode(mode: EuclidStripMode): Promise<void>;
 }
 
-export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
+export function useDigitakt(
+  baseUrl: string,
+  callbacks?: { onMuteChanged?: (track: TrackName) => void },
+): [DigitaktState, DigitaktActions] {
   const [state, setState] = useState<DigitaktState>(DEFAULT_STATE);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shuttingDown = useRef(false);
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   const api = useCallback(
     async (method: string, path: string, body?: unknown) => {
@@ -605,6 +610,12 @@ export function useDigitakt(baseUrl: string): [DigitaktState, DigitaktActions] {
               return { ...prev, log: newLog };
           }
         });
+        if (msg.event === "mute_changed") {
+          const track = msg.data["track"];
+          if (typeof track === "string") {
+            callbacksRef.current?.onMuteChanged?.(track as TrackName);
+          }
+        }
       } catch { /* ignore malformed frames */ }
     };
 

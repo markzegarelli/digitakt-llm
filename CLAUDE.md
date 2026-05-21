@@ -87,6 +87,7 @@ Keyboard shortcuts:
 **Interaction contract**
 
 - `Tab` — rotate panel focus `SEQ → MIX → CMD`
+- `i` — jump focus to MIX
 - `Shift+Tab` — toggle input mode `beat` ↔ `chat`
 - `/` — jump focus to CMD input
 - `Enter` / `Esc` — enter/exit the active edit context in focused panel

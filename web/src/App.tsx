@@ -20,6 +20,7 @@ import {
 import { dispatchCommand, type CommandContext } from "./lib/commandDispatch.js";
 import { formatGenerationReply } from "./lib/chatDisplay.js";
 import { normalizeCcParamAlias } from "./lib/slashParsing.js";
+import type { TrackName } from "./backend/types.js";
 
 const BASE_URL =
   (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_API_URL"] ?? "";
@@ -27,8 +28,12 @@ const BASE_URL =
 const client = createClient(BASE_URL || undefined);
 
 export function App() {
-  const { state, actions } = useDigitakt(client);
   const { ui, dispatch } = useUiState();
+  const onMuteChanged = useCallback(
+    (track: TrackName) => dispatch({ type: "MUTE_ARMED_REMOVE", track }),
+    [dispatch],
+  );
+  const { state, actions } = useDigitakt(client, { onMuteChanged });
   const startMs = useRef(Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const view = useMemo(() => buildWorkbenchView(state, ui), [state, ui]);
@@ -91,10 +96,18 @@ export function App() {
       },
       clearStep: () => actions.setVel(track.name, step, 0),
       playStop: () => (state.is_playing ? actions.stop() : actions.play()),
-      muteTrack: (trackIdx?: number) => {
-        const ti = trackIdx ?? ui.cursor.track;
-        const tn = view.tracks[ti]!.name;
-        actions.muteQueued(tn, !state.track_muted[tn]);
+      muteImmediate: () => {
+        const tn = view.tracks[ui.cursor.track]!.name;
+        actions.setMute(tn, !state.track_muted[tn]);
+      },
+      muteStagePending: () => {
+        dispatch({ type: "MUTE_PENDING_TOGGLE", trackIdx: ui.cursor.track });
+      },
+      muteFirePending: () => {
+        for (const tn of ui.pendingMuteTracks) {
+          actions.muteQueued(tn, !state.track_muted[tn]);
+        }
+        dispatch({ type: "MUTE_ARM_PENDING" });
       },
       nudgeMix: (delta: number, shift: boolean) => {
         const param = PARAM_NAMES[ui.cursor.mixParam]!;
@@ -145,7 +158,7 @@ export function App() {
         actions.setLfoRoute(slots[idx]!.target, null);
       },
     }),
-    [actions, state, track, step, ui, view.tracks],
+    [actions, dispatch, state, track, step, ui, view.tracks],
   );
 
   useKeyboard(view, dispatch, handlers, focusAppRoot);

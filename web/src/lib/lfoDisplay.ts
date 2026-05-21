@@ -107,6 +107,13 @@ export function lfoTimingLabel(stepLen: number, num: number, den: number): strin
   return `${barLabel} · ${cyc.toFixed(2)} cyc`;
 }
 
+/** Vertical inset so stroke/fill stays inside the plot (px, min fraction of height). */
+export function lfoPlotInsets(height: number): { padY: number; baseline: number } {
+  const h = Math.max(2, Math.round(height));
+  const padY = Math.max(6, Math.round(h * 0.1));
+  return { padY, baseline: h - padY - 0.5 };
+}
+
 /**
  * Sample LFO waveform points using the same engine-aligned logic as TUI `lfoBrailleLines`.
  */
@@ -127,8 +134,10 @@ export function sampleLfoWavePoints(opts: {
   const csn = cycleSteps(pl, num, den);
   const baseG =
     globalStep != null && globalStep >= 0 ? Math.floor(globalStep / pl) * pl : 0;
-  const mid = (h - 1) / 2;
-  const amp = mid;
+  const { padY } = lfoPlotInsets(h);
+  const plotH = h - padY * 2;
+  const mid = padY + (plotH - 1) / 2;
+  const amp = (plotH - 1) / 2;
   const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
 
   const points: { x: number; y: number }[] = [];
@@ -136,7 +145,7 @@ export function sampleLfoWavePoints(opts: {
     const t = w <= 1 ? 0 : px / (w - 1);
     const g = baseG + t * pl;
     const val = wAtG(g);
-    const y = Math.max(0, Math.min(h - 1, mid - val * amp));
+    const y = Math.max(padY, Math.min(h - padY - 1, mid - val * amp));
     points.push({ x: px, y });
   }
   return points;

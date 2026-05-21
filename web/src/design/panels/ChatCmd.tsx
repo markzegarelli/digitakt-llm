@@ -54,6 +54,20 @@ export function ChatColumn({
   );
 }
 
+const CHAT_INPUT_MIN_ROWS = 1;
+const CHAT_INPUT_MAX_ROWS = 8;
+
+function syncChatInputHeight(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  const style = getComputedStyle(el);
+  const lineHeight = parseFloat(style.lineHeight) || 19;
+  const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  const minHeight = lineHeight + padY;
+  const maxHeight = lineHeight * CHAT_INPUT_MAX_ROWS + padY;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(maxHeight, Math.max(minHeight, el.scrollHeight))}px`;
+}
+
 function ChatComposer({
   view,
   focused,
@@ -67,17 +81,22 @@ function ChatComposer({
   onSend: (text: string) => void;
   focusAppRoot?: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (focused) inputRef.current?.focus();
     else inputRef.current?.blur();
   }, [focused]);
 
+  useEffect(() => {
+    syncChatInputHeight(inputRef.current);
+  }, [view.ui.cmd]);
+
   return (
     <div className={focused ? "chat-composer focused" : "chat-composer"}>
-      <span className={focused ? "cb b" : "d"}>›</span>
-      <input
+      <span className={focused ? "cb b chat-composer-prompt" : "d chat-composer-prompt"}>›</span>
+      <textarea
         ref={inputRef}
+        rows={CHAT_INPUT_MIN_ROWS}
         tabIndex={-1}
         value={view.ui.cmd}
         placeholder={focused ? "tell claude what to do…" : "press C or /"}
@@ -87,7 +106,7 @@ function ChatComposer({
             handleTabCycle(e.nativeEvent, view, dispatch, focusAppRoot);
             return;
           }
-          if (e.key === "Enter" && view.ui.cmd.trim()) {
+          if (e.key === "Enter" && !e.shiftKey && view.ui.cmd.trim()) {
             onSend(view.ui.cmd.trim());
             dispatch({ type: "SET_CMD", value: "" });
             e.preventDefault();

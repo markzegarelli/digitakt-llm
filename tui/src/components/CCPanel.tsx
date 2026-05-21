@@ -17,6 +17,7 @@ interface CCPanelProps {
   selectedTrack: number;  // 0–7
   trackMuted?: DigitaktState["track_muted"];
   pendingMuteTracks?: Set<TrackName>;
+  armedMuteTracks?: Set<TrackName>;
   selectedParam: number;  // index into ccParams
   isFocused: boolean;
   stepMode: boolean;
@@ -52,6 +53,7 @@ export function CCPanel({
   selectedTrack,
   trackMuted,
   pendingMuteTracks = new Set(),
+  armedMuteTracks = new Set(),
   selectedParam,
   isFocused,
   stepMode,
@@ -93,22 +95,25 @@ export function CCPanel({
         <Text bold color={theme.textDim}>MIX </Text>
         {TRACK_NAMES.map((t, i) => {
           const muted = trackMuted?.[t] ?? false;
-          const queued = pendingMuteTracks.has(t);
+          const staged = pendingMuteTracks.has(t);
+          const armed = armedMuteTracks.has(t);
+          const showQ = staged || armed;
           const sel = i === selectedTrack;
-          const showBadge = muted || queued;
+          const showBadge = muted || showQ;
           const badgeMuted = muted ? "M" : "·";
-          const badgeQueue = queued ? "Q" : "·";
-          const badgeColor = queued ? theme.warn : theme.error;
+          const badgeQueue = showQ ? "Q" : "·";
           return (
             <Box key={t} flexDirection="row">
               <Text bold={sel} color={sel ? theme.accent : theme.textDim}>
                 {sel ? `[${t.toUpperCase()}]` : ` ${t} `}
               </Text>
               {showBadge ? (
-                <Text bold color={badgeColor}>
-                  {badgeMuted}
-                  {badgeQueue}
-                </Text>
+                <>
+                  <Text bold color={muted ? theme.error : theme.textDim}>{badgeMuted}</Text>
+                  {showQ ? (
+                    <Text bold color={armed ? theme.error : theme.warn}>{badgeQueue}</Text>
+                  ) : null}
+                </>
               ) : null}
             </Box>
           );

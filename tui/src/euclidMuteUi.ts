@@ -92,6 +92,7 @@ export interface EuclidTrackStripRow {
   cursor: ">" | " ";
   label: string;
   badge: "" | "M" | "Q" | "MQ";
+  qArmed: boolean;
 }
 
 export type PatternMuteRouteFocus = "pattern" | "cc" | "lfo" | "prompt";
@@ -103,6 +104,7 @@ export function shouldRoutePatternMuteKey({
   meta,
   patternStepEdit,
   trigKeysActive,
+  ccStepMode,
 }: {
   input: string;
   focus: PatternMuteRouteFocus;
@@ -110,13 +112,15 @@ export function shouldRoutePatternMuteKey({
   meta: boolean | undefined;
   patternStepEdit: boolean;
   trigKeysActive: boolean;
+  ccStepMode?: boolean;
 }): boolean {
+  const focusOk =
+    (focus === "pattern" && !patternStepEdit && !trigKeysActive) ||
+    (focus === "cc" && !ccStepMode);
   return (
-    focus === "pattern" &&
+    focusOk &&
     !ctrl &&
     !meta &&
-    !patternStepEdit &&
-    !trigKeysActive &&
     (input === "m" || input === "q" || input === "Q")
   );
 }
@@ -142,7 +146,26 @@ export function togglePendingMuteTrack(
   return next;
 }
 
-export function tracksToQueueAndClear(
+export type MuteBadge = "" | "M" | "Q" | "MQ";
+
+export type MuteIndicator = {
+  badge: MuteBadge;
+  qArmed: boolean;
+};
+
+export function muteIndicator(
+  muted: boolean,
+  staged: boolean,
+  armed: boolean,
+): MuteIndicator {
+  const showQ = staged || armed;
+  if (muted && showQ) return { badge: "MQ", qArmed: armed };
+  if (muted) return { badge: "M", qArmed: false };
+  if (showQ) return { badge: "Q", qArmed: armed };
+  return { badge: "", qArmed: false };
+}
+
+export function tracksToArmAndClear(
   pendingMuteTracks: Set<TrackName>,
 ): { tracks: TrackName[]; nextPending: Set<TrackName> } {
   return {
@@ -151,26 +174,32 @@ export function tracksToQueueAndClear(
   };
 }
 
-function muteBadge(muted: boolean, pending: boolean): "" | "M" | "Q" | "MQ" {
-  if (muted && pending) return "MQ";
-  if (muted) return "M";
-  if (pending) return "Q";
-  return "";
-}
+/** @deprecated alias */
+export const tracksToQueueAndClear = tracksToArmAndClear;
 
 export function getEuclidTrackStripRows({
   selectedTrack,
   trackMuted,
   pendingMuteTracks,
+  armedMuteTracks = new Set<TrackName>(),
 }: {
   selectedTrack: number;
   trackMuted: Record<TrackName, boolean>;
   pendingMuteTracks: Set<TrackName>;
+  armedMuteTracks?: Set<TrackName>;
 }): EuclidTrackStripRow[] {
-  return TRACK_NAMES.map((track, index) => ({
-    track,
-    cursor: index === selectedTrack ? ">" : " ",
-    label: TRACK_LABELS[track],
-    badge: muteBadge(trackMuted[track] ?? false, pendingMuteTracks.has(track)),
-  }));
+  return TRACK_NAMES.map((track, index) => {
+    const ind = muteIndicator(
+      trackMuted[track] ?? false,
+      pendingMuteTracks.has(track),
+      armedMuteTracks.has(track),
+    );
+    return {
+      track,
+      cursor: index === selectedTrack ? ">" : " ",
+      label: TRACK_LABELS[track],
+      badge: ind.badge,
+      qArmed: ind.qArmed,
+    };
+  });
 }

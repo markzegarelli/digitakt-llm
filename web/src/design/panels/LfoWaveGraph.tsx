@@ -5,16 +5,18 @@ import { LFO_DESTS, LFO_SHAPES } from "../constants.js";
 import {
   lfoDestArrow,
   lfoPlayheadIndex,
+  lfoPlotInsets,
   lfoShapeNameFromIndex,
   lfoTimingLabel,
   sampleLfoWavePoints,
 } from "../../lib/lfoDisplay.js";
 
 const MODES = ["FREE", "TRIG", "HOLD", "ONE"] as const;
-const MIN_W = 280;
-const MIN_H = 140;
 
-function pointsToPath(pts: { x: number; y: number }[], h: number): string {
+function pointsToPath(
+  pts: { x: number; y: number }[],
+  baseline: number,
+): string {
   if (pts.length === 0) return "";
   const first = pts[0]!;
   let d = `M ${first.x} ${first.y}`;
@@ -22,7 +24,7 @@ function pointsToPath(pts: { x: number; y: number }[], h: number): string {
     const p = pts[i]!;
     d += ` L ${p.x} ${p.y}`;
   }
-  d += ` L ${pts[pts.length - 1]!.x} ${h} L 0 ${h} Z`;
+  d += ` L ${pts[pts.length - 1]!.x} ${baseline} L 0 ${baseline} Z`;
   return d;
 }
 
@@ -38,17 +40,18 @@ export function LfoWaveGraph({
   activeCount: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: MIN_W, h: MIN_H });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [size, setSize] = useState({ w: 280, h: 120 });
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = svgRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const cr = entries[0]?.contentRect;
-      if (!cr) return;
+      if (!cr || cr.width < 2 || cr.height < 2) return;
       setSize({
-        w: Math.max(MIN_W, Math.floor(cr.width)),
-        h: Math.max(MIN_H, Math.floor(cr.height)),
+        w: Math.max(2, Math.floor(cr.width)),
+        h: Math.max(2, Math.floor(cr.height)),
       });
     });
     ro.observe(el);
@@ -90,12 +93,15 @@ export function LfoWaveGraph({
     return d;
   }, [points]);
 
-  const fillPath = useMemo(() => pointsToPath(points, size.h), [points, size.h]);
+  const { baseline } = lfoPlotInsets(size.h);
+
+  const fillPath = useMemo(() => pointsToPath(points, baseline), [points, baseline]);
   const gradId = `lfo-grad-${lfoIdx}`;
 
   return (
     <div className="lfo-graph" ref={containerRef}>
       <svg
+        ref={svgRef}
         className="lfo-graph-svg"
         width="100%"
         height="100%"

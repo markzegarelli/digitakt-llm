@@ -1,6 +1,7 @@
 import React from "react";
 import type { WorkbenchView } from "../../lib/viewModel.js";
 import { fmt2, fmtBpm } from "../constants.js";
+import { WEB_HELP_LINES } from "../helpContent.js";
 
 export function Header({ view }: { view: WorkbenchView }) {
   const s = view;
@@ -38,7 +39,8 @@ export function HelpStrip({ view }: { view: WorkbenchView }) {
   const groups = [
     { l: "?", v: "help" },
     { l: "TAB", v: "pane" },
-    { l: "S/M/T/L/C", v: "jump" },
+    { l: "S/I/T/L/C", v: "jump" },
+    { l: "m/q/Q", v: "mute" },
     { l: "⌘K", v: "cmd" },
     { l: "SPACE", v: "play" },
     { l: "ENTER", v: "trig" },
@@ -67,8 +69,25 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
     <div className="help-overlay" onClick={onClose}>
       <div className="help-overlay-inner" onClick={(e) => e.stopPropagation()}>
         <div className="help-overlay-title">HELP · DGTK WEB</div>
-        <p className="d">Keyboard-first workbench. Shift-row and solo are not wired in web v1.</p>
-        <p className="d">Press ? or ESC to close.</p>
+        <div className="help-overlay-scroll">
+          {WEB_HELP_LINES.map((line, i) => {
+            if (!line) return <div key={i} className="help-overlay-gap" />;
+            const isHeader = line.startsWith("──");
+            const isSection = !line.startsWith("  ") && !isHeader;
+            return (
+              <div
+                key={i}
+                className={
+                  isHeader ? "help-overlay-section" :
+                  isSection ? "help-overlay-subhead" :
+                  "help-overlay-line"
+                }
+              >
+                {line.trimStart()}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

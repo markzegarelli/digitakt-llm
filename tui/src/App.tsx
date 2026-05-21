@@ -70,7 +70,14 @@ const US_SHIFT_TOP_ROW_TO_SLOT: Record<string, number> = {
 export function App({ baseUrl }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const [state, actions] = useDigitakt(baseUrl);
+  const onMuteChanged = useCallback((track: TrackName) => {
+    setArmedMuteTracks((prev) => {
+      const next = new Set(prev);
+      next.delete(track);
+      return next;
+    });
+  }, []);
+  const [state, actions] = useDigitakt(baseUrl, { onMuteChanged });
   const [, forceRedraw] = useReducer((x: number) => x + 1, 0);
 
   const [focus, setFocus]               = useState<FocusPanel>("pattern");
@@ -88,6 +95,7 @@ export function App({ baseUrl }: AppProps) {
   const [inputMode, setInputMode]       = useState<"beat" | "chat">("beat");
   const [showHistory, setShowHistory]   = useState(false);
   const [pendingMuteTracks, setPendingMuteTracks] = useState<Set<TrackName>>(new Set());
+  const [armedMuteTracks, setArmedMuteTracks] = useState<Set<TrackName>>(new Set());
   const [implementableHint, setImplementableHint] = useState(false);
   const [barCount, setBarCount] = useState(0);
   const promptTabCaptureRef = useRef(false);
@@ -994,7 +1002,8 @@ export function App({ baseUrl }: AppProps) {
   };
 
   const handlePatternMuteKey = useCallback((input: string): boolean => {
-    const track = TRACK_NAMES[patternTrack] as TrackName;
+    const trackIndex = focus === "cc" ? ccTrack : patternTrack;
+    const track = TRACK_NAMES[trackIndex] as TrackName;
     const intent = getPatternMuteIntent(input, track, pendingMuteTracks);
 
     if (intent.kind === "immediate") {
@@ -1011,6 +1020,7 @@ export function App({ baseUrl }: AppProps) {
     if (intent.kind === "queue-all") {
       const queued = tracksToQueueAndClear(pendingMuteTracks);
       setPendingMuteTracks(queued.nextPending);
+      setArmedMuteTracks((prev) => new Set([...prev, ...queued.tracks]));
       for (const queuedTrack of queued.tracks) {
         actions.setMuteQueued(queuedTrack, !state.track_muted[queuedTrack])
           .catch((e: Error) => actions.addLog(`✗ ${e.message}`));
@@ -1019,7 +1029,7 @@ export function App({ baseUrl }: AppProps) {
     }
 
     return false;
-  }, [actions, patternTrack, pendingMuteTracks, state.track_muted]);
+  }, [actions, ccTrack, focus, patternTrack, pendingMuteTracks, state.track_muted]);
 
   useInput((input, key) => {
     const isUnmodified = !key.ctrl && !key.meta;
@@ -1124,6 +1134,13 @@ export function App({ baseUrl }: AppProps) {
     }
     if (input === "/" && focus !== "prompt") { setFocus("prompt"); return; }
 
+    if (focus !== "prompt" && isPlainShortcut("i")) {
+      if (chainStripFocused) setChainStripFocused(false);
+      setFocus("cc");
+      void actions.setCCFocusedTrack(TRACK_NAMES[ccTrack]);
+      return;
+    }
+
     // SEQ (pattern): plain t / Shift+t — step edit + TRIG; Shift+t from row view opens TRIG + ALL in one step.
     if (focus === "pattern" && !key.ctrl && !key.meta) {
       const ch = typeof input === "string" ? input.trim() : "";
@@ -1180,6 +1197,7 @@ export function App({ baseUrl }: AppProps) {
       meta: key.meta,
       patternStepEdit,
       trigKeysActive,
+      ccStepMode,
     })) {
       if (handlePatternMuteKey(shortcutInput)) return;
     }
@@ -1640,6 +1658,7 @@ export function App({ baseUrl }: AppProps) {
                     selectedPatternStep={patternStepEdit ? patternSelectedStep : null}
                     trackMuted={state.track_muted}
                     pendingMuteTracks={pendingMuteTracks}
+                    armedMuteTracks={armedMuteTracks}
                   />
                   {patternStepEdit && (
                     <TrigEditPanel
@@ -1673,6 +1692,7 @@ export function App({ baseUrl }: AppProps) {
                     trackMuted={state.track_muted}
                     selectedTrack={patternTrack}
                     pendingMuteTracks={pendingMuteTracks}
+                    armedMuteTracks={armedMuteTracks}
                     stepEditMode={patternStepEdit}
                     selectedStep={patternSelectedStep}
                     isFocused={focus === "pattern"}
@@ -1711,6 +1731,7 @@ export function App({ baseUrl }: AppProps) {
                   selectedTrack={ccTrack}
                   trackMuted={state.track_muted}
                   pendingMuteTracks={pendingMuteTracks}
+                  armedMuteTracks={armedMuteTracks}
                 selectedParam={ccParam}
                 isFocused={focus === "cc"}
                 stepMode={ccStepMode}
@@ -1795,7 +1816,7 @@ export function App({ baseUrl }: AppProps) {
             />
             <Box paddingX={1}>
               <Text color={theme.textFaint}>
-                {"? Help  Tab Focus  Shift+Tab Mode  / Cmd  Enter Edit  t TRIG  Esc Back  Space Play/Stop"}
+                {"? Help  Tab/i Focus  m/q/Q Mute  Shift+Tab Mode  / Cmd  t TRIG  Space Play/Stop"}
               </Text>
             </Box>
           </Box>
