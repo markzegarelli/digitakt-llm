@@ -110,8 +110,26 @@ impl App {
                 }),
             );
         }
-        let _ = HardwareMidiListener::start(app.state.clone(), app.bus.clone())
-            .map(|l| *app._midi_listener.lock() = Some(l));
+        if let Ok(ports) = list_ports() {
+            if let Some(port_name) = find_digitakt(&ports) {
+                match open_port(&port_name) {
+                    Ok(conn) => {
+                        let sink: Arc<Mutex<dyn digitakt_midi::MidiSink + Send>> =
+                            Arc::new(Mutex::new(conn));
+                        app.player.set_port(Some(sink));
+                        app.state.set_midi_port_name(Some(port_name.clone()));
+                        app.bus.emit(
+                            "midi_connected",
+                            Some(Map::from_iter([("port".into(), json!(port_name.clone()))])),
+                        );
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+        if let Ok(l) = HardwareMidiListener::start(app.state.clone(), app.bus.clone()) {
+            *app._midi_listener.lock() = Some(l);
+        }
         Ok(app)
     }
 
@@ -360,7 +378,7 @@ async fn post_midi_connect(
     app.state.set_midi_port_name(Some(port_name.clone()));
     app.bus.emit(
         "midi_connected",
-        Some(Map::from_iter([("port".into(), json!(port_name))])),
+        Some(Map::from_iter([("port".into(), json!(port_name.clone()))])),
     );
     Ok(Json(MidiConnectResponse {
         status: "connected".into(),

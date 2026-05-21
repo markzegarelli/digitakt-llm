@@ -1,7 +1,7 @@
 //! Anthropic pattern generator (parity with `core/generator.py`).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::thread;
 
 use digitakt_core::{AppState, Pattern, TRACK_NAMES};
@@ -39,7 +39,8 @@ pub trait LlmClient: Send + Sync {
 }
 
 pub struct AnthropicClient {
-    http: reqwest::blocking::Client,
+    /// Lazy init: `reqwest::blocking::Client` must not be created on a tokio worker thread.
+    http: OnceLock<reqwest::blocking::Client>,
     api_key: String,
 }
 
@@ -51,9 +52,13 @@ impl AnthropicClient {
             return Err("ANTHROPIC_API_KEY not set".to_string());
         }
         Ok(Self {
-            http: reqwest::blocking::Client::new(),
+            http: OnceLock::new(),
             api_key,
         })
+    }
+
+    fn http(&self) -> &reqwest::blocking::Client {
+        self.http.get_or_init(reqwest::blocking::Client::new)
     }
 
     fn parse_response(resp: reqwest::blocking::Response) -> Result<Value, String> {
@@ -90,7 +95,7 @@ impl LlmClient for AnthropicClient {
             "tool_choice": {"type": "tool", "name": tool_name}
         });
         let resp = self
-            .http
+            .http()
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -134,7 +139,7 @@ impl LlmClient for AnthropicClient {
             "messages": msgs
         });
         let resp = self
-            .http
+            .http()
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")

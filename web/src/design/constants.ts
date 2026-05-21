@@ -70,6 +70,7 @@ export const COMMANDS: CmdSpec[] = [
   { name: "new", desc: "reset pattern" },
   { name: "undo", desc: "undo pattern" },
   { name: "randbeat", desc: "random techno beat" },
+  { name: "midi", desc: "connect Digitakt MIDI (optional: list | exact port name)" },
   { name: "help", desc: "open help" },
 ];
 

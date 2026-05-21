@@ -388,7 +388,9 @@ export function useDigitakt(client: BackendClient): { state: DigitaktState; acti
   }, [client]);
 
   const post = useCallback((path: string, body?: object) => {
-    (body !== undefined ? client.post(path, body) : client.post(path)).catch(() => {});
+    const p = body !== undefined ? client.post(path, body) : client.post(path);
+    p.catch(() => {});
+    return p;
   }, [client]);
 
   const actions: DigitaktActions = {
