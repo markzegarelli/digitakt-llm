@@ -99,6 +99,10 @@ If your change adds or modifies slash commands, update the command table in `CLA
 If your change affects data flow or module structure, update `ARCHITECTURE.md`.
 If your change adds API endpoints, document them in `ARCHITECTURE.md`.
 
+### Web UI debugging
+
+When fixing `web/` bugs (sequencer not updating, wrong chat behavior, stale production UI), follow the Chrome DevTools MCP self-diagnose loop in [docs/web-ui-debugging.md](docs/web-ui-debugging.md): reproduce in the browser, inspect `POST /generate` vs `POST /ask` and WebSocket events, then verify on both `:5173` (dev) and `:8000` (built `web/dist`).
+
 ## Project Structure
 
 See `CLAUDE.md` for the full layout and `ARCHITECTURE.md` for system design.
