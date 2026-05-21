@@ -39,7 +39,7 @@ export function ChatColumn({
               </span>
               <span className="f" style={{ fontSize: 10 }}>{m.t}</span>
             </div>
-            <div style={{ paddingLeft: 36, lineHeight: 1.5 }}>{m.text}</div>
+            <div style={{ paddingLeft: 36, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.text}</div>
           </div>
         ))}
       </div>

@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { condToIndex, indexToCond, condLabel } from "../src/lib/condAdapter.js";
-import { lfoDefToSlot, slotToLfoDef } from "../src/lib/lfoAdapter.js";
+import {
+  applySlotField,
+  lfoDefToSlot,
+  newDefaultSlot,
+  slotToLfoDef,
+} from "../src/lib/lfoAdapter.js";
 import { buildTrackViews, playheadFromState } from "../src/lib/viewModel.js";
 import type { DigitaktState } from "../src/backend/types.js";
 import { TRACK_NAMES, emptyTrigState } from "../src/backend/types.js";
@@ -27,6 +32,24 @@ describe("lfoAdapter", () => {
     const def = slotToLfoDef({ ...slot, shape: 2 });
     expect(def?.shape).toBe("sine");
     expect(def?.depth).toBe(40);
+  });
+
+  it("maps cc decay target to LFO_DESTS decay index (not PARAM_NAMES index)", () => {
+    const slot = lfoDefToSlot("cc:kick:decay", "kick", {
+      shape: "triangle",
+      depth: 10,
+      phase: 0,
+      rate: { num: 1, den: 1 },
+    });
+    expect(slot.dest).toBe(2);
+  });
+
+  it("applySlotField dest changes target key", () => {
+    const slot = { ...newDefaultSlot("kick"), shape: 2, dest: 0 };
+    const { slot: next, target } = applySlotField(slot, "kick", "dest", 1);
+    expect(next.dest).toBe(1);
+    expect(target).toBe("cc:kick:reso");
+    expect(target).not.toBe(slot.target);
   });
 });
 

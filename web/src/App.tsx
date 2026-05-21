@@ -14,9 +14,11 @@ import {
   applySlotField,
   lfosForTrack,
   newDefaultSlot,
+  slotTargetChanged,
   slotToLfoDef,
 } from "./lib/lfoAdapter.js";
 import { dispatchCommand, type CommandContext } from "./lib/commandDispatch.js";
+import { formatGenerationReply } from "./lib/chatDisplay.js";
 import { normalizeCcParamAlias } from "./lib/slashParsing.js";
 
 const BASE_URL =
@@ -54,7 +56,7 @@ export function App() {
     if (state.generation_summary) {
       dispatch({
         type: "CHAT_RESOLVE_PENDING",
-        text: state.generation_summary.producer_notes ?? state.generation_summary.track_summary,
+        text: formatGenerationReply(state.generation_summary),
       });
     } else if (state.generation_status === "failed" && state.generation_error) {
       dispatch({ type: "CHAT_RESOLVE_PENDING", text: `Error: ${state.generation_error}` });
@@ -69,6 +71,11 @@ export function App() {
       actions,
       client,
       addLog: (msg) => dispatch({ type: "CHAT_SYS", text: msg, startMs: startMs.current }),
+      addAgentReply: (text) =>
+        dispatch({
+          type: "CHAT_APPEND",
+          msg: { who: "llm", t: nowTag(startMs.current), text },
+        }),
       onHelp: () => dispatch({ type: "HELP_SET", value: true }),
       onLoadPattern: (name) => dispatch({ type: "SET_PATTERN_META", index: ui.patternIndex, name: name.toUpperCase() }),
     }),
@@ -120,7 +127,11 @@ export function App() {
         const slot = slots[idx]!;
         const { slot: next, target } = applySlotField(slot, track.name, field, d);
         const def = slotToLfoDef(next);
-        actions.setLfoRoute(def ? target : slot.target, def);
+        if (def && slotTargetChanged(slot, next, field)) {
+          actions.retargetLfoRoute(slot.target, target, def);
+        } else {
+          actions.setLfoRoute(def ? target : slot.target, def);
+        }
       },
       lfoAdd: () => {
         const slot = newDefaultSlot(track.name);
@@ -147,9 +158,10 @@ export function App() {
       });
       if (text.startsWith("/")) {
         void dispatchCommand(text, cmdCtx);
-      } else {
-        actions.generate(text);
+        return;
       }
+      // Plain chat prompts generate patterns (matches TUI beat mode); use /ask for Q&A.
+      actions.generate(text);
     },
     [actions, cmdCtx, dispatch],
   );
@@ -164,6 +176,8 @@ export function App() {
         onChatSend={onChatSend}
         onSelectLfoSlot={(idx) => dispatch({ type: "LFO_SWITCH", set: idx })}
         onSelectTrack={(delta) => dispatch({ type: "TRACK_DELTA", delta })}
+        onLfoAdd={handlers.lfoAdd}
+        onLfoDel={handlers.lfoDel}
         focusAppRoot={focusAppRoot}
       />
       <HelpStrip view={view} />

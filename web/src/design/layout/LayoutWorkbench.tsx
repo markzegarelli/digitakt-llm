@@ -13,6 +13,8 @@ export function LayoutWorkbench({
   onChatSend,
   onSelectLfoSlot,
   onSelectTrack,
+  onLfoAdd,
+  onLfoDel,
   focusAppRoot,
 }: {
   view: WorkbenchView;
@@ -21,6 +23,8 @@ export function LayoutWorkbench({
   onChatSend: (text: string) => void;
   onSelectLfoSlot: (idx: number) => void;
   onSelectTrack: (delta: number) => void;
+  onLfoAdd: () => void;
+  onLfoDel: () => void;
   focusAppRoot?: () => void;
 }) {
   const focusKey =
@@ -78,7 +82,13 @@ export function LayoutWorkbench({
           {focusKey === "MIX" ? <MixGrid view={view} focused={view.ui.mode === "MIX"} /> : null}
           {focusKey === "LFO" ? (
             <div className="lfo-split">
-              <LFOPanel view={view} focused={view.ui.mode === "LFO"} onSelectSlot={onSelectLfoSlot} />
+              <LFOPanel
+                view={view}
+                focused={view.ui.mode === "LFO"}
+                onSelectSlot={onSelectLfoSlot}
+                onLfoAdd={onLfoAdd}
+                onLfoDel={onLfoDel}
+              />
               <LfoSummary view={view} onSelectTrack={onSelectTrack} />
             </div>
           ) : null}

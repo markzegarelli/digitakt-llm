@@ -347,6 +347,7 @@ export interface DigitaktActions {
   muteQueued(track: TrackName, muted: boolean): void;
   connectMidi(port?: string): void;
   setLfoRoute(target: string, lfo: LfoDef | null): void;
+  retargetLfoRoute(oldTarget: string, newTarget: string, lfo: LfoDef): void;
   setEuclidStripMode(mode: EuclidStripMode): void;
   queueFill(name: string): void;
   chainSlotFill(slot: number): void;
@@ -416,6 +417,22 @@ export function useDigitakt(client: BackendClient): { state: DigitaktState; acti
     muteQueued: useCallback((track, muted) => post("/mute-queued", { track, muted }), [post]),
     connectMidi: useCallback((port) => post("/midi/connect", port ? { port } : {}), [post]),
     setLfoRoute: useCallback((target, lfo) => post("/lfo", { target, lfo }), [post]),
+    retargetLfoRoute: useCallback(
+      (oldTarget, newTarget, lfo) => {
+        setState((s) => {
+          const next = { ...s.lfo };
+          delete next[oldTarget];
+          next[newTarget] = lfo;
+          const nextOut = { ...s.lfo_out };
+          delete nextOut[oldTarget];
+          delete nextOut[newTarget];
+          return { ...s, lfo: next, lfo_out: nextOut };
+        });
+        post("/lfo", { target: oldTarget, lfo: null });
+        post("/lfo", { target: newTarget, lfo });
+      },
+      [post],
+    ),
     setEuclidStripMode: useCallback((mode) => post("/euclid-strip-mode", { mode }), [post]),
     queueFill: useCallback((name) => {
       setState((s) => ({ ...s, fill_queued: name }));

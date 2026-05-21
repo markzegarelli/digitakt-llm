@@ -13,6 +13,7 @@ export interface CommandContext {
   actions: DigitaktActions;
   client: BackendClient;
   addLog: (msg: string) => void;
+  addAgentReply: (text: string) => void;
   onHelp?: () => void;
   onLoadPattern?: (name: string) => void;
   listPatterns?: () => Promise<Array<{ name: string }>>;
@@ -112,8 +113,12 @@ export async function dispatchCommand(raw: string, ctx: CommandContext): Promise
     case "ask": {
       const q = parts.slice(1).join(" ");
       if (q) {
-        const { answer } = await ctx.actions.ask(q);
-        ctx.addLog(answer);
+        try {
+          const { answer } = await ctx.actions.ask(q);
+          ctx.addAgentReply(answer);
+        } catch {
+          err("ask failed");
+        }
       }
       return true;
     }

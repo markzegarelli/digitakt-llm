@@ -70,6 +70,7 @@ export interface WorkbenchView {
   bpm: number;
   swing: number;
   stepLen: number;
+  globalStep: number | null;
   bar: number;
   midiPort: string;
   midiConnected: boolean;
@@ -170,6 +171,7 @@ export function buildWorkbenchView(state: DigitaktState, ui: UiState): Workbench
     bpm: state.bpm,
     swing: state.swing,
     stepLen: state.pattern_length,
+    globalStep: gs,
     bar,
     midiPort: state.midi_port_name ?? "—",
     midiConnected: state.midi_connected,

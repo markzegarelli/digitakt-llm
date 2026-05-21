@@ -12,6 +12,7 @@ function minimalView(mode: WorkbenchView["ui"]["mode"]): WorkbenchView {
     swing: 0,
     bar: 1,
     stepLen: 16,
+    globalStep: null,
     playhead: 0,
     midiPort: "—",
     midiConnected: false,

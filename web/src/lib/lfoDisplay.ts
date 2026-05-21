@@ -1,4 +1,6 @@
 /** LFO shape sampling for web waveform display (align with core/lfo.py / TUI). */
+import { LFO_DESTS, LFO_SHAPES } from "../design/constants.js";
+
 const PI = Math.PI;
 
 export function normP(p: number): number {
@@ -57,8 +59,85 @@ export function lfoShapeNameFromIndex(shapeIdx: number): string | null {
     2: "sine",
     3: "saw",
     4: "square",
-    5: "ramp",
     6: "ramp",
   };
   return map[shapeIdx] ?? null;
+}
+
+const SHAPE_ABBR: Record<number, string> = {
+  1: "TRI",
+  2: "SIN",
+  3: "SAW",
+  4: "SQR",
+  5: "EXP",
+  6: "RMP",
+  7: "RND",
+};
+
+const DEST_ABBR: Record<string, string> = {
+  filter: "FIL",
+  reso: "RES",
+  decay: "DEC",
+  volume: "VOL",
+  pitch: "PIT",
+  reverb: "REV",
+  delay: "DLY",
+  pan: "PAN",
+};
+
+export function lfoRoutePill(shapeIdx: number, destIdx: number): string | null {
+  if (shapeIdx === 0) return null;
+  const shape = SHAPE_ABBR[shapeIdx] ?? LFO_SHAPES[shapeIdx]?.slice(0, 3).toUpperCase() ?? "?";
+  const dest = LFO_DESTS[destIdx] ?? "filter";
+  const destAbbr = DEST_ABBR[dest] ?? dest.slice(0, 3).toUpperCase();
+  return `${shape}-${destAbbr}`;
+}
+
+export function lfoDestArrow(destIdx: number): string {
+  const dest = LFO_DESTS[destIdx] ?? "filter";
+  return `-> ${dest.toUpperCase()}`;
+}
+
+export function lfoTimingLabel(stepLen: number, num: number, den: number): string {
+  const pl = Math.max(1, stepLen);
+  const csn = cycleSteps(pl, num, den);
+  const bars = Math.max(1, Math.round(csn / pl));
+  const cyc = csn / pl;
+  const barLabel = bars === 1 ? "1 bar" : `${bars} bar`;
+  return `${barLabel} · ${cyc.toFixed(2)} cyc`;
+}
+
+/**
+ * Sample LFO waveform points using the same engine-aligned logic as TUI `lfoBrailleLines`.
+ */
+export function sampleLfoWavePoints(opts: {
+  shape: string;
+  patternLength: number;
+  num: number;
+  den: number;
+  phase: number;
+  width: number;
+  height: number;
+  globalStep?: number | null;
+}): { x: number; y: number }[] {
+  const { shape, patternLength, num, den, phase, width, height, globalStep } = opts;
+  const w = Math.max(2, Math.round(width));
+  const h = Math.max(2, Math.round(height));
+  const pl = Math.max(1, patternLength);
+  const csn = cycleSteps(pl, num, den);
+  const baseG =
+    globalStep != null && globalStep >= 0 ? Math.floor(globalStep / pl) * pl : 0;
+  const mid = (h - 1) / 2;
+  const amp = mid;
+  const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
+
+  const points: { x: number; y: number }[] = [];
+  for (let px = 0; px < w; px++) {
+    const t = w <= 1 ? 0 : px / (w - 1);
+    const g = baseG + t * pl;
+    const val = wAtG(g);
+    const y = Math.max(0, Math.min(h - 1, mid - val * amp));
+    points.push({ x: px, y });
+  }
+  return points;
 }
