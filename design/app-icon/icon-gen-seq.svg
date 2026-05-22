@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="glow-cool" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-warm" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="flow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ec5c5" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#f0a020" stop-opacity="0.85"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="3" fill="transparent"/>
+      <rect y="3" width="4" height="1" fill="#ffffff" opacity="0.03"/>
+    </pattern>
+  </defs>
+  <rect width="1024" height="1024" fill="#0a0908"/>
+  <rect width="1024" height="1024" fill="url(#scan)" opacity="0.35"/>
+  <rect x="72" y="72" width="880" height="880" rx="24" fill="#0d0c0a" stroke="#2a2520" stroke-width="2"/>
+  <g opacity="0.55">
+    <circle cx="340" cy="420" r="6" fill="#4ec5c5"/>
+    <circle cx="400" cy="460" r="5" fill="#6ed4d4"/>
+    <circle cx="470" cy="500" r="5" fill="#8be9e9"/>
+    <circle cx="540" cy="540" r="6" fill="#c9a030"/>
+    <circle cx="610" cy="580" r="7" fill="#f0a020"/>
+    <path d="M 320 400 Q 480 520 680 620" fill="none" stroke="url(#flow)" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  </g>
+  <g filter="url(#glow-cool)" transform="translate(180 200)">
+    <g transform="rotate(12 48 48)">
+      <path d="M48 8 L54 42 L88 48 L54 54 L48 88 L42 54 L8 48 L42 42 Z" fill="#8be9e9"/>
+    </g>
+    <g transform="translate(120 40) rotate(-18 32 32)">
+      <path d="M32 4 L36 28 L60 32 L36 36 L32 60 L28 36 L4 32 L28 28 Z" fill="#4ec5c5"/>
+    </g>
+    <g transform="translate(200 100) rotate(24 20 20)">
+      <path d="M20 2 L23 18 L39 20 L23 22 L20 38 L17 22 L1 20 L17 18 Z" fill="#2a6e6e" opacity="0.9"/>
+    </g>
+    <g transform="translate(60 140) rotate(-8 16 16)">
+      <path d="M16 2 L18 14 L30 16 L18 18 L16 30 L14 18 L2 16 L14 14 Z" fill="#4ec5c5" opacity="0.7"/>
+    </g>
+  </g>
+  <ellipse cx="300" cy="340" rx="140" ry="100" fill="#4ec5c5" opacity="0.06"/>
+  <g transform="translate(520 480)">
+    <rect x="0" y="0" width="88" height="88" rx="6" fill="#f0a020" filter="url(#glow-warm)"/>
+    <rect x="104" y="0" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="208" y="0" width="88" height="88" rx="6" fill="#b88010"/>
+    <rect x="312" y="0" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="0" y="104" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="104" y="104" width="88" height="88" rx="6" fill="#f0a020" opacity="0.85"/>
+    <rect x="208" y="104" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="312" y="104" width="88" height="88" rx="6" fill="#ffc452" opacity="0.7"/>
+    <rect x="0" y="208" width="88" height="88" rx="6" fill="#f0a020"/>
+    <rect x="104" y="208" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="208" y="208" width="88" height="88" rx="6" fill="#4ec5c5" fill-opacity="0.25" stroke="#4ec5c5" stroke-width="2"/>
+    <rect x="312" y="208" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="0" y="312" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="104" y="312" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+    <rect x="208" y="312" width="88" height="88" rx="6" fill="#f0a020" opacity="0.6"/>
+    <rect x="312" y="312" width="88" height="88" rx="6" fill="#1d1407" stroke="#3a3530" stroke-width="2"/>
+  </g>
+</svg>

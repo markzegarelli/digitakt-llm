@@ -19,6 +19,12 @@ bash scripts/bundle-macos.sh
 
 Produces `target/release/bundle/macos/Digitakt LLM.app`. Requires Bun, Rust, and Tauri CLI (`cargo install tauri-cli --locked`).
 
+App icon source: `design/app-icon/paper-v3-chaos-order.png`. Regenerate bundle icons with:
+
+```bash
+cd src-tauri && cargo tauri icon ../design/app-icon/paper-v3-chaos-order.png
+```
+
 ### Pre-commit hook (optional)
 
 To run the bundle build automatically before each commit that touches `web/`, `src-tauri/`, `crates/`, or workspace `Cargo.*`:

@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { WorkbenchView } from "../../lib/viewModel.js";
 import type { LfoSlotView } from "../../lib/lfoAdapter.js";
 import { LFO_DESTS, LFO_SHAPES } from "../constants.js";
+import { useSmoothGlobalStep } from "../../hooks/useSmoothGlobalStep.js";
 import {
   lfoDestArrow,
-  lfoPlayheadIndex,
+  lfoFixedPlayheadX,
   lfoPlotInsets,
   lfoShapeNameFromIndex,
   lfoTimingLabel,
@@ -62,6 +63,7 @@ export function LfoWaveGraph({
   const destLabel = (LFO_DESTS[lfo.dest] ?? "filter").toUpperCase();
   const modeLabel = MODES[lfo.mode] ?? "FREE";
   const graphShape = lfoShapeNameFromIndex(lfo.shape);
+  const smoothGlobalStep = useSmoothGlobalStep(view.playing, view.globalStep, view.bpm);
 
   const points = useMemo(() => {
     if (!graphShape) return [];
@@ -73,14 +75,11 @@ export function LfoWaveGraph({
       phase: lfo.phase,
       width: size.w,
       height: size.h,
-      globalStep: view.globalStep,
+      globalStep: smoothGlobalStep,
     });
-  }, [graphShape, view.stepLen, view.globalStep, lfo.num, lfo.den, lfo.phase, size.w, size.h]);
+  }, [graphShape, view.stepLen, smoothGlobalStep, lfo.num, lfo.den, lfo.phase, size.w, size.h]);
 
-  const playCol =
-    view.playing && graphShape
-      ? lfoPlayheadIndex(view.playhead, view.stepLen, size.w)
-      : null;
+  const playCol = view.playing && graphShape ? lfoFixedPlayheadX(size.w) : null;
 
   const linePath = useMemo(() => {
     if (points.length === 0) return "";

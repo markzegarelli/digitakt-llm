@@ -32,8 +32,19 @@ if ! cargo tauri --version >/dev/null 2>&1; then
   exit 1
 fi
 
+ICON_SRC="$REPO_ROOT/design/app-icon/paper-v3-chaos-order.png"
+ICNS="$REPO_ROOT/src-tauri/icons/icon.icns"
+
 echo "→ bundle-macos: building web dist..."
 (cd web && bun install && bun run build)
+
+if [[ -f "$ICON_SRC" ]]; then
+  echo "→ bundle-macos: tauri icon from paper-v3-chaos-order.png..."
+  (cd src-tauri && cargo tauri icon "../design/app-icon/paper-v3-chaos-order.png")
+elif [[ ! -f "$ICNS" ]]; then
+  echo "error: no icon source ($ICON_SRC) and no $ICNS" >&2
+  exit 1
+fi
 
 echo "→ bundle-macos: cargo tauri build (release)..."
 (cd src-tauri && cargo tauri build)
@@ -42,6 +53,19 @@ APP_PATH="$REPO_ROOT/target/release/bundle/macos/Digitakt LLM.app"
 if [[ ! -d "$APP_PATH" ]]; then
   echo "error: expected app bundle at: $APP_PATH" >&2
   exit 1
+fi
+
+# Tauri 2 app target may omit icon.icns; install explicitly for Finder/Dock.
+if [[ -f "$ICNS" ]]; then
+  echo "→ bundle-macos: install icon.icns into .app..."
+  cp "$ICNS" "$APP_PATH/Contents/Resources/icon.icns"
+  PLIST="$APP_PATH/Contents/Info.plist"
+  if /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$PLIST" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile icon" "$PLIST"
+  else
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string icon" "$PLIST"
+  fi
+  touch "$APP_PATH"
 fi
 
 echo "→ bundle-macos: done"

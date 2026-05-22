@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { LfoDef, LfoShape } from "../types.js";
-import { lfoPlayheadIndex, lfoBrailleLines, cycleSteps } from "../lfoDisplay.js";
+import { lfoFixedPlayheadCol, lfoBrailleLines, cycleSteps } from "../lfoDisplay.js";
 import { theme } from "../theme.js";
 
 export type LfoEditDraft = {
@@ -85,11 +85,11 @@ export function LfoPanel({
 
   const isOff = vals.shape === "off";
 
-  // Waveform lines
-  const step = currentStep === null || currentStep < 0 ? 0 : currentStep;
+  // Waveform lines (playhead fixed left; waveform scrolls with globalStep)
   let waveLines: string[] = [];
   if (!isOff) {
-    const hi = lfoPlayheadIndex(step, patternLength, brailleCols);
+    const playCol =
+      globalStep !== null && globalStep >= 0 ? lfoFixedPlayheadCol(brailleCols) : null;
     waveLines = lfoBrailleLines(
       vals.shape,
       patternLength,
@@ -98,7 +98,7 @@ export function LfoPanel({
       vals.phase,
       brailleCols,
       brailleRows,
-      hi,
+      playCol,
       globalStep,
     );
   }
