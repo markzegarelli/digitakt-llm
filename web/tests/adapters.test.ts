@@ -99,7 +99,7 @@ describe("viewModel", () => {
   });
 
   it("derives playhead from current_step", () => {
-    expect(playheadFromState(base)).toBe(4);
+    expect(playheadFromState(base)).toBe(5);
     expect(playheadFromState({ ...base, is_playing: false, current_step: 3 })).toBe(0);
   });
 });

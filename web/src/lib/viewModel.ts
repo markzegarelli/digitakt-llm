@@ -165,7 +165,7 @@ function rowHas(state: DigitaktState, track: TrackName, param: string): boolean 
 
 export function playheadFromState(state: DigitaktState): number {
   if (!state.is_playing || state.current_step == null) return 0;
-  return Math.max(0, state.current_step - 1);
+  return state.current_step;
 }
 
 export function chainHeaderLabel(state: DigitaktState): string {
