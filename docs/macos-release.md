@@ -19,6 +19,8 @@ bash scripts/bundle-macos.sh
 
 Produces `target/release/bundle/macos/Digitakt LLM.app`. Requires Bun, Rust, and Tauri CLI (`cargo install tauri-cli --locked`).
 
+The Tauri shell starts its own API on an ephemeral `127.0.0.1` port (not `:8000`), so a dev server or an older app instance on port 8000 cannot serve stale `web/dist` to the bundled UI. Quit any running **Digitakt LLM** app before opening a newly built `.app` so the embedded server restarts with the latest bundle.
+
 App icon source: `design/app-icon/paper-v3-chaos-order.png`. Regenerate bundle icons with:
 
 ```bash
