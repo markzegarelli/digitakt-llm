@@ -257,6 +257,124 @@ def _detect_target_tracks(prompt: str) -> set[str]:
     return found
 
 
+_GLOBAL_REWRITE_RE = re.compile(
+    r"(?:"
+    r"from scratch|start over|start fresh|new pattern|new beat|"
+    r"replace (?:the )?(?:whole |entire )?pattern|whole pattern|entire pattern|"
+    r"all tracks|redo everything|scrap (?:this|it)"
+    r")",
+    re.IGNORECASE,
+)
+
+_GLOBAL_VARIATION_RE = re.compile(
+    r"(?:"
+    r"\bsparser\b|\bdenser\b|\bbusier\b|less busy|more energy|less energy|"
+    r"\bvariation\b|vary the|evolve the|transform the|\bremix\b|"
+    r"more minimal\b|more chaotic"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _track_has_content(pattern: dict, track: str, steps: int) -> bool:
+    """True when the track has at least one non-silent step in the live pattern."""
+    row = pattern.get(track)
+    if not isinstance(row, list):
+        return False
+    return any(isinstance(v, int) and v > 0 for v in row[:steps])
+
+
+def _detect_global_rewrite(prompt: str) -> bool:
+    return _GLOBAL_REWRITE_RE.search(prompt) is not None
+
+
+def _detect_global_variation(prompt: str) -> bool:
+    return _GLOBAL_VARIATION_RE.search(prompt) is not None
+
+
+def _resolve_preserve_tracks(
+    prompt: str, pattern: dict, steps: int, variation: bool
+) -> set[str]:
+    """Tracks whose step rows (and per-track extras) must stay verbatim from the live pattern."""
+    if not variation or not pattern:
+        return set()
+    content = {t for t in TRACK_NAMES if _track_has_content(pattern, t, steps)}
+    if not content:
+        return set()
+    if _detect_global_rewrite(prompt):
+        return set()
+    targets = _detect_target_tracks(prompt)
+    if targets:
+        return content - targets
+    if _detect_global_variation(prompt):
+        return set()
+    return content
+
+
+def _format_targeted_update_block(preserve: set[str], modify: set[str]) -> str:
+    lines = ["TARGETED UPDATE — only modify the listed tracks:"]
+    if modify:
+        lines.append(f"  MODIFY: {', '.join(sorted(modify))}")
+    else:
+        lines.append(
+            "  MODIFY: (none — adjust global swing/CC/prob only; do not add hits to silent tracks "
+            "unless the request explicitly asks for them)"
+        )
+    if preserve:
+        lines.append(
+            "  PRESERVE EXACTLY (copy steps verbatim from previous pattern): "
+            + ", ".join(sorted(preserve))
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _merge_preserved_tracks(
+    pattern: dict, existing: dict, preserve: set[str], steps: int
+) -> None:
+    """In-place: restore preserved track rows and per-track pattern extras from existing."""
+    if not preserve:
+        return
+    st = AppState()
+    st.pattern_length = steps
+    ex = st.normalize_pattern_length(copy.deepcopy(existing))
+
+    for track in preserve:
+        pattern[track] = list(ex[track])
+
+    for key in ("prob", "gate", "cond", "note"):
+        ex_sub = ex.get(key)
+        if not isinstance(ex_sub, dict):
+            continue
+        pat_sub = pattern.get(key)
+        if not isinstance(pat_sub, dict):
+            pat_sub = {}
+            pattern[key] = pat_sub
+        for track in preserve:
+            if track in ex_sub:
+                pat_sub[track] = copy.deepcopy(ex_sub[track])
+
+    ex_sc = ex.get("step_cc")
+    if isinstance(ex_sc, dict):
+        pat_sc = pattern.get("step_cc")
+        if not isinstance(pat_sc, dict):
+            pat_sc = {}
+            pattern["step_cc"] = pat_sc
+        for track in preserve:
+            if track in ex_sc:
+                pat_sc[track] = copy.deepcopy(ex_sc[track])
+
+    ex_eu = ex.get("euclid")
+    if isinstance(ex_eu, dict):
+        pat_eu = pattern.get("euclid")
+        if not isinstance(pat_eu, dict):
+            pat_eu = {}
+            pattern["euclid"] = pat_eu
+        for track in preserve:
+            if track in ex_eu:
+                pat_eu[track] = copy.deepcopy(ex_eu[track])
+
+
 def _normalize_producer_notes(raw: str) -> str | None:
     """Strip control chars and cap length; return None if empty after normalize."""
     cleaned: list[str] = []
@@ -433,11 +551,13 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), include producer_notes with 4–8 short sentences of Eurorack/modular guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.\n"
         "- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, add 1–3 concrete Euclidean (k,n,r) suggestions per named track; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).\n"
         "- For simple drum-only tweaks (e.g. denser hats, more kick), omit producer_notes to save tokens.\n\n"
-        "TARGETED UPDATES:\n"
-        "When the user prompt contains a TARGETED UPDATE block:\n"
-        "- Copy the PRESERVE tracks verbatim, step-for-step, from the previous pattern\n"
-        "- Only generate new content for the MODIFY tracks\n"
-        "- CC changes still apply to any track mentioned in the request\n\n"
+        "TARGETED UPDATES / INCREMENTAL BUILDING:\n"
+        "When the user prompt contains a TARGETED UPDATE block (including part-by-part builds):\n"
+        "- Copy every PRESERVE track verbatim, step-for-step, from the previous pattern\n"
+        "- Only generate new hits for MODIFY tracks; silent tracks stay silent unless named in MODIFY\n"
+        "- Tracks that already have hits must never be rewritten unless listed under MODIFY\n"
+        "- CC/swing/prob changes may apply to any track mentioned in the request\n"
+        "- Whole-pattern rewrites (sparser, denser, variation, from scratch, all tracks) omit PRESERVE\n\n"
         "IMPORTANT: Call the emit_pattern tool with the full pattern as its arguments. "
         "If tools cannot be used, output ONLY the JSON object — no text before or after, no markdown fences."
     )
@@ -644,25 +764,28 @@ class Generator:
         state_ctx = self._build_state_context()
         context_prefix = build_injectable_context_prefix(prompt)
 
-        if variation and self.state.last_prompt and self.state.current_pattern:
+        if variation and self.state.current_pattern:
             steps = self.state.pattern_length
             pattern_json = _serialize_pattern_for_llm(self.state.current_pattern, steps)
-            target_tracks = _detect_target_tracks(prompt)
-            if target_tracks:
-                preserve = [t for t in TRACK_NAMES if t not in target_tracks]
-                modify = [t for t in TRACK_NAMES if t in target_tracks]
-                constraint = (
-                    f"TARGETED UPDATE — only modify the listed tracks:\n"
-                    f"  MODIFY: {', '.join(modify)}\n"
-                    f"  PRESERVE EXACTLY (copy steps verbatim from previous pattern): {', '.join(preserve)}\n\n"
-                )
-            else:
-                constraint = ""
+            preserve = _resolve_preserve_tracks(
+                prompt, self.state.current_pattern, steps, variation=True
+            )
+            modify = _detect_target_tracks(prompt)
+            constraint = (
+                _format_targeted_update_block(preserve, modify) + "\n"
+                if preserve or modify
+                else ""
+            )
+            prev_prompt_line = (
+                f"Previous prompt: {self.state.last_prompt}\n"
+                if self.state.last_prompt
+                else ""
+            )
             return (
                 f"{context_prefix}"
                 f"{constraint}"
                 f"Current state:\n{state_ctx}\n\n"
-                f"Previous prompt: {self.state.last_prompt}\n"
+                f"{prev_prompt_line}"
                 f"Previous pattern: {pattern_json}\n\n"
                 f"Apply this variation: {prompt}"
             )
@@ -776,9 +899,11 @@ class Generator:
                 return
 
             pattern, bpm, cc_changes, producer_notes = result
+            existing = self.state.current_pattern or {}
+            preserve = _resolve_preserve_tracks(prompt, existing, steps, variation)
+            _merge_preserved_tracks(pattern, existing, preserve, steps)
             # If emit_pattern omits seq_mode / euclid, preserve them from the live pattern so a
             # generation does not silently revert the user's sequencing mode or wipe ring settings.
-            existing = self.state.current_pattern or {}
             if "seq_mode" not in pattern and isinstance(existing.get("seq_mode"), str):
                 pattern["seq_mode"] = existing["seq_mode"]
             if "euclid" not in pattern and isinstance(existing.get("euclid"), dict):

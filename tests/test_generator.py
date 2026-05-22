@@ -7,11 +7,16 @@ from core.generator import (
     Generator,
     _coerce_pattern_dict,
     _compute_generation_summary,
+    _detect_global_rewrite,
+    _detect_global_variation,
     _detect_target_tracks,
+    _merge_preserved_tracks,
     _normalize_producer_notes,
     _opus_max_output_tokens,
     _parse_ask_response,
+    _resolve_preserve_tracks,
     _serialize_pattern_for_llm,
+    _track_has_content,
 )
 from core.injectable_profiles import (
     InjectableProfile,
@@ -776,8 +781,7 @@ def test_build_user_prompt_targeted_injects_constraint():
 
     assert "TARGETED UPDATE" in prompt
     assert "MODIFY" in prompt
-    assert "kick" in prompt
-    assert "PRESERVE" in prompt
+    assert "kick" in prompt.split("MODIFY")[1].split("\n")[0]
 
 
 def test_build_user_prompt_targeted_preserves_other_tracks():
@@ -793,7 +797,7 @@ def test_build_user_prompt_targeted_preserves_other_tracks():
     assert "hihat" not in prompt.split("PRESERVE")[1].split("\n")[0]
 
 
-def test_build_user_prompt_no_target_no_constraint():
+def test_build_user_prompt_no_target_preserves_content_tracks():
     state = AppState()
     state.last_prompt = "original prompt"
     state.current_pattern = VALID_PATTERN.copy()
@@ -802,8 +806,91 @@ def test_build_user_prompt_no_target_no_constraint():
 
     prompt = gen._build_user_prompt("make it darker", variation=True)
 
+    assert "TARGETED UPDATE" in prompt
+    assert "PRESERVE" in prompt
+    assert "kick" in prompt.split("PRESERVE")[1].split("\n")[0]
+
+
+def test_build_user_prompt_global_variation_allows_full_rewrite():
+    state = AppState()
+    state.last_prompt = "original prompt"
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("make it sparser", variation=True)
+
     assert "TARGETED UPDATE" not in prompt
     assert "PRESERVE" not in prompt
+
+
+def test_build_user_prompt_variation_without_last_prompt_still_preserves():
+    state = AppState()
+    state.current_pattern = VALID_PATTERN.copy()
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt("add offbeat hats", variation=True)
+
+    assert "Previous pattern:" in prompt
+    assert "Previous prompt:" not in prompt
+    assert "TARGETED UPDATE" in prompt
+    assert "kick" in prompt.split("PRESERVE")[1].split("\n")[0]
+
+
+def test_track_has_content_detects_active_steps():
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    assert _track_has_content(pat, "kick", 16) is True
+    assert _track_has_content(pat, "snare", 16) is False
+
+
+def test_resolve_preserve_tracks_part_by_part():
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    assert _resolve_preserve_tracks("add offbeat hats", pat, 16, True) == {"kick"}
+
+
+def test_resolve_preserve_tracks_global_variation():
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    assert _resolve_preserve_tracks("make it sparser", pat, 16, True) == set()
+
+
+def test_resolve_preserve_tracks_global_rewrite():
+    pat = {k: [0] * 16 for k in TRACK_NAMES}
+    pat["kick"][0] = 100
+    assert _resolve_preserve_tracks("start over with a new beat", pat, 16, True) == set()
+
+
+def test_merge_preserved_tracks_restores_overwritten_row():
+    existing = {k: [0] * 16 for k in TRACK_NAMES}
+    existing["kick"][0] = 100
+    incoming = {k: [0] * 16 for k in TRACK_NAMES}
+    incoming["hihat"][2] = 80
+    _merge_preserved_tracks(incoming, existing, {"kick"}, 16)
+    assert incoming["kick"][0] == 100
+    assert incoming["hihat"][2] == 80
+
+
+def test_run_merge_preserves_unmentioned_tracks():
+    state = AppState()
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.current_pattern["kick"][0] = 100
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+
+    llm_out = {k: [0] * 16 for k in TRACK_NAMES}
+    llm_out["hihat"][2] = 70
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client_tool(llm_out)
+    gen._run("add offbeat hats", variation=True)
+
+    assert len(events) == 1
+    pat = events[0]["pattern"]
+    assert pat["kick"][0] == 100
+    assert pat["hihat"][2] == 70
 
 
 def test_build_user_prompt_fresh_no_constraint():
@@ -817,13 +904,20 @@ def test_build_user_prompt_fresh_no_constraint():
     assert "PRESERVE" not in prompt
 
 
+def test_detect_global_rewrite_and_variation():
+    assert _detect_global_rewrite("start over with something new") is True
+    assert _detect_global_variation("make it sparser overall") is True
+    assert _detect_global_rewrite("add offbeat hats") is False
+    assert _detect_global_variation("add offbeat hats") is False
+
+
 def test_system_prompt_includes_targeted_update_guidance():
     from core.generator import _build_system_prompt
     _build_system_prompt.cache_clear()
     prompt = _build_system_prompt(16)
     assert "TARGETED UPDATES" in prompt
+    assert "INCREMENTAL BUILDING" in prompt
     assert "PRESERVE" in prompt
-    assert "amp envelope" in prompt
 
 
 # ── Genre context injection ──────────────────────────────────────────────────
