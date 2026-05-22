@@ -126,26 +126,24 @@ export function lfoBrailleLines(
   const r = Math.max(1, rowCount);
   const csn = cycleSteps(Math.max(1, patternLength), num, den);
   const pl = Math.max(1, patternLength);
-  const baseG =
-    globalStep != null && globalStep >= 0
-      ? Math.floor(globalStep / pl) * pl
-      : 0;
+  const anchorG = globalStep != null && globalStep >= 0 ? globalStep : 0;
   const bits = new Uint8Array(c * r);
   const widthPx = c * 2;
   const heightPx = r * 4;
   const mid = (heightPx - 1) / 2;
   const amp = mid;
+  const playheadPx = lfoFixedPlayheadCol(c) * 2;
+  const stepPerPx = pl / Math.max(1, widthPx - 1);
 
   const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
 
   let prevX = 0;
-  let prevY = Math.round(mid - wAtG(baseG) * amp);
+  let prevY = Math.round(mid - wAtG(anchorG + (0 - playheadPx) * stepPerPx) * amp);
   prevY = Math.max(0, Math.min(heightPx - 1, prevY));
   setBraillePixel(bits, c, r, 0, prevY);
 
   for (let px = 1; px < widthPx; px++) {
-    const t = widthPx <= 1 ? 0 : px / (widthPx - 1);
-    const g = baseG + t * pl;
+    const g = anchorG + (px - playheadPx) * stepPerPx;
     const w = wAtG(g);
     const y = Math.round(mid - w * amp);
     const py = Math.max(0, Math.min(heightPx - 1, y));
@@ -180,4 +178,10 @@ export function lfoPlayheadIndex(currentStep: number, patternLength: number, wid
   const s = currentStep % pl;
   const ph = s / pl;
   return Math.min(width - 1, Math.max(0, Math.floor(ph * width)));
+}
+
+/** Fixed playhead column near the left edge; waveform scrolls underneath. */
+export function lfoFixedPlayheadCol(cols: number): number {
+  const c = Math.max(1, cols);
+  return Math.max(1, Math.round(c * 0.06));
 }

@@ -52,6 +52,18 @@ export function lfoPlayheadIndex(currentStep: number, patternLength: number, wid
   return Math.min(width - 1, Math.max(0, Math.floor(ph * width)));
 }
 
+/** Fixed playhead x (px) near the left edge; waveform scrolls underneath. */
+export function lfoFixedPlayheadX(width: number): number {
+  const w = Math.max(2, Math.round(width));
+  return Math.max(6, Math.round(w * 0.06));
+}
+
+/** Braille column index matching {@link lfoFixedPlayheadX} for a given char width. */
+export function lfoFixedPlayheadCol(cols: number): number {
+  const c = Math.max(1, cols);
+  return Math.max(1, Math.round(c * 0.06));
+}
+
 /** Map web LFO shape index to core shape name for graph sampling. */
 export function lfoShapeNameFromIndex(shapeIdx: number): string | null {
   const map: Record<number, string> = {
@@ -132,8 +144,9 @@ export function sampleLfoWavePoints(opts: {
   const h = Math.max(2, Math.round(height));
   const pl = Math.max(1, patternLength);
   const csn = cycleSteps(pl, num, den);
-  const baseG =
-    globalStep != null && globalStep >= 0 ? Math.floor(globalStep / pl) * pl : 0;
+  const anchorG = globalStep != null && globalStep >= 0 ? globalStep : 0;
+  const playheadX = lfoFixedPlayheadX(w);
+  const stepPerPx = pl / Math.max(1, w - 1);
   const { padY } = lfoPlotInsets(h);
   const plotH = h - padY * 2;
   const mid = padY + (plotH - 1) / 2;
@@ -142,8 +155,7 @@ export function sampleLfoWavePoints(opts: {
 
   const points: { x: number; y: number }[] = [];
   for (let px = 0; px < w; px++) {
-    const t = w <= 1 ? 0 : px / (w - 1);
-    const g = baseG + t * pl;
+    const g = anchorG + (px - playheadX) * stepPerPx;
     const val = wAtG(g);
     const y = Math.max(padY, Math.min(h - padY - 1, mid - val * amp));
     points.push({ x: px, y });
