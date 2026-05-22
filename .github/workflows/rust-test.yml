@@ -15,5 +15,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build web UI
+        run: cd web && bun install && bun run build
+
       - name: cargo test
         run: cargo test --workspace -- --test-threads=1
