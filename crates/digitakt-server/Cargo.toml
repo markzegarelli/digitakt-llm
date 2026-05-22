@@ -1,0 +1,30 @@
+[package]
+name = "digitakt-server"
+description = "Axum REST/WebSocket server mirroring api/server.py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+digitakt-core = { path = "../digitakt-core" }
+digitakt-engine = { path = "../digitakt-engine" }
+digitakt-generator = { path = "../digitakt-generator" }
+digitakt-midi = { path = "../digitakt-midi", features = ["hardware_midi"] }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+include_dir = { workspace = true }
+parking_lot = { workspace = true }
+rand = { workspace = true }
+futures-util = "0.3"
+dotenvy = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+hyper = "1"
+tempfile = "3"
+tokio = { workspace = true }

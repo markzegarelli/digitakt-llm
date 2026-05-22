@@ -12,6 +12,7 @@ function minimalView(mode: WorkbenchView["ui"]["mode"]): WorkbenchView {
     swing: 0,
     bar: 1,
     stepLen: 16,
+    globalStep: null,
     playhead: 0,
     midiPort: "—",
     midiConnected: false,
@@ -39,7 +40,7 @@ describe("handlePaneKeys", () => {
     expect(e.preventDefault).toHaveBeenCalled();
   });
 
-  it("Space calls playStop", () => {
+  it("Space calls playStop in SEQ mode", () => {
     const dispatch = vi.fn();
     const playStop = vi.fn();
     const handlers = { playStop } as never;
@@ -49,8 +50,56 @@ describe("handlePaneKeys", () => {
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
     };
-    handlePaneKeys(e, minimalView("CHAT"), dispatch, handlers);
+    handlePaneKeys(e, minimalView("SEQ"), dispatch, handlers);
     expect(playStop).toHaveBeenCalled();
     expect(e.preventDefault).toHaveBeenCalled();
+  });
+
+  it("Space does not call playStop in CHAT mode when chat input is focused", () => {
+    const prevDoc = globalThis.document;
+    globalThis.document = {
+      activeElement: { tagName: "INPUT" },
+    } as Document;
+
+    const dispatch = vi.fn();
+    const playStop = vi.fn();
+    const handlers = { playStop } as never;
+    const e = {
+      key: " ",
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+    const handled = handlePaneKeys(e, minimalView("CHAT"), dispatch, handlers);
+    expect(handled).toBe(false);
+    expect(playStop).not.toHaveBeenCalled();
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    globalThis.document = prevDoc;
+  });
+
+  it("Space calls playStop in CHAT mode when input is not focused", () => {
+    const playStop = vi.fn();
+    const handlers = { playStop } as never;
+    const e = {
+      key: " ",
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+    handlePaneKeys(e, minimalView("CHAT"), vi.fn(), handlers);
+    expect(playStop).toHaveBeenCalled();
+  });
+
+  it("Space does not call playStop in CMD mode", () => {
+    const playStop = vi.fn();
+    const handlers = { playStop } as never;
+    const e = {
+      key: " ",
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+    handlePaneKeys(e, minimalView("CMD"), vi.fn(), handlers);
+    expect(playStop).not.toHaveBeenCalled();
   });
 });

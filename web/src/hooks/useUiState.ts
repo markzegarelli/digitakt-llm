@@ -2,6 +2,8 @@ import { useReducer, useCallback } from "react";
 import type { UiState, ChatMessage } from "../lib/viewModel.js";
 import { defaultUiState, nowTag } from "../lib/viewModel.js";
 import type { UiMode } from "../design/constants.js";
+import { TRACK_NAMES, type TrackName } from "../backend/types.js";
+import { togglePendingMuteTrack } from "../lib/muteUi.js";
 
 export type UiAction =
   | { type: "MODE"; value: UiMode }
@@ -12,6 +14,9 @@ export type UiAction =
   | { type: "LFO_SWITCH"; delta?: number; set?: number }
   | { type: "HELP_TOGGLE" }
   | { type: "HELP_SET"; value: boolean }
+  | { type: "MUTE_PENDING_TOGGLE"; trackIdx?: number }
+  | { type: "MUTE_ARM_PENDING" }
+  | { type: "MUTE_ARMED_REMOVE"; track: TrackName }
   | { type: "CHAT_APPEND"; msg: ChatMessage }
   | { type: "CHAT_RESOLVE_PENDING"; text: string; delta?: [string, number][] }
   | { type: "CHAT_SYS"; text: string; startMs: number }
@@ -63,6 +68,27 @@ function reducer(s: UiState, a: UiAction): UiState {
       return { ...s, helpOpen: !s.helpOpen };
     case "HELP_SET":
       return { ...s, helpOpen: a.value };
+    case "MUTE_PENDING_TOGGLE": {
+      const idx = a.trackIdx ?? s.cursor.track;
+      const track = TRACK_NAMES[idx] as TrackName;
+      return {
+        ...s,
+        pendingMuteTracks: togglePendingMuteTrack(s.pendingMuteTracks, track),
+      };
+    }
+    case "MUTE_ARM_PENDING": {
+      const nextArmed = new Set([...s.armedMuteTracks, ...s.pendingMuteTracks]);
+      return {
+        ...s,
+        armedMuteTracks: TRACK_NAMES.filter((t) => nextArmed.has(t)),
+        pendingMuteTracks: [],
+      };
+    }
+    case "MUTE_ARMED_REMOVE":
+      return {
+        ...s,
+        armedMuteTracks: s.armedMuteTracks.filter((t) => t !== a.track),
+      };
     case "CHAT_APPEND":
       return { ...s, chat: [...s.chat, a.msg] };
     case "CHAT_RESOLVE_PENDING": {

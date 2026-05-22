@@ -2,6 +2,8 @@ import type { DigitaktState, LfoDef, LfoShape, TrackName } from "../backend/type
 import { TRACK_NAMES } from "../backend/types.js";
 import { LFO_DESTS, LFO_SHAPES, PARAM_NAMES, type ParamName } from "../design/constants.js";
 
+export const MAX_LFO_SLOTS = 10;
+
 export interface LfoSlotView {
   target: string;
   shape: number;
@@ -49,7 +51,7 @@ function destIndexFromTarget(target: string, track: TrackName): number {
   const parts = target.split(":");
   if (parts[0] === "cc" && parts[1] === track) {
     const param = CC_ALIAS[parts[2] ?? ""] ?? "filter";
-    const idx = PARAM_NAMES.indexOf(param);
+    const idx = (LFO_DESTS as readonly string[]).indexOf(param);
     return idx >= 0 ? idx : 0;
   }
   if (parts[0] === "pitch" && parts[1] === track) return LFO_DESTS.indexOf("pitch");
@@ -163,6 +165,15 @@ export function applySlotField(
     next.mode = (next.mode + delta + 4) % 4;
   }
   return { slot: next, target: next.target };
+}
+
+/** True when a field edit changes the LFO route key (e.g. dest change). */
+export function slotTargetChanged(
+  before: LfoSlotView,
+  after: LfoSlotView,
+  field: "shape" | "dest" | "depth" | "speed" | "mult" | "mode",
+): boolean {
+  return field === "dest" && after.target !== before.target;
 }
 
 export function newDefaultSlot(track: TrackName): LfoSlotView {

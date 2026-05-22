@@ -14,10 +14,13 @@ import {
   applySlotField,
   lfosForTrack,
   newDefaultSlot,
+  slotTargetChanged,
   slotToLfoDef,
 } from "./lib/lfoAdapter.js";
 import { dispatchCommand, type CommandContext } from "./lib/commandDispatch.js";
+import { formatGenerationReply } from "./lib/chatDisplay.js";
 import { normalizeCcParamAlias } from "./lib/slashParsing.js";
+import type { TrackName } from "./backend/types.js";
 
 const BASE_URL =
   (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_API_URL"] ?? "";
@@ -25,8 +28,12 @@ const BASE_URL =
 const client = createClient(BASE_URL || undefined);
 
 export function App() {
-  const { state, actions } = useDigitakt(client);
   const { ui, dispatch } = useUiState();
+  const onMuteChanged = useCallback(
+    (track: TrackName) => dispatch({ type: "MUTE_ARMED_REMOVE", track }),
+    [dispatch],
+  );
+  const { state, actions } = useDigitakt(client, { onMuteChanged });
   const startMs = useRef(Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const view = useMemo(() => buildWorkbenchView(state, ui), [state, ui]);
@@ -54,7 +61,7 @@ export function App() {
     if (state.generation_summary) {
       dispatch({
         type: "CHAT_RESOLVE_PENDING",
-        text: state.generation_summary.producer_notes ?? state.generation_summary.track_summary,
+        text: formatGenerationReply(state.generation_summary),
       });
     } else if (state.generation_status === "failed" && state.generation_error) {
       dispatch({ type: "CHAT_RESOLVE_PENDING", text: `Error: ${state.generation_error}` });
@@ -69,6 +76,11 @@ export function App() {
       actions,
       client,
       addLog: (msg) => dispatch({ type: "CHAT_SYS", text: msg, startMs: startMs.current }),
+      addAgentReply: (text) =>
+        dispatch({
+          type: "CHAT_APPEND",
+          msg: { who: "llm", t: nowTag(startMs.current), text },
+        }),
       onHelp: () => dispatch({ type: "HELP_SET", value: true }),
       onLoadPattern: (name) => dispatch({ type: "SET_PATTERN_META", index: ui.patternIndex, name: name.toUpperCase() }),
     }),
@@ -78,22 +90,33 @@ export function App() {
   const handlers = useMemo(
     () => ({
       toggleStep: () => {
-        const vel = state.current_pattern[track.name][ui.cursor.step] ?? 0;
+        const row = state.current_pattern[track.name];
+        const vel = Array.isArray(row) ? (row[ui.cursor.step] ?? 0) : 0;
         actions.setVel(track.name, step, vel > 0 ? 0 : 100);
       },
       clearStep: () => actions.setVel(track.name, step, 0),
       playStop: () => (state.is_playing ? actions.stop() : actions.play()),
-      muteTrack: (trackIdx?: number) => {
-        const ti = trackIdx ?? ui.cursor.track;
-        const tn = view.tracks[ti]!.name;
-        actions.muteQueued(tn, !state.track_muted[tn]);
+      muteImmediate: () => {
+        const tn = view.tracks[ui.cursor.track]!.name;
+        actions.setMute(tn, !state.track_muted[tn]);
+      },
+      muteStagePending: () => {
+        dispatch({ type: "MUTE_PENDING_TOGGLE", trackIdx: ui.cursor.track });
+      },
+      muteFirePending: () => {
+        for (const tn of ui.pendingMuteTracks) {
+          actions.muteQueued(tn, !state.track_muted[tn]);
+        }
+        dispatch({ type: "MUTE_ARM_PENDING" });
       },
       nudgeMix: (delta: number, shift: boolean) => {
         const param = PARAM_NAMES[ui.cursor.mixParam]!;
         const apiParam = param === "reso" ? "resonance" : param;
         const t = view.tracks[ui.cursor.track]!;
         const cur = t.mix[param] ?? 64;
-        actions.setCC(t.name, normalizeCcParamAlias(apiParam), clamp(cur + d, 0, 127));
+        const step = shift ? delta * 10 : delta;
+        const next = clamp(cur + step, 0, 127);
+        actions.setCC(t.name, normalizeCcParamAlias(apiParam), next);
       },
       nudgeTrig: (delta: number, shift: boolean) => {
         const d = shift ? delta : delta;
@@ -117,7 +140,11 @@ export function App() {
         const slot = slots[idx]!;
         const { slot: next, target } = applySlotField(slot, track.name, field, d);
         const def = slotToLfoDef(next);
-        actions.setLfoRoute(def ? target : slot.target, def);
+        if (def && slotTargetChanged(slot, next, field)) {
+          actions.retargetLfoRoute(slot.target, target, def);
+        } else {
+          actions.setLfoRoute(def ? target : slot.target, def);
+        }
       },
       lfoAdd: () => {
         const slot = newDefaultSlot(track.name);
@@ -131,7 +158,7 @@ export function App() {
         actions.setLfoRoute(slots[idx]!.target, null);
       },
     }),
-    [actions, state, track, step, ui, view.tracks],
+    [actions, dispatch, state, track, step, ui, view.tracks],
   );
 
   useKeyboard(view, dispatch, handlers, focusAppRoot);
@@ -144,9 +171,10 @@ export function App() {
       });
       if (text.startsWith("/")) {
         void dispatchCommand(text, cmdCtx);
-      } else {
-        actions.generate(text);
+        return;
       }
+      // Plain chat prompts generate patterns (matches TUI beat mode); use /ask for Q&A.
+      actions.generate(text);
     },
     [actions, cmdCtx, dispatch],
   );
@@ -161,6 +189,8 @@ export function App() {
         onChatSend={onChatSend}
         onSelectLfoSlot={(idx) => dispatch({ type: "LFO_SWITCH", set: idx })}
         onSelectTrack={(delta) => dispatch({ type: "TRACK_DELTA", delta })}
+        onLfoAdd={handlers.lfoAdd}
+        onLfoDel={handlers.lfoDel}
         focusAppRoot={focusAppRoot}
       />
       <HelpStrip view={view} />

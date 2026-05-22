@@ -3,7 +3,6 @@ import type { WorkbenchView } from "../../lib/viewModel.js";
 import { PARAM_NAMES, noteName } from "../constants.js";
 import { condLabel } from "../../lib/condAdapter.js";
 import { Bar, Knob } from "../primitives/index.js";
-import { LFO_SHAPES, LFO_DESTS } from "../constants.js";
 
 export function TrigPanel({ view, focused }: { view: WorkbenchView; focused: boolean }) {
   const t = view.tracks[view.ui.cursor.track]!;
@@ -80,95 +79,4 @@ export function MixGrid({ view, focused }: { view: WorkbenchView; focused: boole
   );
 }
 
-export function LFOPanel({
-  view,
-  focused,
-  onSelectSlot,
-}: {
-  view: WorkbenchView;
-  focused: boolean;
-  onSelectSlot: (idx: number) => void;
-}) {
-  const t = view.tracks[view.ui.cursor.track]!;
-  const lfoIdx = Math.min(view.ui.cursor.lfoIdx, t.lfos.length - 1);
-  const lfo = t.lfos[lfoIdx]!;
-  const shape = LFO_SHAPES[lfo.shape] ?? "off";
-  const dest = LFO_DESTS[lfo.dest] ?? "filter";
-  const fields = [
-    { k: "shape", val: shape.toUpperCase() },
-    { k: "dest", val: dest },
-    { k: "depth", val: lfo.depth, max: 127, bar: true },
-    { k: "speed", val: lfo.speed, max: 127, bar: true },
-    { k: "mult", val: `${lfo.num}/${lfo.den}` },
-    { k: "mode", val: ["FREE", "TRIG", "HOLD", "ONE"][lfo.mode] },
-  ];
-  const cur = view.ui.cursor.lfoField;
-  return (
-    <div className="side-panel">
-      <div className="panel-subhead">
-        <span className={focused ? "y b" : "d b"}>LFO</span>
-        <span className="d">track {t.id}</span>
-      </div>
-      <div className="lfo-slots">
-        {t.lfos.map((l, i) => (
-          <button
-            key={i}
-            type="button"
-            tabIndex={-1}
-            className={i === lfoIdx ? "lfo-slot sel" : "lfo-slot"}
-            onClick={() => onSelectSlot(i)}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-      <div className="lfo-fields">
-        {fields.map((f, i) => {
-          const sel = focused && cur === i;
-          return (
-            <div key={f.k} className={sel ? "lfo-field sel" : "lfo-field"}>
-              <span className="d">{f.k}</span>
-              {f.bar ? (
-                <>
-                  <Bar value={f.val as number} max={f.max} active={sel} />
-                  <span className="y">{f.val}</span>
-                </>
-              ) : (
-                <span className="y">{f.val}</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export function LfoSummary({
-  view,
-  onSelectTrack,
-}: {
-  view: WorkbenchView;
-  onSelectTrack: (delta: number) => void;
-}) {
-  return (
-    <div className="lfo-summary scroll">
-      {view.tracks.map((track, i) => {
-        const activeLfos = track.lfos.filter((l) => l.shape !== 0);
-        const isSel = i === view.ui.cursor.track;
-        return (
-          <div
-            key={track.id}
-            className={isSel ? "lfo-summary-row sel" : "lfo-summary-row"}
-            onClick={() => onSelectTrack(i - view.ui.cursor.track)}
-            role="button"
-            tabIndex={-1}
-          >
-            <span className={isSel ? "y b" : ""}>{track.id}</span>
-            <span className="d">{activeLfos.length}/{track.lfos.length} active</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+export { LFOPanel, LfoSummary } from "./LfoPanel.js";

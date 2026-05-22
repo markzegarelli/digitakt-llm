@@ -27,7 +27,7 @@ cd web && bun install && bun run dev
 
 **Terminal UI:** Bun/Ink app in `tui/` (default `uv run digitakt`).
 
-**Web UI:** React/Vite app in `web/` — Napkin workbench layout (SEQ + Chat + TRIG/MIX/LFO tabs + CMD overlay), wired to the same FastAPI REST/WebSocket API. Launch with `uv run digitakt --ui web` or `cd web && bun run dev` (proxies API to `:8000`). Production: `cd web && bun run build` then open `http://localhost:8000` (static mount).
+**Web UI:** React/Vite app in `web/` — Napkin workbench layout (SEQ + Chat + TRIG/MIX/LFO tabs + CMD overlay), wired to the same FastAPI REST/WebSocket API. Launch with `uv run digitakt --ui web` or `cd web && bun run dev` (proxies API to `:8000`). Production: `cd web && bun run build` then open `http://localhost:8000` (static mount). Plain CHAT prompts call `POST /generate` (beat mode); use `/ask` in CMD for Q&A. **Debugging:** [docs/web-ui-debugging.md](docs/web-ui-debugging.md) — Chrome DevTools MCP self-diagnose loop (`/generate` vs `/ask`, stale `web/dist`, WS events).
 
 Layout (fixed): **SEQ** uses the full main column width; **MIX** and **TRIG** sit on one row under the sequencer (TRIG is always shown); **CMD** is below. When the activity log is on, **LOG** is a full-width strip under the rail + main block.
 
@@ -87,6 +87,7 @@ Keyboard shortcuts:
 **Interaction contract**
 
 - `Tab` — rotate panel focus `SEQ → MIX → CMD`
+- `i` — jump focus to MIX
 - `Shift+Tab` — toggle input mode `beat` ↔ `chat`
 - `/` — jump focus to CMD input
 - `Enter` / `Esc` — enter/exit the active edit context in focused panel
@@ -151,6 +152,7 @@ Keyboard shortcuts:
 ## Key Documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, data flow, EventBus patterns
+- [docs/web-ui-debugging.md](docs/web-ui-debugging.md) — web workbench debugging with Chrome DevTools MCP
 - [docs/ROADMAP.md](docs/ROADMAP.md) — v1 release gates and milestone order vs the codebase
 
 ## Project Layout

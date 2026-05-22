@@ -36,6 +36,28 @@ uv run pytest -v
 
 288 tests, ~4s. No real MIDI or Anthropic API calls — everything is mocked.
 
+Rust workspace:
+
+```bash
+cargo test --workspace -- --test-threads=1
+```
+
+## macOS app bundle (optional pre-commit)
+
+Release `.app` builds use Tauri on **macOS only**. From the repo root:
+
+```bash
+bash scripts/bundle-macos.sh
+```
+
+To run that build as a **git pre-commit** step when you change `web/`, `src-tauri/`, `crates/`, or `Cargo.toml` / `Cargo.lock`:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+Prerequisites: Bun, Rust, [Tauri CLI](https://v2.tauri.app/reference/cli/) (`cargo install tauri-cli --locked`). The hook is skipped on Linux/Windows and when `DIGITAKT_SKIP_BUNDLE=1` is set. See [.githooks/README.md](.githooks/README.md) and [docs/macos-release.md](docs/macos-release.md).
+
 ## Making Changes
 
 ### Branches
@@ -76,6 +98,10 @@ CI runs `pytest` on Python 3.11 and 3.12. PRs must be green before merging.
 If your change adds or modifies slash commands, update the command table in `CLAUDE.md`.
 If your change affects data flow or module structure, update `ARCHITECTURE.md`.
 If your change adds API endpoints, document them in `ARCHITECTURE.md`.
+
+### Web UI debugging
+
+When fixing `web/` bugs (sequencer not updating, wrong chat behavior, stale production UI), follow the Chrome DevTools MCP self-diagnose loop in [docs/web-ui-debugging.md](docs/web-ui-debugging.md): reproduce in the browser, inspect `POST /generate` vs `POST /ask` and WebSocket events, then verify on both `:5173` (dev) and `:8000` (built `web/dist`).
 
 ## Project Structure
 

@@ -1,0 +1,46 @@
+AMBIENT MODE CONTEXT (use instead of standard drum conventions):
+This is an ambient / drone / downtempo request. The 8 fixed track slots are
+named after drums (kick/snare/tom/clap/bell/hihat/openhat/cymbal) but should
+be REPURPOSED as atmospheric voices. Do not program a typical beat.
+
+PATTERN CONVENTIONS:
+  - BPM 70–110 (pick from ambient range).
+  - Extremely sparse triggers: often 1–2 hits per bar per voice; some voices
+    may be silent across the entire loop (that is correct, not a mistake).
+  - Avoid four-on-the-floor, avoid hi-hat 16th grids — no rhythmic beat.
+  - Use "prob" aggressively on 10–40 for most active steps so the loop
+    evolves slowly across bars rather than repeating verbatim.
+  - "swing" should be 0 unless the request explicitly asks for groove.
+  - Velocities soft: mostly 40–90. Occasional 100+ for a swell peak.
+
+TRACK ROLE REMAPPING — treat each track as an ambient voice:
+  - kick    → sub drone / filtered low pulse (≤1 hit per bar, very long tail)
+  - snare   → reverse cymbal swell / noise riser
+  - tom     → tonal pad or mallet (long attack, long decay)
+  - clap    → granular texture burst / air / breath sample
+  - bell    → FM bell / chime / music-box ping with long reverb tail
+  - hihat   → high shimmer / grain cloud / tape flutter
+  - openhat → wash / tape hiss bed / field-recording wind
+  - cymbal  → crash with very long reverb, used once as a rare marker
+
+CC GUIDANCE TUNED FOR AMBIENT (emit a "cc" block reflecting these):
+  attack 40–100, decay 100–127, reverb 60–100, delay 30–70,
+  filter 40–90 (for slow movement), resonance 0–25, volume 90–110.
+  Kick/sub voice may keep attack low (0–15) but decay 100+ for sustain.
+
+REQUIRED producer_notes FORMAT for ambient:
+producer_notes MUST begin with a TRACK SAMPLES: section listing every one
+of the 8 tracks on its own line as:
+  - <track>: <concise sample description>
+Then follow with 2–4 short sentences of arrangement guidance (evolution,
+register, how the voices interlock over time). Plain text, no markdown.
+Example opening:
+TRACK SAMPLES:
+- kick: filtered sub-drone, one pulse per bar, slow decay
+- snare: reverse cymbal swell on the back half of the bar
+- tom: soft mallet pad, long attack, rooted on A2
+- clap: granular breath texture, very low velocity
+- bell: FM chime with 3-second reverb, sparse taps
+- hihat: high shimmer cloud, probability 20
+- openhat: tape hiss wash, constant low-velocity bed
+- cymbal: crash with 6-second tail, fires once across the loop

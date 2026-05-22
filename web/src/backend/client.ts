@@ -32,15 +32,32 @@ export function createClient(baseUrl = ""): BackendClient {
   connect();
 
   return {
-    post(path, body = {}) {
-      return fetch(`${origin}${path}`, {
+    async post(path, body = {}) {
+      const r = await fetch(`${origin}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      }).then((r) => r.json());
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const detail = (data as { detail?: unknown }).detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : detail && typeof detail === "object" && "message" in detail
+              ? String((detail as { message: string }).message)
+              : `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data;
     },
-    get(path) {
-      return fetch(`${origin}${path}`).then((r) => r.json());
+    async get(path) {
+      const r = await fetch(`${origin}${path}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
+      }
+      return data;
     },
     subscribe(handler) {
       handlers.add(handler);

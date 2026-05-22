@@ -137,7 +137,7 @@ test("standard mode can use the same mute intent helper without changing behavio
   expect(getPatternMuteIntent("Q", "clap", pending)).toEqual({ kind: "queue-all" });
 });
 
-test("App mute routing only handles plain pattern row mute keys", () => {
+test("App mute routing handles SEQ browse and MIX panel mute keys", () => {
   expect(
     shouldRoutePatternMuteKey({
       input: "m",
@@ -168,6 +168,28 @@ test("App mute routing only handles plain pattern row mute keys", () => {
       trigKeysActive: false,
     }),
   ).toBe(true);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "m",
+      focus: "cc",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+      ccStepMode: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldRoutePatternMuteKey({
+      input: "q",
+      focus: "cc",
+      ctrl: false,
+      meta: false,
+      patternStepEdit: false,
+      trigKeysActive: false,
+      ccStepMode: false,
+    }),
+  ).toBe(true);
 
   expect(
     shouldRoutePatternMuteKey({
@@ -187,6 +209,7 @@ test("App mute routing only handles plain pattern row mute keys", () => {
       meta: false,
       patternStepEdit: false,
       trigKeysActive: false,
+      ccStepMode: true,
     }),
   ).toBe(false);
   expect(

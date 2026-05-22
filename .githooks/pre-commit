@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Optional local hook: macOS Tauri bundle build before commit.
+# Install: bash scripts/install-git-hooks.sh
+#
+# Skip for one commit:  DIGITAKT_SKIP_BUNDLE=1 git commit ...
+# Skip hook mechanism:   git commit --no-verify
+
+set -euo pipefail
+
+if [[ "${DIGITAKT_SKIP_BUNDLE:-}" == "1" ]]; then
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Only run when the commit touches Rust, web, or Tauri config.
+if ! git diff --cached --name-only | grep -qE '^(web/|src-tauri/|crates/|Cargo\.(toml|lock))'; then
+  exit 0
+fi
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "pre-commit: skipping macOS bundle (not on Darwin; set DIGITAKT_SKIP_BUNDLE=1 to silence)"
+  exit 0
+fi
+
+echo "pre-commit: running macOS bundle build (DIGITAKT_SKIP_BUNDLE=1 to skip)..."
+exec bash "$REPO_ROOT/scripts/bundle-macos.sh"

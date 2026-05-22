@@ -13,6 +13,7 @@ export interface CommandContext {
   actions: DigitaktActions;
   client: BackendClient;
   addLog: (msg: string) => void;
+  addAgentReply: (text: string) => void;
   onHelp?: () => void;
   onLoadPattern?: (name: string) => void;
   listPatterns?: () => Promise<Array<{ name: string }>>;
@@ -52,6 +53,34 @@ export async function dispatchCommand(raw: string, ctx: CommandContext): Promise
     case "randbeat":
       ctx.actions.randbeat();
       return true;
+    case "midi": {
+      if (parts[1]?.toLowerCase() === "list") {
+        try {
+          const data = (await ctx.client.get("/midi/outputs")) as { ports?: string[] };
+          const ports = data.ports ?? [];
+          if (ports.length === 0) ctx.addLog("No MIDI output ports.");
+          else {
+            ctx.addLog("MIDI outputs:");
+            ports.forEach((p) => ctx.addLog(`  ${p}`));
+          }
+        } catch {
+          err("Could not list MIDI outputs");
+        }
+        return true;
+      }
+      const explicit = parts.slice(1).join(" ").trim();
+      try {
+        const data = (await ctx.client.post(
+          "/midi/connect",
+          explicit ? { port: explicit } : {},
+        )) as { port?: string; status?: string };
+        if (data.port) ctx.addLog(`MIDI connected: ${data.port}`);
+        else ctx.addLog("MIDI connect requested");
+      } catch {
+        err("MIDI connect failed — is the Digitakt powered on and connected via USB?");
+      }
+      return true;
+    }
     case "bpm": {
       const v = parseFloat(parts[1] ?? "");
       if (Number.isFinite(v)) ctx.actions.setBpm(v);
@@ -112,8 +141,12 @@ export async function dispatchCommand(raw: string, ctx: CommandContext): Promise
     case "ask": {
       const q = parts.slice(1).join(" ");
       if (q) {
-        const { answer } = await ctx.actions.ask(q);
-        ctx.addLog(answer);
+        try {
+          const { answer } = await ctx.actions.ask(q);
+          ctx.addAgentReply(answer);
+        } catch {
+          err("ask failed");
+        }
       }
       return true;
     }

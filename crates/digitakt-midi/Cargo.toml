@@ -1,0 +1,17 @@
+[package]
+name = "digitakt-midi"
+description = "MIDI port discovery, CC map, echo suppression"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+hardware_midi = ["midir"]
+
+[dependencies]
+digitakt-core = { path = "../digitakt-core" }
+midir = { workspace = true, optional = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }

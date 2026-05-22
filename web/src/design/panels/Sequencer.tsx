@@ -1,5 +1,6 @@
 import React from "react";
 import type { WorkbenchView, TrackView } from "../../lib/viewModel.js";
+import { muteIndicator } from "../../lib/muteUi.js";
 import { StepNumberRow } from "../primitives/index.js";
 import type { StepStyle } from "../constants.js";
 
@@ -26,7 +27,7 @@ export function Sequencer({
             <span className={focused ? "y" : ""}>{ui.cursor.step + 1}</span>
           </span>
         </div>
-        <div className="d" style={{ fontSize: 10 }}>↑↓ track · ←→ step · ENTER toggle</div>
+        <div className="d" style={{ fontSize: 10 }}>↑↓ track · ←→ step · m/q/Q mute</div>
       </div>
       <div className="scroll seq-body">
         <div style={{ display: "flex" }}>
@@ -64,8 +65,9 @@ function SeqRow(props: {
   rowH: number;
 }) {
   const { track, isActiveTrack, cursorStep, playing, playhead, focused, stepStyle, labelW, rowH } = props;
+  const mute = muteIndicator(track.muted, track.muteStaged, track.muteArmed);
   return (
-    <div style={{ display: "flex", height: rowH, alignItems: "center" }}>
+    <div style={{ display: "flex", height: rowH, alignItems: "center", opacity: track.muted ? 0.45 : 1 }}>
       <div
         style={{
           width: labelW,
@@ -78,7 +80,16 @@ function SeqRow(props: {
       >
         {isActiveTrack && focused ? "> " : "  "}
         {track.id}
-        {track.muted ? <span className="r" style={{ fontSize: 9 }}> M</span> : null}
+        {mute.badge === "M" ? <span className="r" style={{ fontSize: 9 }}> M</span> : null}
+        {mute.badge === "Q" ? (
+          <span className={mute.qArmed ? "r" : "y"} style={{ fontSize: 9 }}> Q</span>
+        ) : null}
+        {mute.badge === "MQ" ? (
+          <>
+            <span className="r" style={{ fontSize: 9 }}> M</span>
+            <span className={mute.qArmed ? "r" : "y"} style={{ fontSize: 9 }}>Q</span>
+          </>
+        ) : null}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(16, minmax(0, 1fr))", flex: 1, minWidth: 0 }}>
         {track.trigs.map((trig, si) => (

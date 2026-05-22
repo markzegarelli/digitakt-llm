@@ -1,0 +1,22 @@
+[package]
+name = "digitakt-generator"
+description = "Anthropic pattern generator, tracing, injectable profiles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+digitakt-core = { path = "../digitakt-core" }
+digitakt-engine = { path = "../digitakt-engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+regex = "1"
+reqwest = { workspace = true, features = ["json", "blocking"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+
+[dev-dependencies]
+wiremock = "0.6"

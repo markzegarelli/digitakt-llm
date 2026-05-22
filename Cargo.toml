@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/digitakt-core",
+    "crates/digitakt-midi",
+    "crates/digitakt-engine",
+    "crates/digitakt-generator",
+    "crates/digitakt-server",
+    "crates/digitakt-cli",
+    "src-tauri",
+]
+default-members = ["crates/digitakt-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["digitakt-llm contributors"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+parking_lot = "0.12"
+rand = "0.8"
+tracing = "0.1"
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+midir = "0.10"
+reqwest = { version = "0.12", features = ["json"] }
+include_dir = "0.7"
+dotenvy = "0.15"

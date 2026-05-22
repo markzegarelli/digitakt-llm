@@ -32,9 +32,15 @@ def _start_server(api_port: int) -> None:
     state = AppState()
     bus = EventBus()
 
-    port_name = midi_utils.find_digitakt(midi_utils.list_ports())
-    port = midi_utils.open_port(port_name) if port_name else None
-    state.midi_port_name = port_name
+    available = midi_utils.list_ports()
+    port_name = midi_utils.find_digitakt(available)
+    port = None
+    if port_name:
+        try:
+            port = midi_utils.open_port(port_name)
+        except Exception:
+            port = None
+    state.midi_port_name = port_name if port else None
 
     player = Player(state, bus, port)
     generator = Generator(state, bus)

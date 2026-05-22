@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { BackendClient, AppEvent } from "../backend/client.js";
 import type { DigitaktState, TrackName, LfoDef, EuclidStripMode, CCParamDef } from "../backend/types.js";
 import {
   TRACK_NAMES,
+  DEFAULT_GATE_PCT,
   emptyTrigState,
   inferPatternLengthFromApi,
   parseEuclidStripMode,
@@ -78,6 +79,15 @@ function parseEuclidBlock(
     };
   }
   return result;
+}
+
+function copyRow<T>(row: T[] | undefined, length: number, fill: T): T[] {
+  if (Array.isArray(row)) return [...row];
+  return Array.from({ length }, () => fill);
+}
+
+function isTrackName(t: unknown): t is TrackName {
+  return typeof t === "string" && (TRACK_NAMES as readonly string[]).includes(t);
 }
 
 function applyEvent(state: DigitaktState, event: AppEvent): DigitaktState {
@@ -236,47 +246,63 @@ function applyEvent(state: DigitaktState, event: AppEvent): DigitaktState {
         },
       };
     case "vel_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const newPattern = { ...state.current_pattern };
-      newPattern[track] = [...newPattern[track]];
-      newPattern[track][step] = val;
+      const row = copyRow(newPattern[track], state.pattern_length, 0);
+      if (step < 0 || step >= row.length) return state;
+      row[step] = val;
+      newPattern[track] = row;
       return { ...state, current_pattern: newPattern };
     }
     case "gate_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const pt = state.pattern_trig;
-      const row = [...pt.gate[track]];
+      const row = copyRow(pt.gate[track], state.pattern_length, DEFAULT_GATE_PCT);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, gate: { ...pt.gate, [track]: row } } };
     }
     case "note_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = (event["value"] ?? null) as number | null;
       const pt = state.pattern_trig;
-      const row = [...pt.note[track]];
+      const row = copyRow(pt.note[track], state.pattern_length, null);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, note: { ...pt.note, [track]: row } } };
     }
     case "cond_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = (event["value"] as string | null) ?? null;
       const pt = state.pattern_trig;
-      const row = [...pt.cond[track]];
+      const row = copyRow(pt.cond[track], state.pattern_length, null);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, cond: { ...pt.cond, [track]: row } } };
     }
     case "prob_changed": {
-      const track = event["track"] as TrackName;
-      const step = (event["step"] as number) - 1;
+      const track = event["track"];
+      const stepRaw = event["step"];
+      if (!isTrackName(track) || typeof stepRaw !== "number") return state;
+      const step = stepRaw - 1;
       const val = event["value"] as number;
       const pt = state.pattern_trig;
-      const row = [...pt.prob[track]];
+      const row = copyRow(pt.prob[track], state.pattern_length, 100);
+      if (step < 0 || step >= row.length) return state;
       row[step] = val;
       return { ...state, pattern_trig: { ...pt, prob: { ...pt.prob, [track]: row } } };
     }
@@ -321,6 +347,7 @@ export interface DigitaktActions {
   muteQueued(track: TrackName, muted: boolean): void;
   connectMidi(port?: string): void;
   setLfoRoute(target: string, lfo: LfoDef | null): void;
+  retargetLfoRoute(oldTarget: string, newTarget: string, lfo: LfoDef): void;
   setEuclidStripMode(mode: EuclidStripMode): void;
   queueFill(name: string): void;
   chainSlotFill(slot: number): void;
@@ -338,8 +365,13 @@ export interface DigitaktActions {
   clearLog(): void;
 }
 
-export function useDigitakt(client: BackendClient): { state: DigitaktState; actions: DigitaktActions } {
+export function useDigitakt(
+  client: BackendClient,
+  callbacks?: { onMuteChanged?: (track: TrackName) => void },
+): { state: DigitaktState; actions: DigitaktActions } {
   const [state, setState] = useState<DigitaktState>(DEFAULT_STATE);
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   useEffect(() => {
     client.get("/state").then((raw) => {
@@ -355,13 +387,19 @@ export function useDigitakt(client: BackendClient): { state: DigitaktState; acti
         return;
       }
       setState((s) => applyEvent(s, event));
+      if (event["type"] === "mute_changed") {
+        const track = event["track"];
+        if (isTrackName(track)) callbacksRef.current?.onMuteChanged?.(track);
+      }
     });
 
     return unsub;
   }, [client]);
 
   const post = useCallback((path: string, body?: object) => {
-    (body !== undefined ? client.post(path, body) : client.post(path)).catch(() => {});
+    const p = body !== undefined ? client.post(path, body) : client.post(path);
+    p.catch(() => {});
+    return p;
   }, [client]);
 
   const actions: DigitaktActions = {
@@ -390,6 +428,22 @@ export function useDigitakt(client: BackendClient): { state: DigitaktState; acti
     muteQueued: useCallback((track, muted) => post("/mute-queued", { track, muted }), [post]),
     connectMidi: useCallback((port) => post("/midi/connect", port ? { port } : {}), [post]),
     setLfoRoute: useCallback((target, lfo) => post("/lfo", { target, lfo }), [post]),
+    retargetLfoRoute: useCallback(
+      (oldTarget, newTarget, lfo) => {
+        setState((s) => {
+          const next = { ...s.lfo };
+          delete next[oldTarget];
+          next[newTarget] = lfo;
+          const nextOut = { ...s.lfo_out };
+          delete nextOut[oldTarget];
+          delete nextOut[newTarget];
+          return { ...s, lfo: next, lfo_out: nextOut };
+        });
+        post("/lfo", { target: oldTarget, lfo: null });
+        post("/lfo", { target: newTarget, lfo });
+      },
+      [post],
+    ),
     setEuclidStripMode: useCallback((mode) => post("/euclid-strip-mode", { mode }), [post]),
     queueFill: useCallback((name) => {
       setState((s) => ({ ...s, fill_queued: name }));

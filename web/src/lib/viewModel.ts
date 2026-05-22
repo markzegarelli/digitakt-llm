@@ -23,6 +23,8 @@ export interface TrackView {
   id: string;
   name: TrackName;
   muted: boolean;
+  muteStaged: boolean;
+  muteArmed: boolean;
   mix: Record<string, number>;
   trigs: StepView[];
   lfos: LfoSlotView[];
@@ -60,6 +62,10 @@ export interface UiState {
   stepStyle: StepStyle;
   patternName: string;
   patternIndex: number;
+  /** Tracks staged with q (yellow Q) before Shift+Q. */
+  pendingMuteTracks: TrackName[];
+  /** Tracks queued on server (red Q) until mute_changed. */
+  armedMuteTracks: TrackName[];
 }
 
 export interface WorkbenchView {
@@ -70,6 +76,7 @@ export interface WorkbenchView {
   bpm: number;
   swing: number;
   stepLen: number;
+  globalStep: number | null;
   bar: number;
   midiPort: string;
   midiConnected: boolean;
@@ -96,6 +103,8 @@ export function defaultUiState(): UiState {
     stepStyle: "blocks",
     patternName: "LIVE PATTERN",
     patternIndex: 0,
+    pendingMuteTracks: [],
+    armedMuteTracks: [],
   };
 }
 
@@ -106,7 +115,13 @@ function ccValue(state: DigitaktState, track: TrackName, param: string): number 
   return def?.default ?? 64;
 }
 
-export function buildTrackViews(state: DigitaktState): TrackView[] {
+export function buildTrackViews(
+  state: DigitaktState,
+  pendingMuteTracks: readonly TrackName[] = [],
+  armedMuteTracks: readonly TrackName[] = [],
+): TrackView[] {
+  const staged = new Set(pendingMuteTracks);
+  const armed = new Set(armedMuteTracks);
   const len = state.pattern_length;
   return TRACKS.map((meta) => {
     const name = meta.name;
@@ -135,6 +150,8 @@ export function buildTrackViews(state: DigitaktState): TrackView[] {
       id: meta.id,
       name,
       muted: state.track_muted[name],
+      muteStaged: staged.has(name),
+      muteArmed: armed.has(name),
       mix,
       trigs,
       lfos: lfosForTrack(state, name),
@@ -164,12 +181,13 @@ export function buildWorkbenchView(state: DigitaktState, ui: UiState): Workbench
   const bar = gs != null ? Math.floor(gs / state.pattern_length) + 1 : 1;
   return {
     ui,
-    tracks: buildTrackViews(state),
+    tracks: buildTrackViews(state, ui.pendingMuteTracks, ui.armedMuteTracks),
     playing: state.is_playing,
     playhead: playheadFromState(state),
     bpm: state.bpm,
     swing: state.swing,
     stepLen: state.pattern_length,
+    globalStep: gs,
     bar,
     midiPort: state.midi_port_name ?? "—",
     midiConnected: state.midi_connected,
