@@ -8,7 +8,7 @@ use axum::{
     extract::{Path as AxPath, State, WebSocketUpgrade},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
     Json, Router,
 };
 use digitakt_core::{
@@ -1018,7 +1018,6 @@ async fn ws_handler(ws: WebSocketUpgrade, State(app): State<Arc<App>>) -> Respon
     let mut rx = app.ws_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         use axum::extract::ws::Message;
-        use futures_util::{SinkExt, StreamExt};
         loop {
             tokio::select! {
                 msg = rx.recv() => {

@@ -143,7 +143,6 @@ pub fn sanitize_lfo_in_pattern(pattern: &mut Map<String, Value>, pattern_length:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pattern::deep_copy;
     use crate::state::AppState;
     use crate::types::empty_pattern;
     use serde_json::json;
@@ -284,7 +283,7 @@ mod tests {
         });
         let mut pat = empty_pattern();
         pat.insert("lfo".into(), lfo.clone());
-        let mut state = AppState::new();
+        let state = AppState::new();
         state.replace_current_pattern(pat);
         assert_eq!(state.current_pattern()["lfo"], lfo);
     }

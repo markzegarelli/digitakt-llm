@@ -1,4 +1,3 @@
-use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;

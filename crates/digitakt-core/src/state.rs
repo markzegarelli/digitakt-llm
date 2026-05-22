@@ -4,11 +4,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use parking_lot::RwLock;
 use serde_json::{json, Map, Value};
 
-use crate::commands::apply_swing;
 use crate::euclidean::normalize_euclid_in_pattern;
 use crate::fill_fsm::FillFsm;
 use crate::lfo::sanitize_lfo_in_pattern;
-use crate::pattern::{deep_copy, has_all_tracks, Pattern};
+use crate::pattern::{deep_copy, Pattern};
 use crate::types::{cc_defaults, DEFAULT_GATE_PCT, TRACK_NAMES};
 
 const HISTORY_MAX: usize = 20;
