@@ -11,10 +11,10 @@ use regex::Regex;
 use serde_json::{json, Map, Value};
 
 use crate::coerce::{
-    coerce_pattern_dict, compute_generation_summary, detect_target_tracks, normalize_producer_notes,
+    coerce_pattern_dict, compute_generation_summary, detect_target_tracks,
     opus_max_output_tokens, parse_ask_response, serialize_pattern_for_llm,
 };
-use crate::prompts::{classify_system_prompt, help_system_prompt, system_prompt_for_steps};
+use crate::prompts::{help_system_prompt, system_prompt_for_steps};
 use crate::injectable_profiles::build_injectable_context_prefix;
 use crate::tracing::{global_tracer, SpanGuard};
 

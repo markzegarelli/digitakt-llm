@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use digitakt_core::{default_pattern, AppState, TRACK_NAMES};
-use digitakt_generator::{Generator, LlmClient};
+use digitakt_core::default_pattern;
+use digitakt_generator::LlmClient;
 use digitakt_server::App;
 use serde_json::{json, Map, Value};
 use tower::ServiceExt;
@@ -38,7 +38,7 @@ impl LlmClient for MockLlm {
 
 fn test_app() -> Arc<App> {
     let tmp = tempfile::tempdir().unwrap();
-    let mut app = App::with_mock_generator(tmp.path(), Arc::new(MockLlm));
+    let app = App::with_mock_generator(tmp.path(), Arc::new(MockLlm));
     let pat = default_pattern();
     app.state.assign_current_pattern(pat);
     Arc::new(app)
