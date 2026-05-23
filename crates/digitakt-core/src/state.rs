@@ -124,6 +124,10 @@ impl AppState {
         self.inner.read().last_prompt.clone()
     }
 
+    pub fn set_last_prompt(&self, prompt: Option<&str>) {
+        self.inner.write().last_prompt = prompt.map(String::from);
+    }
+
     pub fn pattern_history_len(&self) -> usize {
         self.inner.read().pattern_history.len()
     }

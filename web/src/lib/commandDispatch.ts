@@ -117,8 +117,14 @@ export async function dispatchCommand(raw: string, ctx: CommandContext): Promise
     case "load": {
       const name = parts[1];
       if (name) {
-        await ctx.client.post(`/patterns/${encodeURIComponent(name)}`);
-        ctx.onLoadPattern?.(name);
+        const path = `/patterns/${encodeURIComponent(name)}`;
+        try {
+          await ctx.client.get(path);
+          ctx.onLoadPattern?.(name);
+          ctx.addLog(`Loaded "${name}"`);
+        } catch (e) {
+          err(e instanceof Error ? e.message : "load failed");
+        }
       } else {
         const list = (await ctx.client.get("/patterns")) as { patterns?: Array<{ name: string }> };
         const names = list.patterns?.map((p) => p.name).join(", ") ?? "none";

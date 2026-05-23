@@ -919,11 +919,26 @@ async fn load_pattern(
 ) -> Result<Json<Map<String, Value>>, ApiError> {
     validate_pattern_name(&name)?;
     let path = app.patterns_dir.join(format!("{name}.json"));
-    let data: Value = serde_json::from_str(&std::fs::read_to_string(path).map_err(|_| ApiError::not_found_simple("Pattern not found"))?)
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let data: Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).map_err(|_| ApiError::not_found_simple("Pattern not found"))?,
+    )
+    .map_err(|e| ApiError::internal(e.to_string()))?;
     if let Some(pat) = data.get("pattern").and_then(|v| v.as_object()) {
         let p: Pattern = pat.clone();
-        app.state.queue_pattern(p);
+        let is_playing = app.state.is_playing();
+        if is_playing {
+            app.state.queue_pattern(p.clone());
+        } else {
+            app.state.replace_current_pattern(p.clone());
+            app.state.set_last_prompt(Some(&name));
+            app.bus.emit(
+                "pattern_changed",
+                Some(Map::from_iter([
+                    ("pattern".into(), Value::Object(p.clone())),
+                    ("prompt".into(), json!(name)),
+                ])),
+            );
+        }
         app.bus.emit("pattern_loaded", None);
         return Ok(Json(Map::from_iter([("loaded".into(), json!(name))])));
     }
