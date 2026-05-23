@@ -133,7 +133,7 @@ export function App() {
       },
       nudgeLfo: (delta: number, shift: boolean) => {
         const d = shift ? delta * 10 : delta;
-        const fields = ["shape", "dest", "depth", "speed", "mult", "mode"] as const;
+        const fields = ["shape", "dest", "depth", "mult", "phase", "mode"] as const;
         const field = fields[ui.cursor.lfoField] ?? "depth";
         const slots = lfosForTrack(state, track.name);
         const idx = Math.min(ui.cursor.lfoIdx, slots.length - 1);

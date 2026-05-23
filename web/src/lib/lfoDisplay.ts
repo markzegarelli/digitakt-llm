@@ -110,6 +110,19 @@ export function lfoDestArrow(destIdx: number): string {
   return `-> ${dest.toUpperCase()}`;
 }
 
+/** Static base value for depth-scaled waveform display (zero axis = min, base = max at depth 100%). */
+export function lfoBaseValueForDest(
+  mix: Record<string, number>,
+  trigs: { note: number }[],
+  destIdx: number,
+): { base: number; max: number } {
+  const dest = LFO_DESTS[destIdx] ?? "filter";
+  if (dest === "pitch") return { base: trigs[0]?.note ?? 60, max: 127 };
+  if (dest === "pan") return { base: mix.volume ?? 64, max: 127 };
+  if (dest in mix) return { base: mix[dest] ?? 64, max: 127 };
+  return { base: 64, max: 127 };
+}
+
 export function lfoTimingLabel(stepLen: number, num: number, den: number): string {
   const pl = Math.max(1, stepLen);
   const csn = cycleSteps(pl, num, den);
@@ -135,11 +148,26 @@ export function sampleLfoWavePoints(opts: {
   num: number;
   den: number;
   phase: number;
+  depth: number;
+  baseValue: number;
+  maxValue?: number;
   width: number;
   height: number;
   globalStep?: number | null;
 }): { x: number; y: number }[] {
-  const { shape, patternLength, num, den, phase, width, height, globalStep } = opts;
+  const {
+    shape,
+    patternLength,
+    num,
+    den,
+    phase,
+    depth,
+    baseValue,
+    maxValue = 127,
+    width,
+    height,
+    globalStep,
+  } = opts;
   const w = Math.max(2, Math.round(width));
   const h = Math.max(2, Math.round(height));
   const pl = Math.max(1, patternLength);
@@ -147,17 +175,17 @@ export function sampleLfoWavePoints(opts: {
   const anchorG = globalStep != null && globalStep >= 0 ? globalStep : 0;
   const playheadX = lfoFixedPlayheadX(w);
   const stepPerPx = pl / Math.max(1, w - 1);
-  const { padY } = lfoPlotInsets(h);
+  const { padY, baseline } = lfoPlotInsets(h);
   const plotH = h - padY * 2;
-  const mid = padY + (plotH - 1) / 2;
-  const amp = (plotH - 1) / 2;
+  const peakNorm = (Math.max(0, baseValue) / Math.max(1, maxValue)) * (depth / 100);
   const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
 
   const points: { x: number; y: number }[] = [];
   for (let px = 0; px < w; px++) {
     const g = anchorG + (px - playheadX) * stepPerPx;
     const val = wAtG(g);
-    const y = Math.max(padY, Math.min(h - padY - 1, mid - val * amp));
+    const u = (val + 1) / 2;
+    const y = Math.max(padY, Math.min(h - padY - 1, baseline - u * peakNorm * plotH));
     points.push({ x: px, y });
   }
   return points;

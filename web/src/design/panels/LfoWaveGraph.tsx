@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { WorkbenchView } from "../../lib/viewModel.js";
+import type { WorkbenchView, TrackView } from "../../lib/viewModel.js";
 import type { LfoSlotView } from "../../lib/lfoAdapter.js";
 import { LFO_DESTS, LFO_SHAPES } from "../constants.js";
 import { useSmoothGlobalStep } from "../../hooks/useSmoothGlobalStep.js";
 import {
   lfoDestArrow,
   lfoFixedPlayheadX,
+  lfoBaseValueForDest,
   lfoPlotInsets,
   lfoShapeNameFromIndex,
   lfoTimingLabel,
@@ -33,11 +34,13 @@ export function LfoWaveGraph({
   lfo,
   lfoIdx,
   view,
+  track,
   activeCount,
 }: {
   lfo: LfoSlotView;
   lfoIdx: number;
   view: WorkbenchView;
+  track: TrackView;
   activeCount: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +67,9 @@ export function LfoWaveGraph({
   const modeLabel = MODES[lfo.mode] ?? "FREE";
   const graphShape = lfoShapeNameFromIndex(lfo.shape);
   const smoothGlobalStep = useSmoothGlobalStep(view.playing, view.globalStep, view.bpm);
+  const { base, max } = lfoBaseValueForDest(track.mix, track.trigs, lfo.dest);
+  const waveAnchorStep =
+    view.playing && smoothGlobalStep != null ? smoothGlobalStep : view.playhead;
 
   const points = useMemo(() => {
     if (!graphShape) return [];
@@ -73,13 +79,28 @@ export function LfoWaveGraph({
       num: lfo.num,
       den: lfo.den,
       phase: lfo.phase,
+      depth: lfo.depth,
+      baseValue: base,
+      maxValue: max,
       width: size.w,
       height: size.h,
-      globalStep: smoothGlobalStep,
+      globalStep: waveAnchorStep,
     });
-  }, [graphShape, view.stepLen, smoothGlobalStep, lfo.num, lfo.den, lfo.phase, size.w, size.h]);
+  }, [
+    graphShape,
+    view.stepLen,
+    waveAnchorStep,
+    lfo.num,
+    lfo.den,
+    lfo.phase,
+    lfo.depth,
+    base,
+    max,
+    size.w,
+    size.h,
+  ]);
 
-  const playCol = view.playing && graphShape ? lfoFixedPlayheadX(size.w) : null;
+  const playCol = graphShape ? lfoFixedPlayheadX(size.w) : null;
 
   const linePath = useMemo(() => {
     if (points.length === 0) return "";
@@ -92,7 +113,9 @@ export function LfoWaveGraph({
     return d;
   }, [points]);
 
-  const { baseline } = lfoPlotInsets(size.h);
+  const { baseline, padY } = lfoPlotInsets(size.h);
+  const plotH = size.h - padY * 2;
+  const peakY = baseline - (base / max) * plotH;
 
   const fillPath = useMemo(() => pointsToPath(points, baseline), [points, baseline]);
   const gradId = `lfo-grad-${lfoIdx}`;
@@ -138,6 +161,18 @@ export function LfoWaveGraph({
           />
         ))}
         {fillPath ? <path d={fillPath} fill={`url(#${gradId})`} stroke="none" /> : null}
+        {graphShape ? (
+          <line
+            x1={0}
+            y1={peakY}
+            x2={size.w}
+            y2={peakY}
+            stroke="var(--border-dim)"
+            strokeOpacity={0.6}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        ) : null}
         {linePath ? (
           <path d={linePath} fill="none" stroke="var(--yellow)" strokeWidth={1.5} />
         ) : (
@@ -152,20 +187,26 @@ export function LfoWaveGraph({
           />
         )}
         {playCol != null ? (
-          <line
-            x1={playCol}
-            y1={0}
-            x2={playCol}
-            y2={size.h}
-            stroke="var(--yellow-bright)"
-            strokeWidth={1.5}
-            strokeOpacity={0.9}
-          />
+          <g className="lfo-playhead">
+            <line
+              x1={playCol}
+              y1={10}
+              x2={playCol}
+              y2={size.h}
+              stroke="var(--yellow-bright)"
+              strokeWidth={1.5}
+              strokeOpacity={0.9}
+            />
+            <polygon
+              points={`${playCol - 4},2 ${playCol + 4},2 ${playCol},9`}
+              fill="var(--yellow-bright)"
+            />
+          </g>
         ) : null}
       </svg>
       <div className="lfo-graph-overlay lfo-graph-overlay-top">
         {graphShape
-          ? `${shapeLabel} · ${modeLabel} · DEPTH ${lfo.depth} · SPD ${lfo.speed} · ${lfoDestArrow(lfo.dest)}`
+          ? `${shapeLabel} · ${modeLabel} · DEPTH ${lfo.depth}% · ${lfoDestArrow(lfo.dest)}`
           : "OFF · no waveform"}
       </div>
       <div className="lfo-graph-overlay lfo-graph-overlay-bottom">

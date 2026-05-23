@@ -9,11 +9,29 @@ export interface LfoSlotView {
   shape: number;
   dest: number;
   depth: number;
-  speed: number;
   num: number;
   den: number;
   phase: number;
   mode: number;
+}
+
+/** Coprime rates from fastest (many cycles/pattern) to slowest. */
+export const LFO_RATE_LADDER: ReadonlyArray<{ num: number; den: number }> = [
+  { num: 1, den: 16 },
+  { num: 1, den: 8 },
+  { num: 1, den: 4 },
+  { num: 1, den: 2 },
+  { num: 1, den: 1 },
+  { num: 2, den: 1 },
+  { num: 4, den: 1 },
+  { num: 8, den: 1 },
+  { num: 16, den: 1 },
+];
+
+function rateLadderIndex(num: number, den: number): number {
+  const i = LFO_RATE_LADDER.findIndex((r) => r.num === num && r.den === den);
+  if (i >= 0) return i;
+  return LFO_RATE_LADDER.findIndex((r) => r.num === 1 && r.den === 1);
 }
 
 const SHAPE_TO_ZIP: Record<LfoShape, number> = {
@@ -73,17 +91,6 @@ function targetFromSlot(track: TrackName, destIdx: number): string {
   return `cc:${track}:${param}`;
 }
 
-function rateToSpeed(num: number, den: number): number {
-  const cycles = den > 0 ? num / den : 1;
-  return Math.round(clamp(cycles * 32, 0, 127));
-}
-
-function speedToRate(speed: number): { num: number; den: number } {
-  const cycles = Math.max(0.0625, speed / 32);
-  if (cycles <= 1) return { num: Math.max(1, Math.round(cycles * 4)), den: 4 };
-  return { num: Math.round(cycles), den: 1 };
-}
-
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -94,7 +101,6 @@ export function lfoDefToSlot(target: string, track: TrackName, def: LfoDef): Lfo
     shape: SHAPE_TO_ZIP[def.shape] ?? 2,
     dest: destIndexFromTarget(target, track),
     depth: def.depth,
-    speed: rateToSpeed(def.rate.num, def.rate.den),
     num: def.rate.num,
     den: def.rate.den,
     phase: def.phase,
@@ -125,8 +131,7 @@ export function lfosForTrack(state: DigitaktState, track: TrackName): LfoSlotVie
       target: targetFromSlot(track, 0),
       shape: 0,
       dest: 0,
-      depth: 0,
-      speed: 32,
+      depth: 50,
       num: 1,
       den: 1,
       phase: 0,
@@ -143,24 +148,28 @@ export function updateSlotTarget(track: TrackName, slot: LfoSlotView, destIdx: n
 export function applySlotField(
   slot: LfoSlotView,
   track: TrackName,
-  field: "shape" | "dest" | "depth" | "speed" | "mult" | "mode",
+  field: "shape" | "dest" | "depth" | "mult" | "phase" | "mode",
   delta: number,
 ): { slot: LfoSlotView; target: string } {
   const next = { ...slot };
   if (field === "shape") {
+    const prevShape = next.shape;
     next.shape = (next.shape + delta + LFO_SHAPES.length) % LFO_SHAPES.length;
+    if (prevShape === 0 && next.shape !== 0 && next.depth === 0) {
+      next.depth = 50;
+    }
   } else if (field === "dest") {
     next.dest = (next.dest + delta + LFO_DESTS.length) % LFO_DESTS.length;
     next.target = targetFromSlot(track, next.dest);
   } else if (field === "depth") {
-    next.depth = clamp(next.depth + delta, 0, 127);
-  } else if (field === "speed") {
-    next.speed = clamp(next.speed + delta, 0, 127);
-    const rate = speedToRate(next.speed);
+    next.depth = clamp(next.depth + delta, 0, 100);
+  } else if (field === "mult") {
+    const idx = rateLadderIndex(next.num, next.den);
+    const rate = LFO_RATE_LADDER[(idx + delta + LFO_RATE_LADDER.length) % LFO_RATE_LADDER.length]!;
     next.num = rate.num;
     next.den = rate.den;
-  } else if (field === "mult") {
-    next.num = clamp(next.num + delta, 1, 16);
+  } else if (field === "phase") {
+    next.phase = Math.round(clamp(next.phase + delta * 0.05, 0, 1) * 100) / 100;
   } else if (field === "mode") {
     next.mode = (next.mode + delta + 4) % 4;
   }
@@ -171,7 +180,7 @@ export function applySlotField(
 export function slotTargetChanged(
   before: LfoSlotView,
   after: LfoSlotView,
-  field: "shape" | "dest" | "depth" | "speed" | "mult" | "mode",
+  field: "shape" | "dest" | "depth" | "mult" | "phase" | "mode",
 ): boolean {
   return field === "dest" && after.target !== before.target;
 }
@@ -181,8 +190,7 @@ export function newDefaultSlot(track: TrackName): LfoSlotView {
     target: targetFromSlot(track, 0),
     shape: 1,
     dest: 0,
-    depth: 30,
-    speed: 32,
+    depth: 50,
     num: 1,
     den: 1,
     phase: 0,
