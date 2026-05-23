@@ -40,20 +40,23 @@ pub fn resolve_web_dist() -> Option<PathBuf> {
             return Some(path);
         }
     }
-    let mut candidates: Vec<PathBuf> = vec![
-        PathBuf::from("web/dist"),
-        PathBuf::from("../web/dist"),
-    ];
-    if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("web/dist"));
-        candidates.push(cwd.join("../web/dist"));
-    }
+    let mut candidates: Vec<PathBuf> = vec![];
+    // Prefer the .app bundle (or release binary) over cwd-relative web/dist — launching
+    // from the repo must not shadow the packaged UI in the macOS Tauri build.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(mac_os) = exe.parent() {
             if let Some(contents) = mac_os.parent() {
                 candidates.push(contents.join("Resources/web/dist"));
             }
         }
+    }
+    candidates.extend([
+        PathBuf::from("web/dist"),
+        PathBuf::from("../web/dist"),
+    ]);
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("web/dist"));
+        candidates.push(cwd.join("../web/dist"));
     }
     candidates
         .into_iter()
@@ -268,7 +271,7 @@ pub async fn run_server(
     patterns_dir: impl AsRef<Path>,
     web_dist: Option<PathBuf>,
     instance_id: u64,
-    bound: Option<std::sync::mpsc::Sender<u64>>,
+    bound: Option<std::sync::mpsc::Sender<(u64, u16)>>,
 ) -> Result<(), String> {
     let app = Arc::new(App::new(patterns_dir, instance_id)?);
     let router = app.router(web_dist.or_else(resolve_web_dist));
@@ -276,8 +279,12 @@ pub async fn run_server(
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| e.to_string())?;
+    let bound_port = listener
+        .local_addr()
+        .map_err(|e| e.to_string())?
+        .port();
     if let Some(tx) = bound {
-        let _ = tx.send(instance_id);
+        let _ = tx.send((instance_id, bound_port));
     }
     axum::serve(listener, router).await.map_err(|e| e.to_string())
 }
