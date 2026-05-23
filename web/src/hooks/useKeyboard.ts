@@ -310,17 +310,17 @@ export function useKeyboard(
         }
       } else if (st.ui.mode === "LFO") {
         if (key === "ArrowLeft" || key === "ArrowRight") {
-          handlersRef.current.nudgeLfo(key === "ArrowRight" ? 1 : -1, mod);
+          dispatchRef.current({ type: "MOVE", axis: "lfoField", delta: key === "ArrowRight" ? 1 : -1 });
           e.preventDefault();
           return;
         }
         if (key === "ArrowUp") {
-          dispatchRef.current({ type: "MOVE", axis: "lfoField", delta: -1 });
+          handlersRef.current.nudgeLfo(1, mod);
           e.preventDefault();
           return;
         }
         if (key === "ArrowDown") {
-          dispatchRef.current({ type: "MOVE", axis: "lfoField", delta: 1 });
+          handlersRef.current.nudgeLfo(-1, mod);
           e.preventDefault();
           return;
         }

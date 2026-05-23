@@ -288,9 +288,15 @@
   font-size: 11px;
   cursor: pointer;
   display: grid;
-  grid-template-columns: 28px 1fr auto 32px;
+  grid-template-columns: 28px 64px auto 32px;
   gap: 6px;
   align-items: center;
+}
+
+.lfo-summary-track {
+  display: inline-block;
+  min-width: 22px;
+  font-weight: 500;
 }
 
 .lfo-summary-row.sel {
@@ -306,6 +312,15 @@
   color: var(--yellow-dim);
   text-transform: uppercase;
   justify-self: start;
+  display: inline-block;
+  min-width: 52px;
+  box-sizing: border-box;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lfo-route-pill.empty {
+  color: var(--text-dim);
 }
 
 .lfo-summary-footer {

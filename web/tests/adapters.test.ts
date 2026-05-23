@@ -51,6 +51,30 @@ describe("lfoAdapter", () => {
     expect(target).toBe("cc:kick:reso");
     expect(target).not.toBe(slot.target);
   });
+
+  it("newDefaultSlot uses depth 50", () => {
+    expect(newDefaultSlot("kick").depth).toBe(50);
+  });
+
+  it("mult steps through faster-than-1/1 rates", () => {
+    const slot = { ...newDefaultSlot("kick"), num: 1, den: 1 };
+    const { slot: faster } = applySlotField(slot, "kick", "mult", -1);
+    expect(faster.num).toBe(1);
+    expect(faster.den).toBe(2);
+  });
+
+  it("phase adjusts in 0.05 steps", () => {
+    const slot = { ...newDefaultSlot("kick"), phase: 0 };
+    const { slot: next } = applySlotField(slot, "kick", "phase", 1);
+    expect(next.phase).toBe(0.05);
+  });
+
+  it("enabling shape from off sets depth to 50 when depth was 0", () => {
+    const slot = { ...newDefaultSlot("kick"), shape: 0, depth: 0 };
+    const { slot: next } = applySlotField(slot, "kick", "shape", 1);
+    expect(next.shape).not.toBe(0);
+    expect(next.depth).toBe(50);
+  });
 });
 
 describe("viewModel", () => {

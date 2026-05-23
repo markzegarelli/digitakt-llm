@@ -30,9 +30,9 @@ export function LFOPanel({
   const fields = [
     { k: "shape", label: "SHAPE", val: (LFO_SHAPES[lfo.shape] ?? "off").toUpperCase() },
     { k: "dest", label: "DEST", val: (LFO_DESTS[lfo.dest] ?? "filter").toUpperCase() },
-    { k: "depth", label: "DEPTH", val: lfo.depth, max: 127, bar: true },
-    { k: "speed", label: "SPEED", val: lfo.speed, max: 127, bar: true },
+    { k: "depth", label: "DEPTH", val: `${lfo.depth}%`, max: 100, bar: true, barVal: lfo.depth },
     { k: "mult", label: "MULT", val: `${lfo.num}/${lfo.den}` },
+    { k: "phase", label: "PHASE", val: lfo.phase.toFixed(2) },
     { k: "mode", label: "MODE", val: LFO_MODES[lfo.mode] ?? "FREE" },
   ];
   const cur = view.ui.cursor.lfoField;
@@ -45,7 +45,7 @@ export function LFOPanel({
           <span className="d">track {t.id}</span>
         </div>
         <span className="d" style={{ fontSize: 10 }}>
-          ↑↓ field · ↔ value · ( ) prev/next · +/- add/del
+          ←→ field · ↑↓ value · ( ) prev/next · +/- add/del
         </span>
       </div>
       <div className="lfo-slot-row">
@@ -89,7 +89,7 @@ export function LFOPanel({
           ) : null,
         )}
       </div>
-      <LfoWaveGraph lfo={lfo} lfoIdx={lfoIdx} view={view} activeCount={activeCount} />
+      <LfoWaveGraph lfo={lfo} lfoIdx={lfoIdx} view={view} track={t} activeCount={activeCount} />
       <div className="lfo-param-grid">
         {fields.map((f, i) => {
           const sel = focused && cur === i;
@@ -98,7 +98,7 @@ export function LFOPanel({
               <span className="lfo-param-label">{f.label}</span>
               {f.bar ? (
                 <div className="lfo-param-value">
-                  <Bar value={f.val as number} max={f.max} active={sel} />
+                  <Bar value={(f as { barVal?: number }).barVal ?? 0} max={f.max} active={sel} />
                   <span className={sel ? "y b" : "y"}>{f.val}</span>
                 </div>
               ) : (
@@ -137,8 +137,8 @@ export function LfoSummary({
             role="button"
             tabIndex={-1}
           >
-            <span className={isSel ? "y b" : ""}>{track.id}</span>
-            <span className={pill ? "lfo-route-pill" : "d"}>{pill ?? "—"}</span>
+            <span className={`lfo-summary-track${isSel ? " y b" : ""}`}>{track.id}</span>
+            <span className={`lfo-route-pill${pill ? "" : " empty"}`}>{pill ?? "—"}</span>
             <span className="d">
               {activeLfos.length}/{track.lfos.length}
             </span>
