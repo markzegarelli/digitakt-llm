@@ -192,6 +192,15 @@
   color: var(--text-dim);
 }
 
+.lfo-graph-overlay-out {
+  top: 6px;
+  right: 8px;
+  left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
 .lfo-graph-overlay-bottom {
   bottom: 28px;
   color: var(--text-dim);
