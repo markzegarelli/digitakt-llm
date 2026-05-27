@@ -2,14 +2,16 @@ import { describe, it, expect } from "vitest";
 import { formatGenerationReply } from "../src/lib/chatDisplay.js";
 
 describe("formatGenerationReply", () => {
-  it("includes track summary and producer notes", () => {
+  it("includes parsed response metadata and producer notes", () => {
     const text = formatGenerationReply({
       prompt: "techno",
       track_summary: "BDx4  CHx8",
       latency_ms: 1200,
       producer_notes: "Try a sub-bass on /2.",
+      parsed_response: "BPM 140 · swing 25\n\nTry a sub-bass on /2.",
     });
     expect(text).toContain("Pattern: BDx4  CHx8 · 1200ms");
+    expect(text).toContain("BPM 140");
     expect(text).toContain("Try a sub-bass on /2.");
   });
 

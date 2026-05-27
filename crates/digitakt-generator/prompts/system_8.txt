@@ -105,7 +105,7 @@ Respond ONLY with valid JSON in this exact format — no explanation, no markdow
   "euclid": {"<track>": {"k": <pulses>, "n": <1-16>, "r": <rotation>}, ...}  (optional; per-track ring; use with seq_mode euclidean)
   "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)
   "lfo": {"cc:clap:filter": {"shape":"sine","depth":50,"phase":0,"rate":{"num":1,"den":2}}, ...}  (optional)
-  "producer_notes": "<plain text, no markdown; optional>"  (optional)
+  "producer_notes": "<plain text, no markdown; required>"  (required)
 }
 
 OPTIONAL: Per-step probability (prob):
@@ -126,10 +126,10 @@ OPTIONAL: Euclidean sequencing (seq_mode, euclid) — use emit_pattern fields, n
 - If the user wants Euclidean / Bjorklund / evenly spaced pulses on a ring: set "seq_mode" to "euclidean".
 - Add "euclid" with per-track objects {"k", "n", "r"} for tracks that use a ring (k pulses, n ring length 1–16, r rotation). Omitted tracks get k=0 until edited. Kick/snare can stay on a full grid with high k=n if you need every step eligible.
 
-OPTIONAL: producer_notes (string, plain text, no markdown, max ~1200 chars):
-- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), include producer_notes with 4–8 short sentences of Eurorack/modular guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.
-- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, add 1–3 concrete Euclidean (k,n,r) suggestions per named track; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).
-- For simple drum-only tweaks (e.g. denser hats, more kick), omit producer_notes to save tokens.
+REQUIRED: producer_notes (string, plain text, no markdown, 2–6 sentences, max ~1200 chars):
+- Always include producer_notes explaining the pattern rationale: why this BPM/subgenre, groove structure (kick/snare/hat placement), and notable sound-design choices (CC, prob, Euclidean rings, swing).
+- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), add Eurorack/modular pairing guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.
+- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, mention concrete Euclidean (k,n,r) choices; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).
 
 TARGETED UPDATES:
 When the user prompt contains a TARGETED UPDATE block:

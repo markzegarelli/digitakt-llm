@@ -194,7 +194,8 @@ def _emit_pattern_tool_schema(steps: int) -> dict:
         "name": "emit_pattern",
         "description": (
             "Submit the complete drum pattern as structured data. "
-            "Include all eight tracks; use optional prob/swing/cc/lfo/producer_notes when relevant. "
+            "Include all eight tracks and required producer_notes (pattern rationale). "
+            "Use optional prob/swing/cc/lfo when relevant. "
             "When the user wants Euclidean (Bjorklund) ring gating, set seq_mode to euclidean and "
             "include euclid per track (k pulses, n ring length 1–16, r rotation 0…n−1)."
         ),
@@ -216,9 +217,16 @@ def _emit_pattern_tool_schema(steps: int) -> dict:
                         "(cc:<track>:<param>, trig:<track>:prob|vel|gate|note, pitch:<track>:main)."
                     ),
                 },
-                "producer_notes": {"type": "string", "maxLength": _PRODUCER_NOTES_MAX_LEN},
+                "producer_notes": {
+                    "type": "string",
+                    "maxLength": _PRODUCER_NOTES_MAX_LEN,
+                    "description": (
+                        "Required. 2–6 plain-text sentences explaining BPM/subgenre choice, "
+                        "groove structure, and notable sound-design decisions."
+                    ),
+                },
             },
-            "required": list(TRACK_NAMES),
+            "required": [*TRACK_NAMES, "producer_notes"],
         },
     }
 
@@ -503,8 +511,103 @@ def _normalize_producer_notes(raw: str) -> str | None:
     return text if text else None
 
 
+def _format_parsed_response(
+    pattern: dict,
+    bpm: int | None,
+    cc_changes: dict,
+    producer_notes: str | None,
+    steps: int,
+) -> str:
+    """Human-readable summary of non-step metadata from the LLM emit_pattern payload."""
+    lines: list[str] = []
+
+    tempo_bits: list[str] = []
+    if bpm is not None:
+        tempo_bits.append(f"BPM {bpm}")
+    swing = pattern.get("swing")
+    if isinstance(swing, (int, float)) and int(swing) != 0:
+        tempo_bits.append(f"swing {int(swing)}")
+    if tempo_bits:
+        lines.append(" · ".join(tempo_bits))
+
+    if pattern.get("seq_mode") == SEQ_MODE_EUCLIDEAN:
+        lines.append("Sequencing: euclidean")
+
+    euclid = pattern.get("euclid")
+    if isinstance(euclid, dict) and euclid:
+        ebits: list[str] = []
+        for track in TRACK_NAMES:
+            row = euclid.get(track)
+            if not isinstance(row, dict):
+                continue
+            k, n, r = row.get("k"), row.get("n"), row.get("r")
+            if isinstance(k, int) and isinstance(n, int) and k > 0:
+                rot = r if isinstance(r, int) else 0
+                ebits.append(f"{track} ({k},{n},{rot})")
+        if ebits:
+            lines.append("Euclid: " + ", ".join(ebits))
+
+    if cc_changes:
+        cc_bits: list[str] = []
+        for track in TRACK_NAMES:
+            params = cc_changes.get(track)
+            if not params:
+                continue
+            param_str = ", ".join(f"{param}={value}" for param, value in sorted(params.items()))
+            cc_bits.append(f"{track} {param_str}")
+        if cc_bits:
+            lines.append("CC: " + "; ".join(cc_bits))
+
+    prob = pattern.get("prob")
+    if isinstance(prob, dict) and prob:
+        pbits: list[str] = []
+        for track in TRACK_NAMES:
+            vals = prob.get(track)
+            if not isinstance(vals, list) or len(vals) != steps:
+                continue
+            varied = sum(1 for v in vals if isinstance(v, int) and v < 100)
+            if varied:
+                lo = min(v for v in vals if isinstance(v, int))
+                hi = max(v for v in vals if isinstance(v, int))
+                pbits.append(f"{track} {varied} steps ({lo}–{hi}%)")
+        if pbits:
+            lines.append("Prob: " + "; ".join(pbits))
+
+    lfo = pattern.get("lfo")
+    if isinstance(lfo, dict) and lfo:
+        lbits: list[str] = []
+        for target, spec in sorted(lfo.items()):
+            if not isinstance(spec, dict):
+                continue
+            shape = spec.get("shape", "?")
+            depth = spec.get("depth", "?")
+            rate = spec.get("rate")
+            rate_s = ""
+            if isinstance(rate, dict):
+                num = rate.get("num", 1)
+                den = rate.get("den", 1)
+                rate_s = f" {num}/{den}"
+            lbits.append(f"{target} {shape} depth={depth}{rate_s}")
+        if lbits:
+            lines.append("LFO: " + "; ".join(lbits[:6]))
+
+    if producer_notes:
+        if lines:
+            lines.append("")
+        lines.append(producer_notes)
+
+    return "\n".join(lines)
+
+
 def _compute_generation_summary(
-    prompt: str, pattern: dict, latency_ms: int, producer_notes: str | None = None
+    prompt: str,
+    pattern: dict,
+    latency_ms: int,
+    producer_notes: str | None = None,
+    *,
+    bpm: int | None = None,
+    cc_changes: dict | None = None,
+    steps: int = 16,
 ) -> dict:
     """Return compact generation telemetry for the TUI."""
     abbreviations = {
@@ -519,8 +622,8 @@ def _compute_generation_summary(
     }
     parts: list[str] = []
     for track in TRACK_NAMES:
-        steps = pattern.get(track, [])
-        active = sum(1 for v in steps if isinstance(v, int) and v > 0)
+        track_steps = pattern.get(track, [])
+        active = sum(1 for v in track_steps if isinstance(v, int) and v > 0)
         if active > 0:
             parts.append(f"{abbreviations.get(track, track[:2].upper())}x{active}")
     summary: dict = {
@@ -528,6 +631,11 @@ def _compute_generation_summary(
         "track_summary": "  ".join(parts) if parts else "empty",
         "latency_ms": latency_ms,
     }
+    parsed_response = _format_parsed_response(
+        pattern, bpm, cc_changes or {}, producer_notes, steps
+    )
+    if parsed_response:
+        summary["parsed_response"] = parsed_response
     if producer_notes:
         summary["producer_notes"] = producer_notes
     return summary
@@ -641,7 +749,7 @@ def _build_system_prompt(steps: int = 16) -> str:
         '  "euclid": {"<track>": {"k": <pulses>, "n": <1-16>, "r": <rotation>}, ...}  (optional; per-track ring; use with seq_mode euclidean)\n'
         '  "cc": {"<track>": {"<param>": <0-127>, ...}, ...}  (optional)\n'
         '  "lfo": {"cc:clap:filter": {"shape":"sine","depth":50,"phase":0,"rate":{"num":1,"den":2}}, ...}  (optional)\n'
-        '  "producer_notes": "<plain text, no markdown; optional>"  (optional)\n'
+        '  "producer_notes": "<plain text, no markdown; required>"  (required)\n'
         "}"
         "\n\nOPTIONAL: Per-step probability (prob):\n"
         f"- Add a \"prob\" key containing a dict of track → {steps}-element list of integers (0–100).\n"
@@ -660,10 +768,10 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- If the user wants Euclidean / Bjorklund / evenly spaced pulses on a ring: set \"seq_mode\" to \"euclidean\".\n"
         "- Add \"euclid\" with per-track objects {\"k\", \"n\", \"r\"} for tracks that use a ring (k pulses, n ring length 1–16, r rotation). "
         "Omitted tracks get k=0 until edited. Kick/snare can stay on a full grid with high k=n if you need every step eligible.\n\n"
-        "OPTIONAL: producer_notes (string, plain text, no markdown, max ~1200 chars):\n"
-        "- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), include producer_notes with 4–8 short sentences of Eurorack/modular guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.\n"
-        "- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, add 1–3 concrete Euclidean (k,n,r) suggestions per named track; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).\n"
-        "- For simple drum-only tweaks (e.g. denser hats, more kick), omit producer_notes to save tokens.\n\n"
+        "REQUIRED: producer_notes (string, plain text, no markdown, 2–6 sentences, max ~1200 chars):\n"
+        "- Always include producer_notes explaining the pattern rationale: why this BPM/subgenre, groove structure (kick/snare/hat placement), and notable sound-design choices (CC, prob, Euclidean rings, swing).\n"
+        "- When the prompt implies genre world-building or accompaniment (e.g. hypnotic techno, modular, bassline, melody, pads, hooks), add Eurorack/modular pairing guidance: clock/mults, voice roles, register vs kick/sub, sequence length vs this drum loop, minimal counter-melody, filter movement. Do not imply this software controls modular hardware.\n"
+        "- When polyrhythm, hypnotic cycles, or uneven peripheral percussion fit the request, mention concrete Euclidean (k,n,r) choices; if the user asked for Euclidean sequencing, emit seq_mode/euclid in emit_pattern (not producer_notes alone).\n\n"
         "TARGETED UPDATES / INCREMENTAL BUILDING:\n"
         "When the user prompt contains a TARGETED UPDATE block (including part-by-part builds):\n"
         "- Copy every PRESERVE track verbatim, step-for-step, from the previous pattern\n"
@@ -1059,7 +1167,13 @@ class Generator:
             self._add_to_history("assistant", f"[generated pattern at {bpm or self.state.bpm} BPM]")
             latency_ms = int((time.monotonic() - t0) * 1000)
             summary = _compute_generation_summary(
-                prompt, pattern, latency_ms, producer_notes
+                prompt,
+                pattern,
+                latency_ms,
+                producer_notes,
+                bpm=bpm,
+                cc_changes=cc_changes,
+                steps=steps,
             )
             self.bus.emit(
                 "generation_complete",

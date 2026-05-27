@@ -503,11 +503,143 @@ pub fn coerce_pattern_dict(
     Some((pattern, bpm, cc_changes, producer_notes))
 }
 
+pub fn format_parsed_response(
+    pattern: &Pattern,
+    bpm: Option<i64>,
+    cc_changes: &HashMap<String, HashMap<String, i64>>,
+    producer_notes: Option<&str>,
+    steps: usize,
+) -> String {
+    let mut lines: Vec<String> = Vec::new();
+
+    let mut tempo_bits: Vec<String> = Vec::new();
+    if let Some(b) = bpm {
+        tempo_bits.push(format!("BPM {b}"));
+    }
+    if let Some(swing) = pattern.get("swing").and_then(|v| v.as_i64()) {
+        if swing != 0 {
+            tempo_bits.push(format!("swing {swing}"));
+        }
+    }
+    if !tempo_bits.is_empty() {
+        lines.push(tempo_bits.join(" · "));
+    }
+
+    if pattern.get("seq_mode").and_then(|v| v.as_str()) == Some(SEQ_MODE_EUCLIDEAN) {
+        lines.push("Sequencing: euclidean".into());
+    }
+
+    if let Some(eu) = pattern.get("euclid").and_then(|v| v.as_object()) {
+        let mut ebits: Vec<String> = Vec::new();
+        for track in TRACK_NAMES {
+            let Some(row) = eu.get(track).and_then(|v| v.as_object()) else {
+                continue;
+            };
+            let k = row.get("k").and_then(|v| v.as_i64()).unwrap_or(0);
+            let n = row.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+            let r = row.get("r").and_then(|v| v.as_i64()).unwrap_or(0);
+            if k > 0 {
+                ebits.push(format!("{track} ({k},{n},{r})"));
+            }
+        }
+        if !ebits.is_empty() {
+            lines.push(format!("Euclid: {}", ebits.join(", ")));
+        }
+    }
+
+    if !cc_changes.is_empty() {
+        let mut cc_bits: Vec<String> = Vec::new();
+        for track in TRACK_NAMES {
+            let Some(params) = cc_changes.get(track) else {
+                continue;
+            };
+            let mut pairs: Vec<_> = params.iter().collect();
+            pairs.sort_by(|a, b| a.0.cmp(b.0));
+            let param_str = pairs
+                .iter()
+                .map(|(p, v)| format!("{p}={v}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            cc_bits.push(format!("{track} {param_str}"));
+        }
+        if !cc_bits.is_empty() {
+            lines.push(format!("CC: {}", cc_bits.join("; ")));
+        }
+    }
+
+    if let Some(prob) = pattern.get("prob").and_then(|v| v.as_object()) {
+        let mut pbits: Vec<String> = Vec::new();
+        for track in TRACK_NAMES {
+            let Some(vals) = prob.get(track).and_then(|v| v.as_array()) else {
+                continue;
+            };
+            if vals.len() != steps {
+                continue;
+            }
+            let ints: Vec<i64> = vals.iter().filter_map(|v| v.as_i64()).collect();
+            let varied = ints.iter().filter(|v| **v < 100).count();
+            if varied > 0 {
+                let lo = ints.iter().copied().min().unwrap_or(0);
+                let hi = ints.iter().copied().max().unwrap_or(0);
+                pbits.push(format!("{track} {varied} steps ({lo}–{hi}%)"));
+            }
+        }
+        if !pbits.is_empty() {
+            lines.push(format!("Prob: {}", pbits.join("; ")));
+        }
+    }
+
+    if let Some(lfo) = pattern.get("lfo").and_then(|v| v.as_object()) {
+        let mut lbits: Vec<String> = Vec::new();
+        let mut targets: Vec<_> = lfo.keys().collect();
+        targets.sort();
+        for target in targets {
+            let Some(spec) = lfo.get(target).and_then(|v| v.as_object()) else {
+                continue;
+            };
+            let shape = spec
+                .get("shape")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let depth = spec
+                .get("depth")
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "?".into());
+            let rate_s = spec
+                .get("rate")
+                .and_then(|v| v.as_object())
+                .map(|rate| {
+                    let num = rate.get("num").and_then(|v| v.as_i64()).unwrap_or(1);
+                    let den = rate.get("den").and_then(|v| v.as_i64()).unwrap_or(1);
+                    format!(" {num}/{den}")
+                })
+                .unwrap_or_default();
+            lbits.push(format!("{target} {shape} depth={depth}{rate_s}"));
+        }
+        if !lbits.is_empty() {
+            let shown: Vec<_> = lbits.into_iter().take(6).collect();
+            lines.push(format!("LFO: {}", shown.join("; ")));
+        }
+    }
+
+    if let Some(notes) = producer_notes {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.push(notes.to_string());
+    }
+
+    lines.join("\n")
+}
+
 pub fn compute_generation_summary(
     prompt: &str,
     pattern: &Pattern,
     latency_ms: i64,
     producer_notes: Option<&str>,
+    bpm: Option<i64>,
+    cc_changes: &HashMap<String, HashMap<String, i64>>,
+    steps: usize,
 ) -> Map<String, Value> {
     let abbrev: HashMap<&str, &str> = HashMap::from([
         ("kick", "BD"),
@@ -540,6 +672,10 @@ pub fn compute_generation_summary(
         ),
         ("latency_ms".into(), json!(latency_ms)),
     ]);
+    let parsed_response = format_parsed_response(pattern, bpm, cc_changes, producer_notes, steps);
+    if !parsed_response.is_empty() {
+        summary.insert("parsed_response".into(), json!(parsed_response));
+    }
     if let Some(n) = producer_notes {
         summary.insert("producer_notes".into(), json!(n));
     }

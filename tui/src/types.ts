@@ -194,6 +194,7 @@ export interface DigitaktState {
     track_summary: string;
     latency_ms: number;
     producer_notes?: string;
+    parsed_response?: string;
   } | null;
   seq_mode: "standard" | "euclidean";
   euclid: Record<TrackName, { k: number; n: number; r: number }>;

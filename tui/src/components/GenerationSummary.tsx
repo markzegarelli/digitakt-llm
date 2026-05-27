@@ -8,6 +8,7 @@ interface GenerationSummaryProps {
     track_summary: string;
     latency_ms: number;
     producer_notes?: string;
+    parsed_response?: string;
   } | null;
   generationStatus: "idle" | "generating" | "failed";
   lastPrompt: string | null | undefined;
@@ -79,7 +80,7 @@ export function GenerationSummary({
   const displayPrompt = summary?.prompt ?? lastPrompt ?? "";
   const truncated = displayPrompt.length > 56 ? `${displayPrompt.slice(0, 55)}\u2026` : displayPrompt;
 
-  const rawNotes = summary?.producer_notes?.trim();
+  const rawNotes = summary?.parsed_response?.trim() || summary?.producer_notes?.trim();
   const noteLines = rawNotes ? wrapProducerNotes(rawNotes) : [];
   const truncatedNotes =
     noteLines.length > NOTES_MAX_LINES
@@ -109,7 +110,7 @@ export function GenerationSummary({
       {truncatedNotes.length > 0 && (
         <Box flexDirection="column" marginTop={0}>
           <Text bold color={theme.textDim}>
-            NOTES{" "}
+            RATIONALE{" "}
           </Text>
           {truncatedNotes.map((ln, i) => (
             <Text key={i} color={theme.textDim}>
