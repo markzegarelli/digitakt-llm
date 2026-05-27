@@ -9,7 +9,9 @@ from core.generator import (
     _compute_generation_summary,
     _detect_global_rewrite,
     _detect_global_variation,
+    _detect_param_only_update,
     _detect_target_tracks,
+    _merge_preserved_steps_only,
     _merge_preserved_tracks,
     _normalize_producer_notes,
     _opus_max_output_tokens,
@@ -795,6 +797,81 @@ def test_build_user_prompt_targeted_preserves_other_tracks():
 
     assert "PRESERVE" in prompt
     assert "hihat" not in prompt.split("PRESERVE")[1].split("\n")[0]
+
+
+def test_detect_param_only_update_closed_hat_probability():
+    prompt = (
+        "update the probability of the closed hat hits, set it between 40 and 100"
+    )
+    result = _detect_param_only_update(prompt)
+    assert result is not None
+    tracks, fields = result
+    assert tracks == {"hihat"}
+    assert "prob" in fields
+
+
+def test_detect_param_only_update_rejects_step_rewrite():
+    assert _detect_param_only_update("add more closed hat hits") is None
+    assert _detect_param_only_update("make it sparser") is None
+
+
+def test_build_user_prompt_param_only_injects_constraint():
+    state = AppState()
+    state.last_prompt = "techno beat"
+    state.current_pattern = VALID_PATTERN.copy()
+    state.current_pattern["hihat"] = [0, 80, 0, 80] + [0] * 12
+    bus = EventBus()
+    gen = Generator(state, bus)
+
+    prompt = gen._build_user_prompt(
+        "update the probability of the closed hat hits, set it between 40 and 100",
+        variation=True,
+    )
+
+    assert "parameter-only" in prompt
+    assert "probability" in prompt
+    assert "hihat" in prompt
+    assert "40–100" in prompt
+    assert "MODIFY: hihat" not in prompt
+
+
+def test_merge_preserved_steps_only_restores_hits_not_prob():
+    existing = {k: [0] * 16 for k in TRACK_NAMES}
+    existing["hihat"] = [0, 80, 0, 80] + [0] * 12
+    existing["prob"] = {"hihat": [100] * 16}
+    incoming = {k: [0] * 16 for k in TRACK_NAMES}
+    incoming["hihat"] = [80] * 16
+    incoming["prob"] = {"hihat": [50] * 16}
+    _merge_preserved_steps_only(incoming, existing, {"hihat"}, 16)
+    assert incoming["hihat"] == existing["hihat"]
+    assert incoming["prob"]["hihat"] == [50] * 16
+
+
+def test_run_param_only_preserves_hat_hit_positions():
+    state = AppState()
+    state.current_pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    state.current_pattern["kick"][0] = 100
+    state.current_pattern["hihat"] = [0, 80, 0, 80] + [0] * 12
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+
+    llm_out = {k: [0] * 16 for k in TRACK_NAMES}
+    llm_out["kick"] = [100] + [0] * 15
+    llm_out["hihat"] = [80] * 16
+    llm_out["prob"] = {"hihat": [60, 60, 60, 60] + [60] * 12}
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client_tool(llm_out)
+    gen._run(
+        "update the probability of the closed hat hits, set it between 40 and 100",
+        variation=True,
+    )
+
+    assert len(events) == 1
+    pat = events[0]["pattern"]
+    assert pat["kick"][0] == 100
+    assert pat["hihat"] == state.current_pattern["hihat"]
+    assert pat["prob"]["hihat"][1] == 60
 
 
 def test_build_user_prompt_no_target_preserves_content_tracks():

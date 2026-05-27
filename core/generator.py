@@ -275,6 +275,78 @@ _GLOBAL_VARIATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_PARAM_FIELD_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("prob", re.compile(r"\b(?:prob(?:ability)?)\b", re.IGNORECASE)),
+    ("gate", re.compile(r"\b(?:gate|length)\b", re.IGNORECASE)),
+    ("vel", re.compile(r"\b(?:velocity|vel(?:ocity)?)\b", re.IGNORECASE)),
+    ("note", re.compile(r"\b(?:note|pitch)\b", re.IGNORECASE)),
+    ("cond", re.compile(r"\b(?:conditional|cond(?:ition)?)\b", re.IGNORECASE)),
+    ("swing", re.compile(r"\bswing\b", re.IGNORECASE)),
+    ("cc", re.compile(
+        r"\b(?:cc|tune|filter|resonance|res(?:onance)?|attack|decay|volume|reverb|delay)\b",
+        re.IGNORECASE,
+    )),
+    ("lfo", re.compile(r"\blfo\b", re.IGNORECASE)),
+)
+
+_PARAM_FIELD_LABELS: dict[str, str] = {
+    "prob": "probability",
+    "gate": "gate",
+    "vel": "velocity",
+    "note": "note",
+    "cond": "conditional trig",
+    "swing": "swing",
+    "cc": "CC",
+    "lfo": "LFO",
+}
+
+_STEP_REWRITE_RE = re.compile(
+    r"(?:"
+    r"\b(?:add|remove|delete|drop|cut|introduce|inject)\s+(?:more\s+)?(?:hits?|steps?|trigs?|notes?)\b|"
+    r"\b(?:more|fewer|less|extra|additional|new)\s+(?:hits?|steps?|trigs?|notes?)\b|"
+    r"\b(?:denser|sparser|busier|quieter)\s+(?:pattern|groove|beat|rhythm)\b|"
+    r"\b(?:offbeat|syncopated|polyrhythm|euclidean|fill)\b|"
+    r"\b(?:pattern|groove|rhythm|beat|sequence|arrangement)\s+(?:change|rewrite|redo)\b|"
+    r"\b(?:move|shift|relocate)\s+(?:hits?|steps?)\b|"
+    r"\b(?:rewrite|rework|rebuild)\s+(?:the\s+)?(?:pattern|groove|beat)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+_PARAM_RANGE_RE = re.compile(
+    r"\b(?:between|from)\s+(\d+)\s+(?:and|to|-)\s+(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _detect_param_fields(prompt: str) -> set[str]:
+    return {name for name, pat in _PARAM_FIELD_PATTERNS if pat.search(prompt)}
+
+
+def _detect_param_only_update(prompt: str) -> tuple[set[str], set[str]] | None:
+    """When the prompt tweaks parameters on named tracks without rewriting step hits."""
+    if _detect_global_rewrite(prompt) or _detect_global_variation(prompt):
+        return None
+    if _STEP_REWRITE_RE.search(prompt):
+        return None
+    fields = _detect_param_fields(prompt)
+    if not fields:
+        return None
+    targets = _detect_target_tracks(prompt)
+    if not targets:
+        return None
+    return targets, fields
+
+
+def _format_param_range_hint(prompt: str) -> str:
+    m = _PARAM_RANGE_RE.search(prompt)
+    if not m:
+        return ""
+    lo, hi = int(m.group(1)), int(m.group(2))
+    if lo > hi:
+        lo, hi = hi, lo
+    return f" (use values {lo}–{hi} where applicable)"
+
 
 def _track_has_content(pattern: dict, track: str, steps: int) -> bool:
     """True when the track has at least one non-silent step in the live pattern."""
@@ -311,7 +383,35 @@ def _resolve_preserve_tracks(
     return content
 
 
-def _format_targeted_update_block(preserve: set[str], modify: set[str]) -> str:
+def _format_targeted_update_block(
+    preserve: set[str],
+    modify: set[str],
+    *,
+    param_only: tuple[set[str], set[str]] | None = None,
+    param_range_hint: str = "",
+) -> str:
+    if param_only:
+        tracks, fields = param_only
+        labels = ", ".join(_PARAM_FIELD_LABELS.get(f, f) for f in sorted(fields))
+        track_list = ", ".join(sorted(tracks))
+        lines = [
+            "TARGETED UPDATE — parameter-only (do not add, remove, or move hits):",
+            f"  ADJUST {labels} on: {track_list}{param_range_hint}",
+            "  Keep every existing hit position on those tracks; change only the requested parameter.",
+        ]
+        if preserve:
+            lines.append(
+                "  PRESERVE EXACTLY (copy steps and all params from previous pattern): "
+                + ", ".join(sorted(preserve))
+            )
+        if tracks:
+            lines.append(
+                "  PRESERVE STEP POSITIONS on adjusted tracks (hits only): "
+                + ", ".join(sorted(tracks))
+            )
+        lines.append("")
+        return "\n".join(lines)
+
     lines = ["TARGETED UPDATE — only modify the listed tracks:"]
     if modify:
         lines.append(f"  MODIFY: {', '.join(sorted(modify))}")
@@ -373,6 +473,19 @@ def _merge_preserved_tracks(
         for track in preserve:
             if track in ex_eu:
                 pat_eu[track] = copy.deepcopy(ex_eu[track])
+
+
+def _merge_preserved_steps_only(
+    pattern: dict, existing: dict, tracks: set[str], steps: int
+) -> None:
+    """In-place: restore only velocity step rows for tracks (params may differ)."""
+    if not tracks:
+        return
+    st = AppState()
+    st.pattern_length = steps
+    ex = st.normalize_pattern_length(copy.deepcopy(existing))
+    for track in tracks:
+        pattern[track] = list(ex[track])
 
 
 def _normalize_producer_notes(raw: str) -> str | None:
@@ -557,6 +670,7 @@ def _build_system_prompt(steps: int = 16) -> str:
         "- Only generate new hits for MODIFY tracks; silent tracks stay silent unless named in MODIFY\n"
         "- Tracks that already have hits must never be rewritten unless listed under MODIFY\n"
         "- CC/swing/prob changes may apply to any track mentioned in the request\n"
+        "- PARAMETER-ONLY blocks: keep hit positions on listed tracks; adjust only the named parameter\n"
         "- Whole-pattern rewrites (sparser, denser, variation, from scratch, all tracks) omit PRESERVE\n\n"
         "IMPORTANT: Call the emit_pattern tool with the full pattern as its arguments. "
         "If tools cannot be used, output ONLY the JSON object — no text before or after, no markdown fences."
@@ -771,9 +885,21 @@ class Generator:
                 prompt, self.state.current_pattern, steps, variation=True
             )
             modify = _detect_target_tracks(prompt)
+            param_only = _detect_param_only_update(prompt)
+            preserve_steps_only: set[str] = set()
+            if param_only:
+                param_targets, _param_fields = param_only
+                preserve_steps_only = param_targets
+                modify = modify - param_targets
             constraint = (
-                _format_targeted_update_block(preserve, modify) + "\n"
-                if preserve or modify
+                _format_targeted_update_block(
+                    preserve,
+                    modify,
+                    param_only=param_only,
+                    param_range_hint=_format_param_range_hint(prompt),
+                )
+                + "\n"
+                if preserve or modify or param_only
                 else ""
             )
             prev_prompt_line = (
@@ -901,7 +1027,10 @@ class Generator:
             pattern, bpm, cc_changes, producer_notes = result
             existing = self.state.current_pattern or {}
             preserve = _resolve_preserve_tracks(prompt, existing, steps, variation)
+            param_only = _detect_param_only_update(prompt) if variation else None
+            preserve_steps_only = param_only[0] if param_only else set()
             _merge_preserved_tracks(pattern, existing, preserve, steps)
+            _merge_preserved_steps_only(pattern, existing, preserve_steps_only, steps)
             # If emit_pattern omits seq_mode / euclid, preserve them from the live pattern so a
             # generation does not silently revert the user's sequencing mode or wipe ring settings.
             if "seq_mode" not in pattern and isinstance(existing.get("seq_mode"), str):

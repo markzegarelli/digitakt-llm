@@ -119,7 +119,7 @@ export function App() {
         actions.setCC(t.name, normalizeCcParamAlias(apiParam), next);
       },
       nudgeTrig: (delta: number, shift: boolean) => {
-        const d = shift ? delta : delta;
+        const d = shift ? delta * 10 : delta;
         const tr = track.trigs[ui.cursor.step]!;
         const field = ui.cursor.trigField;
         if (field === 0) actions.setProb(track.name, step, clamp(tr.prob + d, 0, 100));

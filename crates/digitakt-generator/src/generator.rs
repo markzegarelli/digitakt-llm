@@ -11,8 +11,10 @@ use regex::Regex;
 use serde_json::{json, Map, Value};
 
 use crate::coerce::{
-    coerce_pattern_dict, compute_generation_summary, detect_target_tracks,
-    opus_max_output_tokens, parse_ask_response, serialize_pattern_for_llm,
+    coerce_pattern_dict, compute_generation_summary, detect_param_only_update, detect_target_tracks,
+    format_param_range_hint, format_targeted_update_block, merge_preserved_steps_only,
+    merge_preserved_tracks, opus_max_output_tokens, parse_ask_response, resolve_preserve_tracks,
+    serialize_pattern_for_llm,
 };
 use crate::prompts::{help_system_prompt, system_prompt_for_steps};
 use crate::injectable_profiles::build_injectable_context_prefix;
@@ -265,6 +267,25 @@ impl GeneratorHandle {
 
                 match parsed {
                     Some((mut pattern, bpm, cc_changes, producer_notes)) => {
+                        let existing = self.state.current_pattern();
+                        if variation && !existing.is_empty() {
+                            let preserve = resolve_preserve_tracks(
+                                prompt,
+                                &existing,
+                                steps,
+                                variation,
+                            );
+                            let preserve_steps_only = detect_param_only_update(prompt)
+                                .map(|(tracks, _)| tracks)
+                                .unwrap_or_default();
+                            merge_preserved_tracks(&mut pattern, &existing, &preserve, steps);
+                            merge_preserved_steps_only(
+                                &mut pattern,
+                                &existing,
+                                &preserve_steps_only,
+                                steps,
+                            );
+                        }
                         self.merge_existing_metadata(&mut pattern);
                         self.state.update_pattern(pattern.clone(), Some(prompt));
                         self.state.queue_pattern(pattern.clone());
@@ -360,42 +381,64 @@ impl GeneratorHandle {
 
     fn build_user_prompt(&self, prompt: &str, variation: bool) -> String {
         let context_prefix = build_injectable_context_prefix(prompt);
-        if variation {
-            if let (Some(last), pat) = (self.state.last_prompt(), self.state.current_pattern()) {
-                if !pat.is_empty() {
-                    let steps = self.state.pattern_length() as usize;
-                    let pattern_json = serialize_pattern_for_llm(&pat, steps);
-                    let targets = detect_target_tracks(prompt);
-                    let constraint = if !targets.is_empty() {
-                        let preserve: Vec<_> = TRACK_NAMES
-                            .iter()
-                            .filter(|t| !targets.contains(**t))
-                            .copied()
-                            .collect();
-                        let modify: Vec<_> = TRACK_NAMES
-                            .iter()
-                            .filter(|t| targets.contains(**t))
-                            .copied()
-                            .collect();
-                        format!(
-                            "TARGETED UPDATE — only modify the listed tracks:\n  MODIFY: {}\n  PRESERVE EXACTLY (copy steps verbatim from previous pattern): {}\n\n",
-                            modify.join(", "),
-                            preserve.join(", ")
-                        )
-                    } else {
-                        String::new()
-                    };
-                    return format!(
-                        "{context_prefix}{constraint}Previous prompt: {last}\nPrevious pattern: {pattern_json}\n\nApply this variation: {prompt}"
-                    );
+        let state_ctx = self.build_state_context();
+            if variation {
+            let pat = self.state.current_pattern();
+            if !pat.is_empty() {
+                let steps = self.state.pattern_length() as usize;
+                let pattern_json = serialize_pattern_for_llm(&pat, steps);
+                let mut modify = detect_target_tracks(prompt);
+                let param_only = detect_param_only_update(prompt);
+                let preserve_steps_only = param_only
+                    .as_ref()
+                    .map(|(tracks, _)| tracks.clone())
+                    .unwrap_or_default();
+                if param_only.is_some() {
+                    modify = modify
+                        .difference(&preserve_steps_only)
+                        .copied()
+                        .collect();
                 }
+                let preserve = resolve_preserve_tracks(prompt, &pat, steps, true);
+                let constraint = if !preserve.is_empty() || !modify.is_empty() || param_only.is_some()
+                {
+                    format_targeted_update_block(
+                        &preserve,
+                        &modify,
+                        param_only.as_ref().map(|(t, f)| (t, f)),
+                        &format_param_range_hint(prompt),
+                    )
+                } else {
+                    String::new()
+                };
+                let prev_prompt_line = self
+                    .state
+                    .last_prompt()
+                    .map(|last| format!("Previous prompt: {last}\n"))
+                    .unwrap_or_default();
+                let state_block = if state_ctx.is_empty() {
+                    String::new()
+                } else {
+                    format!("Current state:\n{state_ctx}\n\n")
+                };
+                return format!(
+                    "{context_prefix}{constraint}{state_block}{prev_prompt_line}Previous pattern: {pattern_json}\n\nApply this variation: {prompt}"
+                );
             }
+        }
+        if !state_ctx.is_empty() {
+            return format!("{context_prefix}Current state:\n{state_ctx}\n\n{prompt}");
         }
         if context_prefix.is_empty() {
             prompt.to_string()
         } else {
             format!("{context_prefix}{prompt}")
         }
+    }
+
+    fn build_state_context(&self) -> String {
+        // Minimal parity: variation prompts include live pattern JSON; full state summary deferred.
+        String::new()
     }
 }
 
