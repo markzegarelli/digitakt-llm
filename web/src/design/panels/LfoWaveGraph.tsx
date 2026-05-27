@@ -4,10 +4,12 @@ import type { LfoSlotView } from "../../lib/lfoAdapter.js";
 import { LFO_DESTS, LFO_SHAPES } from "../constants.js";
 import { useSmoothGlobalStep } from "../../hooks/useSmoothGlobalStep.js";
 import {
+  lfoBaseValueForDest,
   lfoDestArrow,
   lfoFixedPlayheadX,
-  lfoBaseValueForDest,
+  lfoOutputAtGlobalStep,
   lfoPlotInsets,
+  lfoPlotYFromScaledWave,
   lfoShapeNameFromIndex,
   lfoTimingLabel,
   sampleLfoWavePoints,
@@ -63,13 +65,40 @@ export function LfoWaveGraph({
   }, []);
 
   const shapeLabel = (LFO_SHAPES[lfo.shape] ?? "off").toUpperCase();
-  const destLabel = (LFO_DESTS[lfo.dest] ?? "filter").toUpperCase();
   const modeLabel = MODES[lfo.mode] ?? "FREE";
   const graphShape = lfoShapeNameFromIndex(lfo.shape);
+  const destName = LFO_DESTS[lfo.dest] ?? "filter";
   const smoothGlobalStep = useSmoothGlobalStep(view.playing, view.globalStep, view.bpm);
   const { base, max } = lfoBaseValueForDest(track.mix, track.trigs, lfo.dest);
   const waveAnchorStep =
     view.playing && smoothGlobalStep != null ? smoothGlobalStep : view.playhead;
+
+  const lfoOutput = useMemo(() => {
+    if (!graphShape) return null;
+    return lfoOutputAtGlobalStep({
+      shape: graphShape,
+      patternLength: view.stepLen,
+      num: lfo.num,
+      den: lfo.den,
+      phase: lfo.phase,
+      depth: lfo.depth,
+      globalStep: waveAnchorStep,
+      dest: destName,
+      track,
+      playhead: view.playhead,
+    });
+  }, [
+    graphShape,
+    view.stepLen,
+    waveAnchorStep,
+    lfo.num,
+    lfo.den,
+    lfo.phase,
+    lfo.depth,
+    destName,
+    track,
+    view.playhead,
+  ]);
 
   const points = useMemo(() => {
     if (!graphShape) return [];
@@ -101,6 +130,10 @@ export function LfoWaveGraph({
   ]);
 
   const playCol = graphShape ? lfoFixedPlayheadX(size.w) : null;
+  const playheadDotY =
+    playCol != null && lfoOutput != null
+      ? lfoPlotYFromScaledWave(lfoOutput.w, size.h, base, max, lfo.depth)
+      : null;
 
   const linePath = useMemo(() => {
     if (points.length === 0) return "";
@@ -203,11 +236,23 @@ export function LfoWaveGraph({
             />
           </g>
         ) : null}
+        {playCol != null && playheadDotY != null ? (
+          <circle
+            cx={playCol}
+            cy={playheadDotY}
+            r={3}
+            fill="var(--yellow-bright)"
+            fillOpacity={0.85}
+          />
+        ) : null}
       </svg>
       <div className="lfo-graph-overlay lfo-graph-overlay-top">
         {graphShape
           ? `${shapeLabel} · ${modeLabel} · DEPTH ${lfo.depth}% · ${lfoDestArrow(lfo.dest)}`
           : "OFF · no waveform"}
+      </div>
+      <div className="lfo-graph-overlay lfo-graph-overlay-out">
+        {graphShape && lfoOutput != null ? `OUT ${lfoOutput.value}` : "—"}
       </div>
       <div className="lfo-graph-overlay lfo-graph-overlay-bottom">
         {lfoTimingLabel(view.stepLen, lfo.num, lfo.den)}

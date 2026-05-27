@@ -139,6 +139,97 @@ export function lfoPlotInsets(height: number): { padY: number; baseline: number 
   return { padY, baseline: h - padY - 0.5 };
 }
 
+/** Bipolar LFO weight at fractional global step (mirror core/lfo.py `lfo_w_at_step`). */
+export function lfoWAtGlobalStep(
+  shape: string,
+  patternLength: number,
+  num: number,
+  den: number,
+  phase: number,
+  globalStep: number,
+): number {
+  const csn = cycleSteps(patternLength, num, den);
+  return lfoShape(shape, (globalStep % csn) / csn + phase);
+}
+
+/** Match Python 3 `round()` (half-to-even) for engine-aligned depth clamp. */
+function pyRound(x: number): number {
+  const fl = Math.floor(x);
+  const frac = x - fl;
+  if (Math.abs(frac - 0.5) < 1e-12) {
+    return fl % 2 === 0 ? fl : fl + 1;
+  }
+  return Math.round(x);
+}
+
+/** Modulate base by bipolar w with depth clamped 0–100 (mirror `apply_depth_clamp`). */
+export function applyLfoDepth(
+  base: number,
+  w: number,
+  depthPct: number,
+  lo: number,
+  hi: number,
+): number {
+  const depth = Math.max(0, Math.min(100, depthPct));
+  const half = (hi - lo) / 2;
+  const v = pyRound(base + w * (depth / 100) * half);
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/** Map bipolar w to SVG plot Y on the depth-scaled waveform (matches {@link sampleLfoWavePoints}). */
+export function lfoPlotYFromScaledWave(
+  w: number,
+  height: number,
+  baseValue: number,
+  maxValue: number,
+  depth: number,
+): number {
+  const h = Math.max(2, Math.round(height));
+  const { padY, baseline } = lfoPlotInsets(h);
+  const plotH = h - padY * 2;
+  const peakNorm = (Math.max(0, baseValue) / Math.max(1, maxValue)) * (depth / 100);
+  const u = (w + 1) / 2;
+  return Math.max(padY, Math.min(h - padY - 1, baseline - u * peakNorm * plotH));
+}
+
+export function lfoDestBase(
+  track: { mix: Record<string, number>; trigs: { note: number }[] },
+  dest: string,
+  playhead: number,
+): number {
+  if (dest === "pitch") {
+    const trig = track.trigs[playhead];
+    return trig?.note ?? 60;
+  }
+  return track.mix[dest] ?? 64;
+}
+
+/** Engine-aligned modulated destination value at a fractional global step. */
+export function lfoOutputAtGlobalStep(opts: {
+  shape: string;
+  patternLength: number;
+  num: number;
+  den: number;
+  phase: number;
+  depth: number;
+  globalStep: number;
+  dest: string;
+  track: { mix: Record<string, number>; trigs: { note: number }[] };
+  playhead: number;
+}): { w: number; value: number } {
+  const w = lfoWAtGlobalStep(
+    opts.shape,
+    opts.patternLength,
+    opts.num,
+    opts.den,
+    opts.phase,
+    opts.globalStep,
+  );
+  const base = lfoDestBase(opts.track, opts.dest, opts.playhead);
+  const value = applyLfoDepth(base, w, opts.depth, 0, 127);
+  return { w, value };
+}
+
 /**
  * Sample LFO waveform points using the same engine-aligned logic as TUI `lfoBrailleLines`.
  */
@@ -171,14 +262,13 @@ export function sampleLfoWavePoints(opts: {
   const w = Math.max(2, Math.round(width));
   const h = Math.max(2, Math.round(height));
   const pl = Math.max(1, patternLength);
-  const csn = cycleSteps(pl, num, den);
   const anchorG = globalStep != null && globalStep >= 0 ? globalStep : 0;
   const playheadX = lfoFixedPlayheadX(w);
   const stepPerPx = pl / Math.max(1, w - 1);
   const { padY, baseline } = lfoPlotInsets(h);
   const plotH = h - padY * 2;
   const peakNorm = (Math.max(0, baseValue) / Math.max(1, maxValue)) * (depth / 100);
-  const wAtG = (g: number) => lfoShape(shape, (g % csn) / csn + phase);
+  const wAtG = (g: number) => lfoWAtGlobalStep(shape, pl, num, den, phase, g);
 
   const points: { x: number; y: number }[] = [];
   for (let px = 0; px < w; px++) {
