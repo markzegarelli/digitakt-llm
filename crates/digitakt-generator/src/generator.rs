@@ -318,6 +318,9 @@ impl GeneratorHandle {
                             &pattern,
                             latency,
                             producer_notes.as_deref(),
+                            bpm,
+                            &cc_changes,
+                            steps,
                         );
                         self.bus.emit(
                             "generation_complete",
@@ -471,10 +474,25 @@ fn emit_pattern_tool_schema(steps: usize) -> Map<String, Value> {
     for t in TRACK_NAMES {
         props.insert(t.to_string(), step_arr.clone());
     }
+    props.insert(
+        "producer_notes".into(),
+        json!({
+            "type": "string",
+            "maxLength": 1200,
+            "description": "Required. 2–6 plain-text sentences explaining BPM/subgenre choice, groove structure, and notable sound-design decisions."
+        }),
+    );
+    let mut required: Vec<Value> = TRACK_NAMES.iter().map(|t| json!(t)).collect();
+    required.push(json!("producer_notes"));
     Map::from_iter([
         ("name".into(), json!("emit_pattern")),
-        ("description".into(), json!("Submit the complete drum pattern as structured data.")),
-        ("input_schema".into(), json!({"type":"object","properties": props, "required": TRACK_NAMES})),
+        ("description".into(), json!(
+            "Submit the complete drum pattern as structured data. Include all eight tracks and required producer_notes (pattern rationale)."
+        )),
+        (
+            "input_schema".into(),
+            json!({"type":"object","properties": props, "required": required}),
+        ),
     ])
 }
 

@@ -51,7 +51,7 @@ This path bypasses the LLM entirely. It is used by `/prob`, `/prob-track`, `/vel
 | Event | Emitter | Payload |
 |-------|---------|---------|
 | `generation_started` | Generator | `{prompt}` |
-| `generation_complete` | Generator | `{pattern, prompt, bpm, cc_changes, summary, producer_notes?}` — `producer_notes` is plain text from the model (not stored in `current_pattern`) |
+| `generation_complete` | Generator | `{pattern, prompt, bpm, cc_changes, summary, producer_notes?}` — `summary.parsed_response` is a human-readable digest of BPM/swing/CC/prob/LFO/Euclidean metadata plus optional `producer_notes`; neither field is stored in `current_pattern` |
 | `generation_failed` | Generator | `{prompt, error}` |
 | `pattern_changed` | Player / Server | `{pattern, prompt}` |
 | `bpm_changed` | Player / Server | `{bpm}` |
@@ -321,13 +321,13 @@ Claude produces (and the API accepts) this JSON structure:
   "prob":    {"<track>": [<16 integers, 0–100>], ...},   // optional
   "swing":   <integer, 0–100>,                           // optional
   "cc":      {"<track>": {"<param>": <0–127>, ...}, ...}, // optional
-  "producer_notes": "<string>"                            // optional; modular/arrangement tips, max ~1200 chars; stripped from pattern before `AppState.update_pattern`
+  "producer_notes": "<string>"                            // required; pattern rationale + optional arrangement tips; stripped from pattern before `AppState.update_pattern`
 }
 ```
 
 The optional `"cc"` key lets Claude include sound design changes alongside the pattern. Valid params: `tune`, `filter`, `resonance`, `attack`, `decay`, `volume`, `reverb`, `delay`, `velocity`. These are applied to `AppState.track_cc` / `AppState.track_velocity` immediately after the pattern is queued.
 
-The optional `"producer_notes"` key is returned to the TUI in `generation_complete.summary` and as a top-level `producer_notes` field; it is **not** written into `current_pattern` (playback, saves, and history stay drum-only).
+The `"producer_notes"` key is returned to the UI in `generation_complete.summary` (inside `parsed_response` and as `producer_notes`) and as a top-level `producer_notes` field; it is **not** written into `current_pattern` (playback, saves, and history stay drum-only). `summary.parsed_response` also summarizes parsed non-step fields (BPM, swing, CC, prob, LFO, Euclidean rings).
 
 ## LLM System Prompt — Genre & Sound Design Knowledge
 

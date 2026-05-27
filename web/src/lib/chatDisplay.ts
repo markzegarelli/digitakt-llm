@@ -1,6 +1,6 @@
 import type { DigitaktState } from "../backend/types.js";
 
-/** Format generation telemetry + optional producer notes for the chat log. */
+/** Format generation telemetry + parsed LLM metadata for the chat log. */
 export function formatGenerationReply(
   summary: NonNullable<DigitaktState["generation_summary"]>,
 ): string {
@@ -10,6 +10,12 @@ export function formatGenerationReply(
     lines.push(`Pattern: ${tracks} · ${summary.latency_ms}ms`);
   } else if (summary.latency_ms > 0) {
     lines.push(`Generated in ${summary.latency_ms}ms`);
+  }
+  const parsed = summary.parsed_response?.trim();
+  if (parsed) {
+    if (lines.length) lines.push("");
+    lines.push(parsed);
+    return lines.join("\n");
   }
   const notes = summary.producer_notes?.trim();
   if (notes) {

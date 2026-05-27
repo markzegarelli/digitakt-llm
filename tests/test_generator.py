@@ -11,6 +11,7 @@ from core.generator import (
     _detect_global_variation,
     _detect_param_only_update,
     _detect_target_tracks,
+    _format_parsed_response,
     _merge_preserved_steps_only,
     _merge_preserved_tracks,
     _normalize_producer_notes,
@@ -153,6 +154,65 @@ def test_compute_generation_summary_omits_producer_notes_when_none():
     pattern = {k: [0] * 16 for k in TRACK_NAMES}
     summary = _compute_generation_summary("p", pattern, 50, None)
     assert "producer_notes" not in summary
+
+
+def test_format_parsed_response_includes_tempo_cc_and_notes():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["swing"] = 25
+    pattern["seq_mode"] = "euclidean"
+    pattern["euclid"] = {"hihat": {"k": 5, "n": 8, "r": 2}}
+    cc = {"kick": {"filter": 90, "decay": 55}}
+    notes = "Four-on-the-floor kick with syncopated hat ring."
+    text = _format_parsed_response(pattern, 140, cc, notes, 16)
+    assert "BPM 140" in text
+    assert "swing 25" in text
+    assert "Sequencing: euclidean" in text
+    assert "hihat (5,8,2)" in text
+    assert "kick decay=55, filter=90" in text
+    assert notes in text
+
+
+def test_compute_generation_summary_includes_parsed_response():
+    pattern = {k: [0] * 16 for k in TRACK_NAMES}
+    pattern["kick"][0] = 100
+    pattern["swing"] = 30
+    summary = _compute_generation_summary(
+        "techno",
+        pattern,
+        120,
+        "Driving kick on every downbeat.",
+        bpm=138,
+        cc_changes={"kick": {"decay": 80}},
+        steps=16,
+    )
+    assert "parsed_response" in summary
+    assert "BPM 138" in summary["parsed_response"]
+    assert "Driving kick on every downbeat." in summary["parsed_response"]
+    assert summary["producer_notes"] == "Driving kick on every downbeat."
+
+
+def test_generation_complete_includes_parsed_response():
+    state = AppState()
+    bus = EventBus()
+    events = []
+    bus.subscribe("generation_complete", lambda p: events.append(p))
+
+    payload = {
+        **VALID_PATTERN,
+        "bpm": 132,
+        "swing": 20,
+        "producer_notes": "Minimal kick/snare grid with shuffle hats.",
+    }
+    gen = Generator(state, bus)
+    gen._client = _make_mock_client(json.dumps(payload))
+    gen._run("minimal techno")
+
+    assert len(events) == 1
+    summary = events[0]["summary"]
+    assert "parsed_response" in summary
+    assert "BPM 132" in summary["parsed_response"]
+    assert "Minimal kick/snare grid" in summary["parsed_response"]
 
 
 def test_normalize_producer_notes_truncates():
